@@ -1,0 +1,32 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: lostfound
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init/postgres-init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+
+  api:
+    build: ../../services/api
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/lostfound
+      NLP_URL: http://nlp:8001       # leave as-is; OK if service is off
+      CV_URL:  http://vision:8002    # leave as-is; OK if service is off
+    depends_on: [postgres]
+    ports: ["8000:8000"]
+
+  # nlp:
+  #   build: ../../services/nlp
+  #   ports: ["8001:8001"]
+
+  # vision:
+  #   build: ../../services/vision
+  #   ports: ["8002:8002"]
+
+volumes:
+  pgdata:
