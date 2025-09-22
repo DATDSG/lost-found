@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Tokens sampled from the mocks (≤2dp tolerance).
+/// Design Tokens — tuned from the 4 reference images (≤2dp variance).
 class DT {
   DT._();
   static _Colors get c => _Colors();
@@ -9,88 +9,62 @@ class DT {
   static _Space get s => _Space();
   static _Text get t => _Text();
   static _Elev get e => _Elev();
+  static ScrollPhysics get scroll => const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
 }
 
 class _Colors {
-  // Brand
-  final Color brand = const Color(0xFF4464B4); // active
-  final Color brandDeep = const Color(0xFF446CBC); // search fill
-
+  // Brand sampled from mocks
+  final brand = const Color(0xFF4464B4);
+  final brandDeep = const Color(0xFF446CBC); // search bar fill
   // Neutrals
-  final Color surface = const Color(0xFFF4F4F4);
-  final Color card = Colors.white;
-  final Color border = const Color(0xFFE8ECF2);
-  final Color divider = const Color(0xFFEDEFF3);
-
+  final surface = const Color(0xFFF4F6F8);
+  final card = Colors.white;
+  final border = const Color(0xFFE8ECF2);
+  final divider = const Color(0xFFEDEFF3);
   // Text
-  final Color text = const Color(0xFF121723);
-  final Color textMuted = const Color(0xFF5A606B);
-
+  final text = const Color(0xFF121723);
+  final textMuted = const Color(0xFF606771);
   // States
-  final Color successBg = const Color(0xFFE7F9E7);
-  final Color successFg = const Color(0xFF2E7D32);
-  final Color dangerBg = const Color(0xFFFBE7E7);
-  final Color dangerFg = const Color(0xFFD32F2F);
-
+  final successBg = const Color(0xFFE7F9E7);
+  final successFg = const Color(0xFF2E7D32);
+  final dangerBg = const Color(0xFFFBE7E7);
+  final dangerFg = const Color(0xFFD32F2F);
   // Accents
-  final Color blueTint = const Color(0xFFE8EEF9);
-  final Color shadow = const Color(0x1A000000); // 10% black
-  final Color badge = const Color(0xFFFF3B30);
+  final blueTint = const Color(0xFFE8EEF9);
+  final badge = const Color(0xFFFF3B30);
+  final shadow10 = const Color(0x1A000000); // 10% black
+  final shadow08 = const Color(0x14000000); // 8% black
 }
 
 class _Radii {
-  final double xs = 8;
-  final double sm = 12;
-  final double md = 16;
-  final double lg = 20;  // cards
-  final double xl = 28;  // search field
-  final double xxl = 32; // bottom nav capsule
+  final xs = 8.0;
+  final sm = 12.0;
+  final md = 16.0;
+  final lg = 20.0;   // cards
+  final xl = 28.0;   // search field
+  final xxl = 32.0;  // bottom nav capsule
+  final pill = 999.0;
 }
 
 class _Space {
-  final double xxs = 4;
-  final double xs = 8;
-  final double sm = 12;
-  final double md = 16;
-  final double lg = 20;
-  final double xl = 24;
-  final double xxl = 32;
+  final xxs = 4.0;
+  final xs = 8.0;
+  final sm = 12.0;
+  final md = 16.0;
+  final lg = 20.0;
+  final xl = 24.0;
+  final xxl = 32.0;
 }
 
 class _Text {
-  TextStyle get h1 => GoogleFonts.poppins(
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-        height: 1.2,
-      );
-  TextStyle get title => GoogleFonts.poppins(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        height: 1.3,
-      );
-  TextStyle get body => GoogleFonts.poppins(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        height: 1.4,
-      );
-  TextStyle get bodyMuted => GoogleFonts.poppins(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: DT.c.textMuted,
-        height: 1.4,
-      );
-  TextStyle get label => GoogleFonts.poppins(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        height: 1.2,
-      );
+  TextStyle get h1 => GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, height: 1.2);
+  TextStyle get title => GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, height: 1.3);
+  TextStyle get body => GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, height: 1.4);
+  TextStyle get bodyMuted => GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: DT.c.textMuted, height: 1.4);
+  TextStyle get label => GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, height: 1.15);
 }
 
 class _Elev {
-  final List<BoxShadow> card = [
-    BoxShadow(color: DT.c.shadow, blurRadius: 12, offset: const Offset(0, 6)),
-  ];
-  final List<BoxShadow> bar = [
-    BoxShadow(color: DT.c.shadow, blurRadius: 18, offset: const Offset(0, -2)),
-  ];
+  final bar = [BoxShadow(color: DT.c.shadow08, blurRadius: 18, offset: const Offset(0, -2))];
+  final card = [BoxShadow(color: DT.c.shadow10, blurRadius: 12, offset: const Offset(0, 6))];
 }

@@ -1,0 +1,16 @@
+{
+  "app_title": "ඉන්දුන ලැබීම්",
+  "messages": "පණිවිඩ",
+  "notifications": "දැනුම්දීම්",
+  "online": "මාර්ගගත",
+  "last_seen": "අවසන් දුටුවේ {ago}",
+  "write_message": "පණිවිඩයක් ලියන්න...",
+  "ask_mark": "විශේෂ ලකුණක් තිබේද?",
+  "request_photo": "තවත් ඡායාරූපයක් ඉල්ලන්න",
+  "language": "භාෂාව",
+  "select_language": "භාෂාව තෝරන්න",
+  "english": "ඉංග්‍රීසි",
+  "sinhala": "සිංහල",
+  "tamil": "දෙමළ",
+  "send_test_notification": "පරීක්ෂණ දැනුම්දීම යවන්න"
+}

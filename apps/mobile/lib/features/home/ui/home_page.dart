@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../shared/widgets/search_bar_with_filter.dart';
+import '../../../shared/widgets/filter_sheet.dart'; // for FilterState type
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -9,103 +10,86 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _search = TextEditingController();
+  // Keep one FilterState to preserve the filter button's active state across rebuilds.
+  final FilterState _filters = FilterState();
 
-  void _openFilter() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.all(DT.s.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Filters', style: DT.t.h1),
-            SizedBox(height: DT.s.md),
-            Text('Design-only placeholder per mock.', style: DT.t.bodyMuted),
-            SizedBox(height: DT.s.xl),
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: DT.c.brand,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text('Apply'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _refresh() async =>
+      Future<void>.delayed(const Duration(milliseconds: 600));
+
+  void _onSubmit(String query, FilterState filters) {
+    debugPrint('Search: "$query", filters: $filters');
+    // TODO: apply query + filters to your list here
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(DT.s.lg, DT.s.lg, DT.s.lg, DT.s.xxl + 80),
-        children: [
-          // Search + filter is the first element
-          SearchBarWithFilter(controller: _search, onFilter: _openFilter),
-          SizedBox(height: DT.s.xl),
-
-          _ItemCard(
-            title: 'Black Backpack',
-            subtitle: 'Colombo  •  0.5 mi  •  2d ago',
-            statusText: 'Found',
-            statusColor: DT.c.successFg,
-            statusBg: DT.c.successBg,
-          ),
-          SizedBox(height: DT.s.lg),
-
-          _ItemCard(
-            title: 'Apple iPhone 13',
-            subtitle: 'Fort Station  •  0.5 mi  •  2d ago',
-            statusText: 'Lost',
-            statusColor: DT.c.dangerFg,
-            statusBg: DT.c.dangerBg,
-          ),
-          SizedBox(height: DT.s.lg),
-
-          _ItemCard(
-            title: 'Gucci GG Wallet',
-            subtitle: 'Wallawaththa  •  0.5 mi  •  2d ago',
-            statusText: 'Found',
-            statusColor: DT.c.successFg,
-            statusBg: DT.c.successBg,
-          ),
-          SizedBox(height: DT.s.lg),
-
-          _ItemCard(
-            title: 'TUF Laptop',
-            subtitle: 'Gampha  •  0.5 mi  •  5d ago',
-            statusText: 'Lost',
-            statusColor: DT.c.dangerFg,
-            statusBg: DT.c.dangerBg,
-          ),
-        ],
+      child: RefreshIndicator.adaptive(
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          physics: DT.scroll,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding:
+                    EdgeInsets.fromLTRB(DT.s.lg, DT.s.lg, DT.s.lg, DT.s.xl),
+                child: SearchBarWithFilter(
+                  onSubmit: _onSubmit,
+                  initialFilters: _filters, // keeps icon state in sync
+                  // hint: 'Enter item name, category, Locat..', // optional
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) {
+                    final data = _demo[i % _demo.length];
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: DT.s.lg),
+                      child: _ItemCard(
+                        title: data.title,
+                        subtitle: data.subtitle,
+                        statusText: data.statusText,
+                        statusColor: data.statusColor,
+                        statusBg: data.statusBg,
+                      ),
+                    );
+                  },
+                  childCount: _demo.length,
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 96)),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ItemCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String statusText;
-  final Color statusColor;
-  final Color statusBg;
+class _CardData {
+  final String title, subtitle, statusText;
+  final Color statusColor, statusBg;
+  const _CardData(
+      this.title, this.subtitle, this.statusText, this.statusColor, this.statusBg);
+}
 
+const _demo = [
+  _CardData('Black Backpack', 'Colombo  •  0.5 mi  •  2d ago',
+      'Found', Color(0xFF2E7D32), Color(0xFFE7F9E7)),
+  _CardData('Apple iPhone 13', 'Fort Station  •  0.5 mi  •  2d ago',
+      'Lost', Color(0xFFD32F2F), Color(0xFFFBE7E7)),
+  _CardData('Gucci GG Wallet', 'Wallawaththa  •  0.5 mi  •  2d ago',
+      'Found', Color(0xFF2E7D32), Color(0xFFE7F9E7)),
+  _CardData('TUF Laptop', 'Gampha  •  0.5 mi  •  5d ago',
+      'Lost', Color(0xFFD32F2F), Color(0xFFFBE7E7)),
+];
+
+class _ItemCard extends StatelessWidget {
+  final String title, subtitle, statusText;
+  final Color statusColor, statusBg;
   const _ItemCard({
     required this.title,
     required this.subtitle,
@@ -116,17 +100,18 @@ class _ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(DT.r.lg), // ≈20dp
+        color: DT.c.card,
+        borderRadius: BorderRadius.circular(DT.r.lg),
         boxShadow: DT.e.card,
       ),
       padding: EdgeInsets.all(DT.s.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thumbnail 76x76, radius 16
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Container(
@@ -141,30 +126,30 @@ class _ItemCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(title, style: DT.t.title.copyWith(fontSize: 18)),
+                Row(children: [
+                  Expanded(
+                    child: Text(title, style: DT.t.title.copyWith(fontSize: 18)),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: DT.s.sm, vertical: DT.s.xs),
+                    decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: DT.s.sm, vertical: DT.s.xs),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(statusText,
-                          style: DT.t.label.copyWith(color: statusColor)),
+                    child: Text(
+                      statusText,
+                      style: DT.t.label.copyWith(color: statusColor),
                     ),
-                  ],
-                ),
+                  ),
+                ]),
                 SizedBox(height: DT.s.xs),
                 Text(subtitle, style: DT.t.body.copyWith(color: DT.c.brand)),
                 SizedBox(height: DT.s.md),
                 Row(
-                  children: [
+                  children: const [
                     _MiniButton('Contact'),
-                    SizedBox(width: DT.s.md),
+                    SizedBox(width: 16),
                     _MiniButton('View Details'),
                   ],
                 ),
@@ -180,16 +165,24 @@ class _ItemCard extends StatelessWidget {
 class _MiniButton extends StatelessWidget {
   final String label;
   const _MiniButton(this.label);
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: DT.s.lg, vertical: 10),
+    return Ink(
       decoration: BoxDecoration(
         color: DT.c.blueTint,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Text(label, style: DT.t.body.copyWith(fontWeight: FontWeight.w700)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {},
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: DT.s.lg, vertical: 10),
+          child: Text(
+            label,
+            style: DT.t.body.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
     );
   }
 }

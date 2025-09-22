@@ -1,0 +1,16 @@
+{
+  "app_title": "Lost Finder",
+  "messages": "Messages",
+  "notifications": "Notifications",
+  "online": "Online",
+  "last_seen": "Last seen {ago}",
+  "write_message": "Write a message...",
+  "ask_mark": "Ask about unique mark",
+  "request_photo": "Request extra photo",
+  "language": "Language",
+  "select_language": "Select language",
+  "english": "English",
+  "sinhala": "Sinhala",
+  "tamil": "Tamil",
+  "send_test_notification": "Send test notification"
+}

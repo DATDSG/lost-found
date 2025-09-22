@@ -1,46 +1,87 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme/design_tokens.dart';
+import 'filter_sheet.dart';
 
-class SearchBarWithFilter extends StatelessWidget {
-  final TextEditingController controller;
-  final VoidCallback onFilter;
+/// Lightweight, fast search with a light-blue background and a stateful
+/// Filter button that changes appearance when filters are applied.
+class SearchBarWithFilter extends StatefulWidget {
+  final void Function(String query, FilterState filters) onSubmit;
+  final FilterState? initialFilters;
+  final String hint;
+
   const SearchBarWithFilter({
     super.key,
-    required this.controller,
-    required this.onFilter,
+    required this.onSubmit,
+    this.initialFilters,
+    this.hint = 'Enter item name, category, Locat..',
   });
+
+  @override
+  State<SearchBarWithFilter> createState() => _SearchBarWithFilterState();
+}
+
+class _SearchBarWithFilterState extends State<SearchBarWithFilter> {
+  late final TextEditingController _controller;
+  late FilterState _filters;
+  Timer? _debounce;
+
+  bool get _active => !_filters.isDefault;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _filters = widget.initialFilters?.copy() ?? FilterState();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _submitNow() => widget.onSubmit(_controller.text.trim(), _filters);
+
+  Future<void> _openFilter() async {
+    final updated = await showFilterSheet(context, initial: _filters);
+    if (!mounted || updated == null) return;
+    setState(() => _filters = updated);
+    _submitNow();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Search field — height 56, radius 28, fill brandDeep
+        // SEARCH FIELD — light blue background
         Expanded(
           child: Container(
             height: 56,
             decoration: BoxDecoration(
-              color: DT.c.brandDeep,
+              color: DT.c.blueTint.withOpacity(1), // lighter than before
               borderRadius: BorderRadius.circular(DT.r.xl),
             ),
-            padding: EdgeInsets.symmetric(horizontal: DT.s.lg), // 20dp
+            padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
             child: Row(
               children: [
-                const Icon(Icons.search, size: 20, color: Colors.black87),
+                const Icon(Icons.search_rounded, size: 22, color: Colors.black87),
                 SizedBox(width: DT.s.md),
                 Expanded(
                   child: TextField(
-                    controller: controller,
-                    style: DT.t.body.copyWith(color: Colors.black),
-                    cursorColor: Colors.black,
-                    decoration: const InputDecoration(
+                    controller: _controller,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
                       isCollapsed: true,
                       border: InputBorder.none,
-                      hintText: 'Enter item name, category, Locat..',
-                      hintStyle: TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      hintText: widget.hint,
                     ),
+                    onSubmitted: (_) => _submitNow(),
+                    onChanged: (_) {
+                      _debounce?.cancel();
+                      _debounce = Timer(const Duration(milliseconds: 220), _submitNow);
+                    },
                   ),
                 ),
               ],
@@ -48,79 +89,21 @@ class SearchBarWithFilter extends StatelessWidget {
           ),
         ),
         SizedBox(width: DT.s.md),
-        // Filter button — 48x48, radius 12, outlined
-        _FilterButton(onTap: onFilter),
+
+        // FILTER BUTTON — toggles style when filters active
+        IconButton(
+          onPressed: _openFilter,
+          tooltip: 'Filter',
+          icon: Icon(_active ? Icons.tune : Icons.tune_rounded),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: _active ? DT.c.brand : Colors.white,
+            foregroundColor: _active ? Colors.white : DT.c.brand,
+            side: _active ? BorderSide.none : BorderSide(color: DT.c.brand, width: 2),
+          ),
+        ),
       ],
     );
   }
-}
-
-class _FilterButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _FilterButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Filter',
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 48,
-          width: 48,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: DT.c.brand, width: 2),
-          ),
-          child: const _FilterGlyph(),
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterGlyph extends StatelessWidget {
-  const _FilterGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(painter: _FilterGlyphPainter());
-  }
-}
-
-class _FilterGlyphPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = DT.c.brand
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    final w = size.width;
-    final h = size.height;
-
-    // Right-aligned filled circle
-    final center = Offset(w * 0.72, h * 0.38);
-    canvas.drawCircle(center, 5, paint..style = PaintingStyle.fill);
-    paint.style = PaintingStyle.stroke;
-
-    // Two horizontal lines
-    canvas.drawLine(
-      Offset(w * 0.24, h * 0.30),
-      Offset(w * 0.60, h * 0.30),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(w * 0.24, h * 0.65),
-      Offset(w * 0.76, h * 0.65),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
