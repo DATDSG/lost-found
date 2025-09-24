@@ -1,4 +1,45 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ===== Core networking (images, tiles, APIs, etc.) ===== -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- ===== Camera & media picking ===== -->
+    <!-- Camera capture for image_picker -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera.any" android:required="false"/>
+
+    <!-- Gallery access on Android 13+ (runtime) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+
+    <!-- Optional (Android 14+ Photo Picker “selected only”) – harmless if unused -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+
+    <!-- ===== Location (map pin, “use current location”) ===== -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
+    <!-- If you ever track in the background, uncomment this and request at runtime
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    -->
+
+    <!-- Foreground service (used by geolocator when running a foreground service) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+
+    <!-- ===== Notifications ===== -->
+    <!-- Android 13+ runtime permission for posting notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Optional but recommended for exact scheduled local notifications (API 31+) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+
+    <!-- Vibration for haptics/notification patterns (normal permission) -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Optional: reschedule alarms after reboot (if you later add that behavior) -->
+    <!-- <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/> -->
+
     <application
         android:label="mobile"
         android:name="${applicationName}"
@@ -40,6 +81,17 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+
+        <!-- Optional: let the system know we may open map intents -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+            <data android:host="maps.google.com"/>
         </intent>
     </queries>
 </manifest>

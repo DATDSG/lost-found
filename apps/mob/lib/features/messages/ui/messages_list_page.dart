@@ -1,4 +1,3 @@
-import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme/design_tokens.dart';
 import 'data/chat_models.dart';

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:characters/characters.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,7 +14,8 @@ class ChatThreadPage extends StatefulWidget {
   State<ChatThreadPage> createState() => _ChatThreadPageState();
 }
 
-class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObserver {
+class _ChatThreadPageState extends State<ChatThreadPage>
+    with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   final _picker = ImagePicker();
@@ -23,7 +23,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
 
   late List<ChatMessage> _messages;
   final Set<String> _selected = {};
-  bool _showJump = false;
 
   bool get _selecting => _selected.isNotEmpty;
 
@@ -32,11 +31,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _messages = List<ChatMessage>.from(widget.thread.messages);
-    _scroll.addListener(() {
-      if (!_scroll.hasClients) return;
-      final away = _scroll.position.maxScrollExtent - _scroll.position.pixels > 200;
-      if (away != _showJump) setState(() => _showJump = away);
-    });
   }
 
   @override
@@ -86,7 +80,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
       final XFile? file = camera
           ? await _picker.pickImage(source: ImageSource.camera)
           : await _picker.pickImage(source: ImageSource.gallery);
-      if (file == null) return;
+      if (!mounted || file == null) return;
       setState(() {
         _messages.add(ChatMessage(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -104,7 +98,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
   Future<void> _sendVideo() async {
     try {
       final XFile? file = await _picker.pickVideo(source: ImageSource.gallery);
-      if (file == null) return;
+      if (!mounted || file == null) return;
       setState(() {
         _messages.add(ChatMessage(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -131,6 +125,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
       if (permission == LocationPermission.deniedForever) return;
 
       final pos = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
       setState(() {
         _messages.add(ChatMessage(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -147,7 +142,9 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
 
   // --- Selection / delete ---
   void _toggleSelect(String id) {
-    setState(() => _selected.contains(id) ? _selected.remove(id) : _selected.add(id));
+    setState(() => _selected.contains(id)
+        ? _selected.remove(id)
+        : _selected.add(id));
   }
 
   void _deleteSelected() {
@@ -162,17 +159,42 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => SafeArea(
         child: Padding(
           padding: EdgeInsets.all(DT.s.lg),
           child: Wrap(
             runSpacing: 8,
             children: [
-              _AttachTile(icon: Icons.photo_outlined, label: 'Photo (Gallery)', onTap: () { Navigator.pop(context); _sendImage(camera: false); }),
-              _AttachTile(icon: Icons.photo_camera_outlined, label: 'Photo (Camera)', onTap: () { Navigator.pop(context); _sendImage(camera: true); }),
-              _AttachTile(icon: Icons.videocam_outlined, label: 'Video', onTap: () { Navigator.pop(context); _sendVideo(); }),
-              _AttachTile(icon: Icons.location_on_outlined, label: 'Location', onTap: () { Navigator.pop(context); _sendLocation(); }),
+              _AttachTile(
+                  icon: Icons.photo_outlined,
+                  label: 'Photo (Gallery)',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _sendImage(camera: false);
+                  }),
+              _AttachTile(
+                  icon: Icons.photo_camera_outlined,
+                  label: 'Photo (Camera)',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _sendImage(camera: true);
+                  }),
+              _AttachTile(
+                  icon: Icons.videocam_outlined,
+                  label: 'Video',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _sendVideo();
+                  }),
+              _AttachTile(
+                  icon: Icons.location_on_outlined,
+                  label: 'Location',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _sendLocation();
+                  }),
             ],
           ),
         ),
@@ -190,8 +212,10 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
       appBar: AppBar(
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(_selecting ? Icons.close_rounded : Icons.arrow_back_rounded),
-          onPressed: () => _selecting ? setState(_selected.clear) : Navigator.pop(context),
+          icon:
+              Icon(_selecting ? Icons.close_rounded : Icons.arrow_back_rounded),
+          onPressed: () =>
+              _selecting ? setState(_selected.clear) : Navigator.pop(context),
         ),
         title: Column(
           children: [
@@ -233,80 +257,80 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
             ),
           ),
           Expanded(
-            child: Stack(
-              children: [
-                ListView.builder(
-                  controller: _scroll,
-                  padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final m = _messages[index];
-                    final isMe = m.isMe;
-                    final selected = _selected.contains(m.id);
+            child: ListView.builder(
+              controller: _scroll,
+              padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final m = _messages[index];
+                final isMe = m.isMe;
+                final selected = _selected.contains(m.id);
 
-                    return GestureDetector(
-                      onLongPress: () => _toggleSelect(m.id),
-                      onTap: () => _selecting ? _toggleSelect(m.id) : null,
-                      child: Padding(
-                        padding: EdgeInsets.only(bottom: DT.s.lg),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                          children: [
-                            if (!isMe)
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: const Color(0xFFE6EAF2),
-                                child: Text(m.sender.characters.first),
-                              ),
-                            if (!isMe) SizedBox(width: DT.s.sm),
-                            Flexible(
-                              child: Column(
-                                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                children: [
-                                  Text(m.sender, style: DT.t.body.copyWith(color: DT.c.brand)),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    padding: EdgeInsets.all(DT.s.lg),
-                                    decoration: BoxDecoration(
-                                      color: isMe ? DT.c.brand : DT.c.blueTint.withOpacity(0.6),
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(16),
-                                        topRight: const Radius.circular(16),
-                                        bottomLeft: Radius.circular(isMe ? 16 : 4),
-                                        bottomRight: Radius.circular(isMe ? 4 : 16),
-                                      ),
-                                      border: selected ? Border.all(color: DT.c.brand, width: 1.2) : null,
-                                    ),
-                                    child: _Bubble(msg: m, isMe: isMe),
+                return GestureDetector(
+                  onLongPress: () => _toggleSelect(m.id),
+                  onTap: () => _selecting ? _toggleSelect(m.id) : null,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: DT.s.lg),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: isMe
+                          ? MainAxisAlignment.end
+                          : MainAxisAlignment.start,
+                      children: [
+                        if (!isMe)
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: const Color(0xFFE6EAF2),
+                            child: Text(m.sender.characters.first),
+                          ),
+                        if (!isMe) SizedBox(width: DT.s.sm),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: isMe
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            children: [
+                              Text(m.sender,
+                                  style:
+                                      DT.t.body.copyWith(color: DT.c.brand)),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: EdgeInsets.all(DT.s.lg),
+                                decoration: BoxDecoration(
+                                  color: isMe
+                                      ? DT.c.brand
+                                      : DT.c.blueTint
+                                          .withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft:
+                                        Radius.circular(isMe ? 16 : 4),
+                                    bottomRight:
+                                        Radius.circular(isMe ? 4 : 16),
                                   ),
-                                ],
+                                  border: selected
+                                      ? Border.all(
+                                          color: DT.c.brand, width: 1.2)
+                                      : null,
+                                ),
+                                child: _Bubble(msg: m, isMe: isMe),
                               ),
-                            ),
-                            if (isMe) SizedBox(width: DT.s.sm),
-                            if (isMe)
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: const Color(0xFFE6EAF2),
-                                child: const Icon(Icons.person),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                if (_showJump)
-                  Positioned(
-                    right: DT.s.lg,
-                    bottom: DT.s.lg,
-                    child: FloatingActionButton.small(
-                      heroTag: 'jumpToBottom',
-                      onPressed: _scrollToEnd,
-                      child: const Icon(Icons.arrow_downward_rounded),
+                        if (isMe) SizedBox(width: DT.s.sm),
+                        if (isMe)
+                          const CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Color(0xFFE6EAF2),
+                            child: Icon(Icons.person),
+                          ),
+                      ],
                     ),
                   ),
-              ],
+                );
+              },
             ),
           ),
           // Quick actions
@@ -314,9 +338,13 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
             padding: EdgeInsets.fromLTRB(DT.s.lg, 0, DT.s.lg, DT.s.sm),
             child: Column(
               children: const [
-                _QuickAction(icon: Icons.help_outline_rounded, label: 'Ask about unique mark'),
+                _QuickAction(
+                    icon: Icons.help_outline_rounded,
+                    label: 'Ask about unique mark'),
                 SizedBox(height: 12),
-                _QuickAction(icon: Icons.image_outlined, label: 'Request extra photo'),
+                _QuickAction(
+                    icon: Icons.image_outlined,
+                    label: 'Request extra photo'),
               ],
             ),
           ),
@@ -327,7 +355,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
             padding: EdgeInsets.only(bottom: insets > 0 ? insets : 0),
             child: SafeArea(
               top: false,
-              minimum: EdgeInsets.fromLTRB(DT.s.lg, 0, DT.s.lg, DT.s.lg),
+              minimum:
+                  EdgeInsets.fromLTRB(DT.s.lg, 0, DT.s.lg, DT.s.lg),
               child: Row(
                 children: [
                   IconButton(
@@ -338,8 +367,13 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
                   Expanded(
                     child: Container(
                       height: 56,
-                      padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
-                      decoration: BoxDecoration(color: DT.c.blueTint.withOpacity(.55), borderRadius: BorderRadius.circular(16)),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: DT.s.lg),
+                      decoration: BoxDecoration(
+                        color: DT.c.blueTint
+                            .withValues(alpha: .55),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: Row(
                         children: [
                           Expanded(
@@ -350,7 +384,9 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
                               onSubmitted: (_) => _sendText(),
                               minLines: 1,
                               maxLines: 4,
-                              decoration: const InputDecoration(hintText: 'Write a message...', border: InputBorder.none),
+                              decoration: const InputDecoration(
+                                  hintText: 'Write a message...',
+                                  border: InputBorder.none),
                             ),
                           ),
                         ],
@@ -366,7 +402,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> with WidgetsBindingObse
                       shape: const CircleBorder(),
                       padding: EdgeInsets.zero,
                     ),
-                    child: const Icon(Icons.send_rounded, color: Colors.white),
+                    child: const Icon(Icons.send_rounded,
+                        color: Colors.white),
                   ),
                 ],
               ),
@@ -389,23 +426,32 @@ class _Bubble extends StatelessWidget {
       case MessageKind.text:
         return Text(
           msg.text ?? '',
-          style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: isMe ? Colors.white : DT.c.text, height: 1.5),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium!
+              .copyWith(
+                  color: isMe ? Colors.white : DT.c.text, height: 1.5),
         );
       case MessageKind.image:
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: msg.mediaPath != null ? Image.file(File(msg.mediaPath!), height: 180) : const SizedBox(),
+          child: msg.mediaPath != null
+              ? Image.file(File(msg.mediaPath!), height: 180)
+              : const SizedBox(),
         );
       case MessageKind.video:
         return Container(
           height: 120,
           width: 220,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+              color: Colors.black26,
+              borderRadius: BorderRadius.circular(12)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.play_circle_fill_rounded, size: 36, color: Colors.white),
+              Icon(Icons.play_circle_fill_rounded,
+                  size: 36, color: Colors.white),
               SizedBox(width: 8),
               Text('Video', style: TextStyle(color: Colors.white)),
             ],
@@ -418,14 +464,17 @@ class _Bubble extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.location_on_rounded, color: isMe ? Colors.white : DT.c.brand),
+              Icon(Icons.location_on_rounded,
+                  color: isMe ? Colors.white : DT.c.brand),
               const SizedBox(width: 8),
               Text(
                 '${p.lat.toStringAsFixed(5)}, ${p.lng.toStringAsFixed(5)}',
-                style: TextStyle(color: isMe ? Colors.white : DT.c.text),
+                style:
+                    TextStyle(color: isMe ? Colors.white : DT.c.text),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.open_in_new_rounded, size: 18, color: isMe ? Colors.white : DT.c.brand),
+              Icon(Icons.open_in_new_rounded,
+                  size: 18, color: isMe ? Colors.white : DT.c.brand),
             ],
           ),
         );
@@ -433,7 +482,8 @@ class _Bubble extends StatelessWidget {
   }
 
   Future<void> _openMaps(GeoPoint p) async {
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}');
+    final uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
@@ -449,7 +499,11 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        CircleAvatar(radius: 22, backgroundColor: DT.c.blueTint.withOpacity(0.6), child: Icon(icon, color: DT.c.text)),
+        CircleAvatar(
+            radius: 22,
+            backgroundColor:
+                DT.c.blueTint.withValues(alpha: 0.6),
+            child: Icon(icon, color: DT.c.text)),
         SizedBox(width: DT.s.md),
         Text(label, style: DT.t.body),
       ],
@@ -461,10 +515,14 @@ class _AttachTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _AttachTile({required this.icon, required this.label, required this.onTap});
+  const _AttachTile(
+      {required this.icon, required this.label, required this.onTap});
   @override
   Widget build(BuildContext context) {
-    return ListTile(leading: Icon(icon, color: DT.c.brand), title: Text(label), onTap: onTap);
+    return ListTile(
+        leading: Icon(icon, color: DT.c.brand),
+        title: Text(label),
+        onTap: onTap);
   }
 }
 
