@@ -1,4 +1,4 @@
 {
   "java.configuration.updateBuildConfiguration": "automatic",
-  "cSpell.words": ["cupertino", "geolocator", "latlong", "tzdata"]
+  "cSpell.words": ["cupertino", "geolocator", "latlong", "prefs", "tzdata"]
 }

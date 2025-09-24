@@ -15,7 +15,7 @@ class ReportPage extends StatelessWidget {
           SizedBox(height: DT.s.xl),
 
           _BigChoiceCard(
-            imageAsset: 'assets/images/Lost.jpg', // real photo (add to assets)
+            imageAsset: 'assets/images/Lost.png', // real photo (add to assets)
             title: 'Lost',
             subtitle: "Report an item you've lost",
             button: 'Select',
@@ -28,7 +28,7 @@ class ReportPage extends StatelessWidget {
           SizedBox(height: DT.s.xl),
 
           _BigChoiceCard(
-            imageAsset: 'assets/images/Found.jpg', // real photo (add to assets)
+            imageAsset: 'assets/images/Found.png', // real photo (add to assets)
             title: 'Found',
             subtitle: "Report an item you've found",
             button: 'Select',
