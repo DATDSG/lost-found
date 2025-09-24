@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../features/shell/ui/app_shell.dart';
+import '../features/auth/ui/landing_page.dart';
+import '../core/auth/auth_service.dart';
+import '../core/profile/profile_service.dart';
 
-/// Thin bootstrapper (system UI polish, future splash/preload spot).
+/// Thin bootstrapper (system UI polish, auth gate).
 class AppRoot extends StatefulWidget {
   const AppRoot({super.key});
   @override
@@ -26,7 +29,9 @@ class _AppRootState extends State<AppRoot> {
       systemNavigationBarColor: Colors.white,
       systemNavigationBarIconBrightness: Brightness.dark,
     ));
-    setState(() => _ready = true);
+    await AuthService.I.init();
+    await ProfileService.I.init(); // <-- ensure profile is ready for Profile screens
+    if (mounted) setState(() => _ready = true);
   }
 
   @override
@@ -34,6 +39,6 @@ class _AppRootState extends State<AppRoot> {
     if (!_ready) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return const AppShell();
+    return AuthService.I.isLoggedIn ? const AppShell() : const LandingPage();
   }
 }
