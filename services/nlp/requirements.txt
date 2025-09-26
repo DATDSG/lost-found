@@ -1,0 +1,11 @@
+# Minimal deps (works out of the box)
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.4.0
+numpy==2.3.3
+
+
+# OPTIONAL: uncomment to use a real model (E5 small) once you're ready
+# sentence-transformers==2.7.0
+# torch==2.3.1
