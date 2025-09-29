@@ -1,0 +1,15 @@
+{
+  "supported": ["en", "si", "ta"],
+  "default": "en",
+  "fallback": "en",
+  "names": {
+    "en": "English",
+    "si": "සිංහල",
+    "ta": "தமிழ்"
+  },
+  "rtl": {
+    "si": false,
+    "ta": false,
+    "en": false
+  }
+}

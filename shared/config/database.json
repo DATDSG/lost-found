@@ -1,0 +1,19 @@
+{
+  "development": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "lostfound_dev",
+    "username": "lostfound",
+    "password": "lostfound",
+    "extensions": ["postgis"]
+  },
+  "production": {
+    "host": "${DB_HOST}",
+    "port": "${DB_PORT}",
+    "database": "${DB_NAME}",
+    "username": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
+    "extensions": ["postgis"],
+    "ssl": true
+  }
+}

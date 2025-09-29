@@ -1,0 +1,117 @@
+version: "3.9"
+
+name: lost-found
+
+services:
+  # PostgreSQL with PostGIS
+  database:
+    image: postgis/postgis:16-3.4
+    container_name: lf_database
+    environment:
+      POSTGRES_DB: lostfound
+      POSTGRES_USER: lostfound
+      POSTGRES_PASSWORD: lostfound
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lostfound -d lostfound"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: lf_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Main API Service
+  api:
+    build:
+      context: ../backend/api
+      dockerfile: Dockerfile
+    container_name: lf_api
+    environment:
+      - DATABASE_URL=postgresql://lostfound:lostfound@database:5432/lostfound
+      - REDIS_URL=redis://redis:6379
+      - NLP_SERVICE_URL=http://nlp:8090
+      - VISION_SERVICE_URL=http://vision:8091
+    ports:
+      - "8000:8000"
+    depends_on:
+      - database
+      - redis
+    volumes:
+      - ../backend/api:/app
+      - api_uploads:/app/uploads
+
+  # NLP Service
+  nlp:
+    build:
+      context: ../backend/nlp
+      dockerfile: Dockerfile
+    container_name: lf_nlp
+    ports:
+      - "8090:8090"
+    volumes:
+      - nlp_models:/app/models
+
+  # Vision Service
+  vision:
+    build:
+      context: ../backend/vision
+      dockerfile: Dockerfile
+    container_name: lf_vision
+    ports:
+      - "8091:8091"
+    volumes:
+      - vision_models:/app/models
+
+  # Background Worker
+  worker:
+    build:
+      context: ../backend/worker
+      dockerfile: Dockerfile
+    container_name: lf_worker
+    environment:
+      - DATABASE_URL=postgresql://lostfound:lostfound@database:5432/lostfound
+      - REDIS_URL=redis://redis:6379
+      - NLP_SERVICE_URL=http://nlp:8090
+      - VISION_SERVICE_URL=http://vision:8091
+    depends_on:
+      - database
+      - redis
+      - api
+    volumes:
+      - ../backend/worker:/app
+
+  # Web Admin Dashboard
+  web-admin:
+    build:
+      context: ../frontend/web-admin
+      dockerfile: Dockerfile
+    container_name: lf_web_admin
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    volumes:
+      - ../frontend/web-admin:/app
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_uploads:
+  nlp_models:
+  vision_models:
+
+networks:
+  default:
+    name: lost-found-network

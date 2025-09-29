@@ -1,0 +1,55 @@
+{
+  "name": "lost-found-system",
+  "version": "2.0.0",
+  "description": "Trilingual Lost & Found System with AI-powered matching",
+  "private": true,
+  "workspaces": [
+    "frontend/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:nlp\" \"npm run dev:vision\"",
+    "dev:web": "cd frontend/web-admin && npm run dev",
+    "dev:api": "cd backend/api && uvicorn app.main:app --reload --port 8000",
+    "dev:nlp": "cd backend/nlp && python server/main.py",
+    "dev:vision": "cd backend/vision && python server/main.py",
+    "build": "npm run build:web",
+    "build:web": "cd frontend/web-admin && npm run build",
+    "test": "npm run test:web && npm run test:api",
+    "test:web": "cd frontend/web-admin && npm test",
+    "test:api": "cd backend/api && pytest",
+    "lint": "npm run lint:web",
+    "lint:web": "cd frontend/web-admin && npm run lint",
+    "docker:up": "cd deployment && docker-compose up -d",
+    "docker:down": "cd deployment && docker-compose down",
+    "docker:build": "cd deployment && docker-compose build",
+    "setup": "npm run setup:web && npm run setup:api",
+    "setup:web": "cd frontend/web-admin && npm install",
+    "setup:api": "cd backend/api && pip install -r requirements.txt",
+    "setup:mobile": "cd frontend/mobile && flutter pub get"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DATDSG/lost-found.git"
+  },
+  "keywords": [
+    "lost-found",
+    "trilingual",
+    "ai-matching",
+    "react",
+    "fastapi",
+    "flutter",
+    "postgresql",
+    "nlp",
+    "computer-vision"
+  ],
+  "author": "DATDSG",
+  "license": "MIT"
+}
