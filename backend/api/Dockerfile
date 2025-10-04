@@ -1,31 +1,25 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS api-base
 
-# Set environment variables
+LABEL org.opencontainers.image.description="Lost & Found API service" \
+    org.opencontainers.image.component="api"
+
+# Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set work directory
+# Set working directory
 WORKDIR /app
 
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy project
 COPY . .
 
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+# Base user already set
 
 # Expose port
 EXPOSE 8000

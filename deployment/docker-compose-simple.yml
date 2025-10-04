@@ -1,0 +1,110 @@
+version: "3.9"
+
+name: lost-found-local-simple
+
+services:
+  # PostgreSQL with PostGIS - This is your main database
+  database:
+    image: postgis/postgis:16-3.4
+    container_name: lf_database_local
+    environment:
+      POSTGRES_DB: lostfound
+      POSTGRES_USER: lostfound
+      POSTGRES_PASSWORD: lostfound
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lostfound -d lostfound"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: lf_redis_local
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_local:/data
+
+  # Main API Service - Core functionality without expensive APIs
+  api:
+    build:
+      context: ../backend/api
+      dockerfile: Dockerfile
+    container_name: lf_api_local
+    environment:
+      # Database connection
+      - DATABASE_URL=postgresql://lostfound:lostfound@database:5432/lostfound
+      - REDIS_URL=redis://redis:6379
+
+      # Feature flags - Enable only what you need
+      - NLP_ON=true # Enable this since you can invest in NLP
+      - CV_ON=true # Basic computer vision (no external APIs needed)
+
+      # Basic auth (no OAuth needed)
+      - JWT_SECRET=your-local-development-secret-key-change-in-production
+      - ADMIN_EMAIL=admin@localhost
+      - ADMIN_PASSWORD=admin123
+
+      # Local file storage (no S3 needed)
+      - S3_ENDPOINT_URL=
+      - S3_ACCESS_KEY_ID=
+      - S3_SECRET_ACCESS_KEY=
+
+      # Service URLs (enable NLP since you can invest in it)
+      - NLP_SERVICE_URL=http://nlp:8090
+      - VISION_SERVICE_URL=http://vision:8091
+    ports:
+      - "8000:8000"
+    depends_on:
+      - database
+      - redis
+    volumes:
+      - ../backend/api:/app
+      - api_uploads_local:/app/uploads
+
+  # NLP Service - Since you mentioned you can invest in NLP
+  nlp:
+    build:
+      context: ../backend/nlp
+      dockerfile: Dockerfile
+      args:
+        SPACY_EN_MODEL_VERSION: 3.7.1
+        SPACY_XX_MODEL_VERSION: 3.7.0
+    container_name: lf_nlp_local
+    ports:
+      - "8090:8090"
+    volumes:
+      - nlp_models_local:/app/models
+    environment:
+      # Basic NLP configuration without expensive APIs
+      - MODEL_CACHE_DIR=/app/models
+      - HUGGINGFACE_HUB_CACHE=/app/models/hf_cache
+
+  # Vision Service - Basic computer vision
+  vision:
+    build:
+      context: ../backend/vision
+      dockerfile: Dockerfile
+    container_name: lf_vision_local
+    ports:
+      - "8091:8091"
+    volumes:
+      - vision_models_local:/app/models
+    environment:
+      - MODEL_CACHE_DIR=/app/models
+
+volumes:
+  postgres_data_local:
+  redis_data_local:
+  api_uploads_local:
+  nlp_models_local:
+  vision_models_local:
+
+networks:
+  default:
+    name: lost-found-local-network

@@ -1,48 +1,50 @@
-# Multi-stage build for Vision service
-FROM python:3.11-slim as base
+FROM python:3.11-slim
 
-# Install system dependencies for computer vision
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    software-properties-common \
-    git \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libgl1-mesa-glx \
-    && rm -rf /var/lib/apt/lists/*
+LABEL org.opencontainers.image.description="Lost & Found Vision microservice" \
+    org.opencontainers.image.component="vision" \
+    org.opencontainers.image.authors="team@lostfound.local"
 
-# Set working directory
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Minimal native libs required by opencv-python-headless
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1; \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Install dependencies first for caching
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Optional heavy ML stack (build arg to pre-install)
+ARG INSTALL_CLIP=false
+RUN if [ "$INSTALL_CLIP" = "true" ]; then \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir git+https://github.com/openai/CLIP.git@main; \
+    fi || echo "Skipping CLIP installation"
 
-# Pre-download CLIP model (optional, for faster startup)
-RUN python -c "import clip; clip.load('ViT-B/32')" || echo "CLIP model download failed, will download on first use"
-
-# Copy application code
 COPY . .
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash vision
-RUN chown -R vision:vision /app
-USER vision
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
 
-# Expose port
 EXPOSE 8091
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8091/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python - <<'PY' || exit 1\
+    import urllib.request, json, sys;\
+    try:\
+    with urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=3) as r:\
+    sys.exit(0 if r.status == 200 else 1)\
+    except Exception:\
+    sys.exit(1)\
+    PY
 
-# Start command
-CMD ["python", "-m", "uvicorn", "server.enhanced_main:app", "--host", "0.0.0.0", "--port", "8091"]
+CMD ["python", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8091"]

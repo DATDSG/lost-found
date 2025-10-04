@@ -1,4 +1,5 @@
 import os
+import subprocess
 import logging
 from typing import List, Literal, Optional, Dict, Any
 from functools import lru_cache
@@ -7,6 +8,10 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 import numpy as np
+try:
+    from backend.common.health import readiness  # type: ignore
+except Exception:  # pragma: no cover - fallback if path not yet set
+    readiness = None  # runtime safe fallback
 from langdetect import detect, DetectorFactory
 from langdetect.lang_detect_exception import LangDetectException
 
@@ -26,7 +31,12 @@ class Settings(BaseSettings):
     NLP_MODE: Literal["dummy", "real"] = "real"
     EMBEDDING_MODEL: str = "intfloat/multilingual-e5-small"
     NER_MODEL: str = "xx_ent_wiki_sm"  # Multilingual NER
+    FALLBACK_NER_MODEL: str = "en_core_web_sm"
+    SPACY_EN_MODEL_VERSION: str = os.getenv("SPACY_EN_MODEL_VERSION", "3.7.1")
+    SPACY_XX_MODEL_VERSION: str = os.getenv("SPACY_XX_MODEL_VERSION", "3.7.0")
     NORMALIZE_EMBEDDINGS: bool = True
+    MODEL_NAME: str = "multilingual-e5-small"
+    MODEL_VERSION: str = "1"
     
     # Language support
     SUPPORTED_LANGUAGES: List[str] = ["en", "si", "ta"]
@@ -59,7 +69,13 @@ app = FastAPI(
 _embedding_model = None
 _ner_model = None
 _translator = None
+_models_ready = {"embedding": False, "ner": False}
 _cache = {}
+
+# Reused description literals (avoid duplication lint warnings)
+DESC_DETECTED_LANGUAGES = "Detected languages"
+DESC_EMBEDDING_DIM = "Embedding dimension"
+DESC_EMBEDDING_VECTORS = "Embedding vectors"
 
 # --- Model loaders (lazy loading) ---
 def _load_embedding_model():
@@ -72,11 +88,46 @@ def _load_embedding_model():
         from sentence_transformers import SentenceTransformer
         logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
         _embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        _models_ready["embedding"] = True
         logger.info("Embedding model loaded successfully")
         return _embedding_model
     except Exception as e:
         logger.error(f"Could not load embedding model: {e}")
         return None
+
+def _ensure_spacy_model(model_name: str) -> bool:
+    """Ensure a spaCy model is installed; attempt runtime download if missing.
+    Returns True if available after the check, else False."""
+    try:
+        import importlib
+        import spacy
+        # If already loadable, return
+        spacy.load(model_name)
+        return True
+    except Exception:
+        # Attempt a controlled download using exact wheel URL if version known
+        version_map = {
+            'en_core_web_sm': settings.SPACY_EN_MODEL_VERSION,
+            'xx_ent_wiki_sm': settings.SPACY_XX_MODEL_VERSION,
+        }
+        ver = version_map.get(model_name)
+        wheel_url = None
+        if ver:
+            wheel_url = f"https://github.com/explosion/spacy-models/releases/download/{model_name}-{ver}/{model_name}-{ver}-py3-none-any.whl"
+        try:
+            if wheel_url:
+                logger.info(f"Attempting runtime wheel install for {model_name} ({ver})")
+                subprocess.run(["pip", "install", "--no-cache-dir", wheel_url], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                logger.info(f"Attempting runtime spacy download for {model_name}")
+                subprocess.run(["python", "-m", "spacy", "download", model_name], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            import spacy as _sp
+            _sp.load(model_name)
+            logger.info(f"Model {model_name} available after runtime install")
+            return True
+        except Exception as e:
+            logger.warning(f"Runtime installation failed for {model_name}: {e}")
+            return False
 
 def _load_ner_model():
     """Load multilingual NER model"""
@@ -84,23 +135,22 @@ def _load_ner_model():
     if _ner_model is not None:
         return _ner_model
     
+    import spacy
+    target = settings.NER_MODEL
+    if not _ensure_spacy_model(target):
+        logger.error(f"Primary NER model {target} unavailable, attempting fallback {settings.FALLBACK_NER_MODEL}")
+        if not _ensure_spacy_model(settings.FALLBACK_NER_MODEL):
+            logger.error("No spaCy NER model could be loaded")
+            return None
+        target = settings.FALLBACK_NER_MODEL
     try:
-        import spacy
-        logger.info(f"Loading NER model: {settings.NER_MODEL}")
-        _ner_model = spacy.load(settings.NER_MODEL)
-        logger.info("NER model loaded successfully")
+        _ner_model = spacy.load(target)
+        _models_ready["ner"] = True
+        logger.info(f"NER model loaded: {target}")
         return _ner_model
     except Exception as e:
-        logger.error(f"Could not load NER model: {e}")
-        try:
-            # Fallback to English model
-            import spacy
-            _ner_model = spacy.load("en_core_web_sm")
-            logger.info("Loaded fallback English NER model")
-            return _ner_model
-        except Exception as e2:
-            logger.error(f"Could not load fallback NER model: {e2}")
-            return None
+        logger.error(f"Unexpected failure loading model {target}: {e}")
+        return None
 
 def _load_translator():
     """Load translation service"""
@@ -168,8 +218,8 @@ class EmbedRequest(BaseModel):
     language: Optional[str] = Field(default=None, description="Language hint for text")
 
 class EmbedResponse(BaseModel):
-    vectors: List[List[float]] = Field(..., description="Embedding vectors")
-    dim: int = Field(..., description="Embedding dimension")
+    vectors: List[List[float]] = Field(..., description=DESC_EMBEDDING_VECTORS)
+    dim: int = Field(..., description=DESC_EMBEDDING_DIM)
     mode: str = Field(..., description="Model mode (real/dummy)")
     model_name: Optional[str] = Field(default=None, description="Model name used")
     languages_detected: List[str] = Field(default=[], description="Detected languages")
@@ -189,13 +239,13 @@ class NERRequest(BaseModel):
 class NERResponse(BaseModel):
     entities: List[List[Entity]] = Field(..., description="Entities for each text")
     attributes: List[Dict[str, Any]] = Field(..., description="Extracted attributes")
-    languages_detected: List[str] = Field(default=[], description="Detected languages")
+    languages_detected: List[str] = Field(default=[], description=DESC_DETECTED_LANGUAGES)
 
 class LanguageDetectionRequest(BaseModel):
     texts: List[str] = Field(..., description="Texts for language detection")
 
 class LanguageDetectionResponse(BaseModel):
-    languages: List[str] = Field(..., description="Detected languages")
+    languages: List[str] = Field(..., description=DESC_DETECTED_LANGUAGES)
     confidences: List[float] = Field(..., description="Detection confidences")
 
 class TranslationRequest(BaseModel):
@@ -215,40 +265,66 @@ class AttributeExtractionRequest(BaseModel):
 class AttributeExtractionResponse(BaseModel):
     attributes: List[Dict[str, Any]] = Field(..., description="Extracted attributes per text")
     entities: List[List[Entity]] = Field(..., description="All entities found")
-    languages: List[str] = Field(..., description="Detected languages")
+    languages: List[str] = Field(..., description=DESC_DETECTED_LANGUAGES)
 
 
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "mode": settings.NLP_MODE,
-        "model_name": settings.MODEL_NAME,
-        "model_version": settings.MODEL_VERSION,
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+def _embedding_ready():
+    return _models_ready["embedding"]
+
+def _ner_ready():
+    return _models_ready["ner"]
+
+if readiness is not None:
+    try:
+        readiness.register("embedding_model", _embedding_ready)
+        readiness.register("ner_model", _ner_ready)
+    except Exception:  # pragma: no cover
+        pass
+
+@app.get("/readyz")
+def readyz():
+    # Opportunistically trigger lazy loads without blocking too long
+    if not _models_ready["embedding"]:
+        _load_embedding_model()
+    if not _models_ready["ner"]:
+        _load_ner_model()
+    details = {
+        "embedding_model_loaded": _models_ready["embedding"],
+        "ner_model_loaded": _models_ready["ner"],
     }
+    overall = all(details.values())
+    return {"ready": overall, **details}
 
 
 @app.post("/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest):
-    normalize = settings.NORMALIZE if req.normalize is None else req.normalize
+    # Backwards compatibility for normalize flag naming
+    requested_normalize = req.normalize if req.normalize is not None else settings.NORMALIZE_EMBEDDINGS
     texts = [f"{req.kind}: " + t for t in req.texts]
 
+    arr = None
     if settings.NLP_MODE == "real":
-        m = _load_real_model()
-        if m is not None:
-            vecs = m.encode(texts, normalize_embeddings=normalize)
-            arr = np.asarray(vecs, dtype=np.float32)
-        else:
-            arr = _dummy_embed(texts)
-    else:
+        model = _load_embedding_model()
+        if model is not None:
+            try:
+                vecs = model.encode(texts, normalize_embeddings=requested_normalize)
+                arr = np.asarray(vecs, dtype=np.float32)
+            except Exception as e:
+                logger.error(f"Embedding model encode failed, falling back to dummy embeddings: {e}")
+    if arr is None:
         arr = _dummy_embed(texts)
 
     return EmbedResponse(
         vectors=arr.tolist(),
         dim=int(arr.shape[1]),
         mode=settings.NLP_MODE,
-        model_name=settings.MODEL_NAME,
-        model_version=settings.MODEL_VERSION,
+        model_name=settings.EMBEDDING_MODEL,
+        model_version="unknown",
     )
 
 if __name__ == "__main__":

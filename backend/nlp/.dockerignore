@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.ruff_cache/
+.hypothesis/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter notebooks
+notebooks/
+.ipynb_checkpoints
+*.ipynb
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Model cache (mounted as volume)
+models/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+*.whl
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+test/
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Dev files
+Makefile
+*.sh
+*.bat
+requirements-dev.txt

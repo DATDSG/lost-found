@@ -4,6 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import auth, items, media, matches, chat, admin, notifications, claims
 
+try:
+    from backend.common.health import readiness
+except ImportError:  # pragma: no cover
+    readiness = None
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,9 +25,51 @@ app.add_middleware(
 )
 
 
+@app.get("/healthz")
+def healthz():
+    """Liveness check endpoint."""
+    return {"status": "ok"}
+
+
+def _db_ready():
+    """Check if database connection is healthy."""
+    try:
+        from app.db.session import SessionLocal
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        return True
+    except Exception:
+        return False
+
+
+if readiness is not None:
+    try:
+        readiness.register("database", _db_ready)
+    except Exception:  # pragma: no cover
+        pass
+
+
+@app.get("/readyz")
+def readyz():
+    """Readiness check endpoint."""
+    db_ok = _db_ready()
+    return {
+        "ready": db_ok,
+        "database": db_ok,
+        "app": settings.APP_NAME,
+        "version": "2.0.0",
+        "features": {
+            "nlp_enabled": settings.NLP_ON,
+            "cv_enabled": settings.CV_ON,
+            "languages": settings.SUPPORTED_LANGUAGES
+        }
+    }
+
+
 @app.get("/health")
 def health():
-    """Health check endpoint."""
+    """Legacy health check endpoint (deprecated, use /healthz or /readyz)."""
     return {
         "status": "ok",
         "app": settings.APP_NAME,

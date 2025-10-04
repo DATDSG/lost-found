@@ -37,6 +37,37 @@ make install
 
 ### 2. Database Setup
 
+#### On Windows:
+
+```cmd
+# Create PostgreSQL database (use full path to PostgreSQL binaries)
+# Note: You'll be prompted for the postgres user password
+& "C:\Program Files\PostgreSQL\17\bin\createdb.exe" -U postgres lostfound
+
+# Enable PostGIS extension
+& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d lostfound -c "CREATE EXTENSION postgis;"
+
+# Run database migrations
+cd backend/api
+alembic upgrade head
+
+# (Optional) Seed with sample data
+python -c "from app.db.init_db import init_db; init_db()"
+```
+
+**Alternative: Using pgAdmin or SQL Shell**
+If you don't remember the postgres password, you can:
+
+1. Use pgAdmin (installed with PostgreSQL) to create the database visually
+2. Or use SQL Shell (psql) from the Start Menu and run:
+   ```sql
+   CREATE DATABASE lostfound;
+   \c lostfound
+   CREATE EXTENSION postgis;
+   ```
+
+#### On Linux/macOS:
+
 ```bash
 # Create PostgreSQL database
 createdb lostfound
@@ -51,6 +82,8 @@ alembic upgrade head
 # (Optional) Seed with sample data
 python -c "from app.db.init_db import init_db; init_db()"
 ```
+
+**Note for Windows users**: If PostgreSQL is installed in a different location, replace the path `C:\Program Files\PostgreSQL\17\bin\` with your actual PostgreSQL installation path. You can find it by checking `C:\Program Files\PostgreSQL\` for your version number.
 
 ### 3. Start Development Services
 

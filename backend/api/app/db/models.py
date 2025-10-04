@@ -5,7 +5,15 @@ from datetime import datetime
 from geoalchemy2 import Geography
 import uuid
 from app.db.session import Base
-from src.models.soft_delete import SoftDeleteMixin, AuditLogMixin
+
+try:
+    from backend.common.models.soft_delete import SoftDeleteMixin, AuditLogMixin
+except ImportError:
+    # Fallback if common package not in PYTHONPATH yet
+    class SoftDeleteMixin:
+        pass
+    class AuditLogMixin:
+        pass
 
 
 class User(Base, SoftDeleteMixin):

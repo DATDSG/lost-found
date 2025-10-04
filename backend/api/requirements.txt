@@ -1,0 +1,58 @@
+# FastAPI and web framework dependencies
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.2
+pydantic-settings>=2.0.3
+
+# Database dependencies
+sqlalchemy>=2.0.23
+alembic>=1.12.1
+psycopg2-binary>=2.9.7
+geoalchemy2>=0.14.2
+
+# Authentication and security
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.6
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+
+# HTTP client
+httpx>=0.25.0
+
+# Geospatial processing
+geohash2>=1.1
+geopy>=2.4.0
+
+# Scientific computing - Using newer versions compatible with Python 3.13
+numpy>=1.26.0
+pandas>=2.1.0
+
+# Caching and performance
+redis>=5.0.0
+
+# Logging
+loguru>=0.7.0
+
+# Background tasks and workers
+celery>=5.3.0
+
+# Image processing (for CV features)
+Pillow>=10.0.0
+
+# CORS middleware (already included in FastAPI)
+# starlette is included with FastAPI
+
+# Environment and configuration
+python-dotenv>=1.0.0
+python-decouple>=3.8
+
+# Timezone support
+pytz>=2023.3
+
+# Additional utilities
+email-validator>=2.0.0
+jinja2>=3.1.0
+
+# Development and testing (optional)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0

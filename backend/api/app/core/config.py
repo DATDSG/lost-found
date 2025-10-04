@@ -60,7 +60,7 @@ class Settings(BaseSettings):
 
     # External services (optional microservices)
     NLP_SERVICE_URL: str = "http://embedder:8010"
-    VISION_SERVICE_URL: str = "http://vision:8020"
+    VISION_SERVICE_URL: str = "http://vision:8091"
 
     # Matching thresholds
     MIN_MATCH_SCORE: float = 0.3

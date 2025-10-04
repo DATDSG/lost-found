@@ -1,0 +1,72 @@
+# COPY-PASTE COMMANDS FOR WINDOWS TERMINAL
+# Copy and paste these commands one by one into Windows Terminal
+
+# =============================================================================
+# STEP 1: Navigate to project directory
+# =============================================================================
+cd c:\Users\td123\OneDrive\Documents\GitHub\lost-found
+
+# =============================================================================
+# STEP 2: Setup environment (run once)
+# =============================================================================
+copy .env.local .env
+
+# =============================================================================
+# STEP 3: Go to deployment directory
+# =============================================================================
+cd deployment
+
+# =============================================================================
+# STEP 4: Start minimal services (Database + API only)  
+# =============================================================================
+docker-compose -f docker-compose-minimal.yml up --build
+
+# =============================================================================
+# AFTER SERVICES START, OPEN NEW TERMINAL TAB AND RUN:
+# =============================================================================
+
+# Test if API is working
+curl http://localhost:8000/health
+
+# Check running containers
+docker ps
+
+# Open API documentation in browser (copy this URL)
+# http://localhost:8000/docs
+
+# =============================================================================
+# TO STOP SERVICES (Ctrl+C in the running terminal, then run):
+# =============================================================================
+cd c:\Users\td123\OneDrive\Documents\GitHub\lost-found\deployment
+docker-compose -f docker-compose-minimal.yml down
+
+# =============================================================================
+# IF YOU WANT TO TRY WITH NLP FEATURES:
+# =============================================================================
+cd c:\Users\td123\OneDrive\Documents\GitHub\lost-found\deployment
+docker-compose -f docker-compose-simple.yml up --build
+
+# =============================================================================
+# TROUBLESHOOTING COMMANDS
+# =============================================================================
+
+# If port 5432 is already in use:
+netstat -an | findstr ":5432"
+
+# If port 8000 is already in use:
+netstat -an | findstr ":8000"
+
+# Clean restart (removes all data):
+docker-compose -f docker-compose-minimal.yml down -v
+docker-compose -f docker-compose-minimal.yml up --build
+
+# Check Docker is running:
+docker info
+
+# =============================================================================
+# SUCCESS INDICATORS TO LOOK FOR:
+# =============================================================================
+# 1. No red error messages in terminal
+# 2. You see: "Uvicorn running on http://0.0.0.0:8000"
+# 3. curl http://localhost:8000/health returns JSON
+# 4. http://localhost:8000/docs opens in browser
