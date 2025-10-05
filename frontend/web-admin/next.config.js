@@ -1,14 +1,39 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
   images: {
-    domains: ['placehold.co', 'via.placeholder.com'],
+    domains: ["placehold.co", "via.placeholder.com", "localhost"],
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+    NEXT_PUBLIC_API_URL:
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   },
-}
+  // Disable caching to prevent stale content
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value:
+              "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          },
+          {
+            key: "Pragma",
+            value: "no-cache",
+          },
+          {
+            key: "Expires",
+            value: "0",
+          },
+        ],
+      },
+    ];
+  },
+  // Generate unique build IDs to bust cache
+  generateBuildId: async () => {
+    return `build-${Date.now()}`;
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

@@ -43,8 +43,8 @@ api.interceptors.response.use(
 )
 
 export const authApi = {
-  login: async (email: string, password: string): Promise<ApiResponse<{ token: string; user: User }>> => {
-    const response = await api.post('/auth/admin/login', { email, password })
+  login: async (email: string, password: string): Promise<{ access_token: string; token_type: string }> => {
+    const response = await api.post('/auth/login', { email, password })
     return response.data
   },
   
@@ -221,8 +221,8 @@ export const claimsApi = {
 }
 
 export const systemApi = {
-  getStats: async (): Promise<ApiResponse<SystemStats>> => {
-    const response = await api.get('/admin/stats')
+  getStats: async (): Promise<SystemStats> => {
+    const response = await api.get(`/admin/stats?v=${Date.now()}`)
     return response.data
   },
   

@@ -1,6 +1,8 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+import os
+from datetime import datetime
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -14,65 +16,84 @@ from app.schemas.admin import DashboardStats, CategoryStat, ModerationAction, Mo
 
 
 router = APIRouter()
+@router.get("/queue/metrics")
+def queue_metrics(_: models.User = Depends(require_admin)):
+    """Lightweight queue / background metrics.
+
+    Currently surfaces Redis queue depth (if broker URL available) and timestamp.
+    Extend in future with Celery inspect stats or Prometheus counters.
+    """
+    metrics = {"timestamp": datetime.utcnow().isoformat() + "Z"}
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        try:
+            import redis  # type: ignore
+            r = redis.from_url(redis_url)
+            metrics["redis_ping"] = r.ping()
+            # Celery default queue list length (approx) - list name 'celery'
+            qlen = r.llen("celery")
+            metrics["default_queue_length"] = qlen
+        except Exception as e:  # pragma: no cover
+            metrics["redis_error"] = str(e)
+    return metrics
 templates = Jinja2Templates(directory="app/templates")
 
 
 def _compute_dashboard_stats(db: Session) -> DashboardStats:
     total_users = db.query(func.count(models.User.id)).scalar() or 0
     total_items = db.query(func.count(models.Item.id)).scalar() or 0
-    resolved_items = (
-        db.query(func.count(models.Item.id))
-        .filter(models.Item.status == "resolved")
-        .scalar()
-        or 0
-    )
-    resolution_rate = (resolved_items / total_items) if total_items else 0.0
+    total_matches = db.query(func.count(models.Match.id)).scalar() or 0
+    total_claims = db.query(func.count(models.Claim.id)).scalar() or 0
 
-    open_flags = (
-        db.query(func.count(models.Flag.id))
-        .filter(models.Flag.status == "open")
-        .scalar()
-        or 0
-    )
+    # Items by status
+    items_lost = db.query(func.count(models.Item.id)).filter(models.Item.status == "lost").scalar() or 0
+    items_found = db.query(func.count(models.Item.id)).filter(models.Item.status == "found").scalar() or 0
+    items_claimed = db.query(func.count(models.Item.id)).filter(models.Item.status == "claimed").scalar() or 0
+    items_closed = db.query(func.count(models.Item.id)).filter(models.Item.status == "closed").scalar() or 0
 
-    average_match_score = db.query(func.avg(models.Match.score)).scalar()
-    average_match_score = float(average_match_score) if average_match_score is not None else None
+    # Matches by status
+    matches_pending = db.query(func.count(models.Match.id)).filter(models.Match.status == "pending").scalar() or 0
+    matches_accepted = db.query(func.count(models.Match.id)).filter(models.Match.status == "viewed").scalar() or 0
+    matches_rejected = db.query(func.count(models.Match.id)).filter(models.Match.status == "dismissed").scalar() or 0
 
-    lost_alias = aliased(models.Item)
-    found_alias = aliased(models.Item)
-    latency_rows = (
-        db.query(
-            models.Match.created_at,
-            lost_alias.created_at,
-            found_alias.created_at,
-        )
-        .join(lost_alias, models.Match.lost_item_id == lost_alias.id)
-        .join(found_alias, models.Match.found_item_id == found_alias.id)
-        .all()
-    )
-    latencies = []
-    for match_created, lost_created, found_created in latency_rows:
-        if match_created and lost_created and found_created:
-            earliest = min(lost_created, found_created)
-            latencies.append((match_created - earliest).total_seconds())
-    average_match_latency = sum(latencies) / len(latencies) if latencies else None
+    # Claims by status
+    claims_pending = db.query(func.count(models.Claim.id)).filter(models.Claim.status == "pending").scalar() or 0
+    claims_approved = db.query(func.count(models.Claim.id)).filter(models.Claim.status == "approved").scalar() or 0
+    claims_rejected = db.query(func.count(models.Claim.id)).filter(models.Claim.status == "rejected").scalar() or 0
 
-    category_rows = (
-        db.query(models.Item.category, func.count(models.Item.id))
-        .group_by(models.Item.category)
-        .all()
-    )
-    items_by_category = [CategoryStat(category=row[0], total=row[1]) for row in category_rows]
+    # Recent activity (last 7 days)
+    from datetime import timedelta
+    recent_date = datetime.utcnow() - timedelta(days=7)
+    new_items = db.query(func.count(models.Item.id)).filter(models.Item.created_at >= recent_date).scalar() or 0
+    new_matches = db.query(func.count(models.Match.id)).filter(models.Match.created_at >= recent_date).scalar() or 0
+    new_claims = db.query(func.count(models.Claim.id)).filter(models.Claim.created_at >= recent_date).scalar() or 0
 
     return DashboardStats(
-        users=total_users,
-        items=total_items,
-        resolved_items=resolved_items,
-        resolution_rate=resolution_rate,
-        open_flags=open_flags,
-        average_match_score=average_match_score,
-        average_match_latency_seconds=average_match_latency,
-        items_by_category=items_by_category,
+        totalUsers=total_users,
+        totalItems=total_items,
+        totalMatches=total_matches,
+        totalClaims=total_claims,
+        itemsByStatus={
+            "lost": items_lost,
+            "found": items_found,
+            "claimed": items_claimed,
+            "closed": items_closed,
+        },
+        matchesByStatus={
+            "pending": matches_pending,
+            "accepted": matches_accepted,
+            "rejected": matches_rejected,
+        },
+        claimsByStatus={
+            "pending": claims_pending,
+            "approved": claims_approved,
+            "rejected": claims_rejected,
+        },
+        recentActivity={
+            "newItems": new_items,
+            "newMatches": new_matches,
+            "newClaims": new_claims,
+        },
     )
 
 

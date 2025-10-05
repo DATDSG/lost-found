@@ -1,25 +1,25 @@
-'use client'
+"use client";
 
-import { Fragment } from 'react'
-import { Menu, Transition } from '@headlessui/react'
-import { 
-  Bars3Icon, 
-  BellIcon, 
-  UserCircleIcon,
-  Cog6ToothIcon,
-  ArrowRightOnRectangleIcon,
-} from '@heroicons/react/24/outline'
-import { cn } from '@/lib/utils'
+import { Fragment } from "react";
+import { Menu, Transition } from "@headlessui/react";
+import {
+  Menu as MenuIcon,
+  Bell,
+  UserCircle,
+  Settings,
+  LogOut,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
-  onMenuClick: () => void
+  onMenuClick: () => void;
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
   const handleLogout = () => {
-    localStorage.removeItem('admin_token')
-    window.location.href = '/login'
-  }
+    localStorage.removeItem("admin_token");
+    window.location.href = "/login";
+  };
 
   return (
     <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
@@ -30,7 +30,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         onClick={onMenuClick}
       >
         <span className="sr-only">Open sidebar</span>
-        <Bars3Icon className="h-6 w-6" />
+        <MenuIcon className="h-6 w-6" />
       </button>
 
       {/* Separator */}
@@ -53,7 +53,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500"
           >
             <span className="sr-only">View notifications</span>
-            <BellIcon className="h-6 w-6" />
+            <Bell className="h-6 w-6" />
           </button>
 
           {/* Separator */}
@@ -63,14 +63,14 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu as="div" className="relative">
             <Menu.Button className="-m-1.5 flex items-center p-1.5">
               <span className="sr-only">Open user menu</span>
-              <UserCircleIcon className="h-8 w-8 text-gray-400" />
+              <UserCircle className="h-8 w-8 text-gray-400" />
               <span className="hidden lg:flex lg:items-center">
                 <span className="ml-4 text-sm font-semibold leading-6 text-gray-900">
                   Admin User
                 </span>
               </span>
             </Menu.Button>
-            
+
             <Transition
               as={Fragment}
               enter="transition ease-out duration-100"
@@ -86,11 +86,11 @@ export function Header({ onMenuClick }: HeaderProps) {
                     <a
                       href="/dashboard/settings"
                       className={cn(
-                        active ? 'bg-gray-50' : '',
-                        'flex items-center px-3 py-1 text-sm leading-6 text-gray-900'
+                        active ? "bg-gray-50" : "",
+                        "flex items-center px-3 py-1 text-sm leading-6 text-gray-900"
                       )}
                     >
-                      <Cog6ToothIcon className="mr-2 h-4 w-4" />
+                      <Settings className="mr-2 h-4 w-4" />
                       Settings
                     </a>
                   )}
@@ -100,11 +100,11 @@ export function Header({ onMenuClick }: HeaderProps) {
                     <button
                       onClick={handleLogout}
                       className={cn(
-                        active ? 'bg-gray-50' : '',
-                        'flex w-full items-center px-3 py-1 text-sm leading-6 text-gray-900'
+                        active ? "bg-gray-50" : "",
+                        "flex w-full items-center px-3 py-1 text-sm leading-6 text-gray-900"
                       )}
                     >
-                      <ArrowRightOnRectangleIcon className="mr-2 h-4 w-4" />
+                      <LogOut className="mr-2 h-4 w-4" />
                       Sign out
                     </button>
                   )}
@@ -115,5 +115,5 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

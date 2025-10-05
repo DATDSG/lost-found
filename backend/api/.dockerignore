@@ -4,98 +4,62 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
-build/
-.eggs/
-*.egg
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-.ruff_cache/
-.hypothesis/
-
-# Virtual environments
+env/
 venv/
 ENV/
-env/
-.venv
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# IDEs
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
+Thumbs.db
 
-# Jupyter
-.ipynb_checkpoints
-*.ipynb
-
-# Environment files (avoid leaking secrets)
+# Environment
 .env
 .env.local
-.env.*.local
 
 # Logs
 *.log
 logs/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Uploads (large files that should be volume-mounted)
-uploads/
-media/
-
-# Model caches (should be volume-mounted)
-models/
-*.pt
-*.pth
-*.bin
-*.onnx
-*.safetensors
-
-# Documentation and markdown (not needed in image)
+# Documentation
 *.md
 docs/
 
-# Tests (if not running in container)
-tests/
-test/
-*_test.py
-test_*.py
+# Database
+*.db
+*.sqlite
 
-# Git
-.git/
-.gitignore
-.gitattributes
+# Migrations (keep tracked)
+migrations/versions/*.pyc
 
-# CI/CD
-.github/
-.gitlab-ci.yml
-.circleci/
-.travis.yml
-
-# Docker
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# Misc development files
-Makefile
-*.sh
-*.bat
-*.ps1
-setup.py
-pyproject.toml
-requirements-dev.txt
+# Media and uploads
+media/
+uploads/
+static/uploads/

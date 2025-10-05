@@ -1,32 +1,29 @@
-FROM python:3.11-slim AS api-base
+FROM python:3.11-slim
 
-LABEL org.opencontainers.image.description="Lost & Found API service" \
-    org.opencontainers.image.component="api"
-
-# Prevent Python from writing pyc files and buffering stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
-
-# Set working directory
 WORKDIR /app
 
-# Install Python dependencies
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    postgresql-client \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy project
-COPY . .
+# Copy requirements first for better caching
+COPY backend/api/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Base user already set
+# Copy common shared module
+COPY backend/common /app/backend/common
 
-# Expose port
-EXPOSE 8000
+# Copy application code
+COPY backend/api /app/backend/api
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Set Python path
+ENV PYTHONPATH=/app
 
-# Default command
+WORKDIR /app/backend/api
+
+# Run migrations and start server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

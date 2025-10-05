@@ -4,128 +4,125 @@ This directory contains all backend microservices for the Lost & Found system.
 
 ## Services
 
-### API Service (`/api`)
+### API Service (`api/`)
 
-Main API gateway and business logic service built with FastAPI.
+Main FastAPI application handling:
 
-**Features:**
+- User authentication & authorization
+- Item management (lost/found items)
+- Matching algorithm coordination
+- Chat messaging
+- Admin operations
+- Media upload/download
 
-- RESTful API endpoints
-- Authentication and authorization
-- Item and user management
-- Match processing
-- Real-time notifications
+**Tech Stack**: FastAPI, SQLAlchemy, PostgreSQL + PostGIS, Alembic
 
-**Technology Stack:**
+### NLP Service (`nlp/`)
 
-- Python 3.11+
-- FastAPI
-- SQLAlchemy
-- PostgreSQL + PostGIS
-- Redis
+Natural Language Processing microservice (optional):
 
-### NLP Service (`/nlp`)
-
-Natural language processing service for multilingual text analysis.
-
-**Features:**
-
-- Text embedding generation
-- Named entity recognition
+- Multilingual text embeddings
+- Named Entity Recognition (NER)
 - Language detection
-- Semantic similarity matching
+- Translation services
+- Text similarity computation
 
-**Technology Stack:**
+**Tech Stack**: FastAPI, spaCy, sentence-transformers, PyTorch
 
-- Python 3.11+
-- Transformers
-- spaCy
-- scikit-learn
+### Vision Service (`vision/`)
 
-### Vision Service (`/vision`)
+Computer Vision microservice (optional):
 
-Computer vision service for image processing and analysis.
+- Perceptual image hashing
+- Image similarity computation
+- Optional CLIP embeddings
+- Image preprocessing
 
-**Features:**
+**Tech Stack**: FastAPI, PIL, imagehash, OpenCV
 
-- Image hashing and fingerprinting
-- Visual similarity matching
-- Feature extraction
-- Object detection
+### Worker Service (`worker/`)
 
-**Technology Stack:**
+Background task processor:
 
-- Python 3.11+
-- OpenCV
-- PIL/Pillow
-- NumPy
+- Thumbnail generation
+- Batch matching computations
+- Email/SMS notifications
+- Data cleanup jobs
 
-### Worker Service (`/worker`)
+**Tech Stack**: Celery, Redis, boto3
 
-Background task processing service for async operations.
+### Common (`common/`)
 
-**Features:**
+Shared utilities and health check endpoints used across services.
 
-- Asynchronous job processing
-- Email notifications
-- Data cleanup tasks
-- Scheduled operations
+## Setup
 
-**Technology Stack:**
+### Install Dependencies
 
-- Python 3.11+
-- Celery
-- Redis
-- Background tasks
+Each service has its own `requirements.txt`:
 
-## Getting Started
+```bash
+# API service
+cd api && pip install -r requirements.txt
 
-1. **Environment Setup**
+# NLP service
+cd nlp && pip install -r requirements.txt
 
-   ```bash
-   cd backend/api
-   python -m venv venv
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
-   pip install -r requirements.txt
-   ```
+# Vision service
+cd vision && pip install -r requirements.txt
 
-2. **Database Setup**
+# Worker service
+cd worker && pip install -r requirements.txt
+```
 
-   ```bash
-   # Create database and run migrations
-   alembic upgrade head
-   ```
+### Database Setup
 
-3. **Start Services**
+```bash
+cd api
+alembic upgrade head
+```
 
-   ```bash
-   # API Service
-   uvicorn app.main:app --reload --port 8000
+### Running Services
 
-   # NLP Service
-   cd ../nlp
-   python server/main.py
+```bash
+# API (port 8000)
+cd api
+uvicorn app.main:app --reload --port 8000
 
-   # Vision Service
-   cd ../vision
-   python server/main.py
+# NLP (port 8090)
+cd nlp
+python server/main.py
 
-   # Worker Service
-   cd ../worker
-   celery -A worker.worker worker --loglevel=info
-   ```
+# Vision (port 8091)
+cd vision
+python server/main.py
 
-## Development
+# Worker
+cd worker
+celery -A worker.jobs worker --loglevel=info
+```
 
-- All services follow the same project structure
-- Use environment variables for configuration
-- Include proper logging and error handling
-- Write unit tests for core functionality
-- Follow Python coding standards (PEP 8)
+## Configuration
+
+Services can be configured via environment variables. See individual service `.env.example` files.
+
+### Feature Flags
+
+- `NLP_ON=true/false`: Enable/disable NLP service integration
+- `CV_ON=true/false`: Enable/disable vision service integration
+
+When disabled, the system uses baseline matching only (geo-temporal + attributes).
 
 ## API Documentation
 
 Once the API service is running, visit:
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## Testing
+
+```bash
+cd api
+pytest
+```

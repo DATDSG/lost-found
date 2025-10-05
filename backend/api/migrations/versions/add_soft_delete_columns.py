@@ -1,7 +1,7 @@
 """Add soft delete columns to existing tables
 
 Revision ID: add_soft_delete_001
-Revises: 
+Revises: 20250928_0003
 Create Date: 2024-09-29 10:51:45.000000
 
 """
@@ -11,7 +11,7 @@ from datetime import datetime
 
 # revision identifiers, used by Alembic.
 revision = 'add_soft_delete_001'
-down_revision = None
+down_revision = '20250928_0003'
 branch_labels = None
 depends_on = None
 

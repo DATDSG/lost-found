@@ -1,53 +1,48 @@
-'use client'
+"use client";
 
-import { 
-  PackageIcon, 
-  UsersIcon, 
-  LinkIcon, 
-  ClipboardListIcon 
-} from '@heroicons/react/24/outline'
-import { formatNumber } from '@/lib/utils'
-import type { SystemStats } from '@/types'
+import { Package, Users, Link as LinkIcon, ClipboardList } from "lucide-react";
+import { formatNumber } from "@/lib/utils";
+import type { SystemStats } from "@/types";
 
 interface StatsCardsProps {
-  stats: SystemStats
+  stats: SystemStats;
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     {
-      name: 'Total Items',
+      name: "Total Items",
       value: stats.totalItems,
-      icon: PackageIcon,
+      icon: Package,
       change: `+${stats.recentActivity.newItems}`,
-      changeType: 'increase' as const,
-      description: 'New items this week',
+      changeType: "increase" as const,
+      description: "New items this week",
     },
     {
-      name: 'Total Users',
+      name: "Total Users",
       value: stats.totalUsers,
-      icon: UsersIcon,
-      change: '+12%',
-      changeType: 'increase' as const,
-      description: 'From last month',
+      icon: Users,
+      change: "+12%",
+      changeType: "increase" as const,
+      description: "From last month",
     },
     {
-      name: 'Active Matches',
+      name: "Active Matches",
       value: stats.totalMatches,
       icon: LinkIcon,
       change: `+${stats.recentActivity.newMatches}`,
-      changeType: 'increase' as const,
-      description: 'New matches this week',
+      changeType: "increase" as const,
+      description: "New matches this week",
     },
     {
-      name: 'Pending Claims',
+      name: "Pending Claims",
       value: stats.claimsByStatus.pending,
-      icon: ClipboardListIcon,
+      icon: ClipboardList,
       change: `+${stats.recentActivity.newClaims}`,
-      changeType: 'increase' as const,
-      description: 'Awaiting review',
+      changeType: "increase" as const,
+      description: "Awaiting review",
     },
-  ]
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -91,5 +86,5 @@ export function StatsCards({ stats }: StatsCardsProps) {
         </div>
       ))}
     </div>
-  )
+  );
 }

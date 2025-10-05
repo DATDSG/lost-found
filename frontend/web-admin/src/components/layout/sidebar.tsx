@@ -1,40 +1,40 @@
-'use client'
+"use client";
 
-import { Fragment } from 'react'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Dialog, Transition } from '@headlessui/react'
-import { 
-  HomeIcon, 
-  PackageIcon, 
-  UsersIcon, 
-  LinkIcon, 
-  ClipboardListIcon,
-  SettingsIcon,
-  XMarkIcon,
-  ChartBarIcon,
-  FlagIcon,
-} from '@heroicons/react/24/outline'
-import { cn } from '@/lib/utils'
+import { Fragment } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Dialog, Transition } from "@headlessui/react";
+import {
+  Home,
+  Package,
+  Users,
+  Link as LinkIcon,
+  ClipboardList,
+  Settings,
+  X,
+  BarChart3,
+  Flag,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Items', href: '/dashboard/items', icon: PackageIcon },
-  { name: 'Users', href: '/dashboard/users', icon: UsersIcon },
-  { name: 'Matches', href: '/dashboard/matches', icon: LinkIcon },
-  { name: 'Claims', href: '/dashboard/claims', icon: ClipboardListIcon },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon },
-  { name: 'Feature Flags', href: '/dashboard/features', icon: FlagIcon },
-  { name: 'Settings', href: '/dashboard/settings', icon: SettingsIcon },
-]
+  { name: "Dashboard", href: "/dashboard", icon: Home },
+  { name: "Items", href: "/dashboard/items", icon: Package },
+  { name: "Users", href: "/dashboard/users", icon: Users },
+  { name: "Matches", href: "/dashboard/matches", icon: LinkIcon },
+  { name: "Claims", href: "/dashboard/claims", icon: ClipboardList },
+  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Feature Flags", href: "/dashboard/features", icon: Flag },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+];
 
 interface SidebarProps {
-  open: boolean
-  onClose: () => void
+  open: boolean;
+  onClose: () => void;
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   const SidebarContent = () => (
     <div className="flex h-full flex-col">
@@ -42,7 +42,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
         <div className="flex items-center">
           <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-            <PackageIcon className="w-5 h-5 text-white" />
+            <Package className="w-5 h-5 text-white" />
           </div>
           <span className="ml-3 text-xl font-semibold text-gray-900">
             Lost & Found
@@ -53,29 +53,32 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-          
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
+
           return (
             <Link
               key={item.name}
               href={item.href}
               className={cn(
-                'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
                 isActive
-                  ? 'bg-primary-100 text-primary-700 border-r-2 border-primary-600'
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  ? "bg-primary-100 text-primary-700 border-r-2 border-primary-600"
+                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
               )}
               onClick={onClose}
             >
               <item.icon
                 className={cn(
-                  'mr-3 h-5 w-5 flex-shrink-0',
-                  isActive ? 'text-primary-600' : 'text-gray-400 group-hover:text-gray-500'
+                  "mr-3 h-5 w-5 flex-shrink-0",
+                  isActive
+                    ? "text-primary-600"
+                    : "text-gray-400 group-hover:text-gray-500"
                 )}
               />
               {item.name}
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -87,7 +90,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </div>
       </div>
     </div>
-  )
+  );
 
   return (
     <>
@@ -133,11 +136,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       onClick={onClose}
                     >
                       <span className="sr-only">Close sidebar</span>
-                      <XMarkIcon className="h-6 w-6 text-white" />
+                      <X className="h-6 w-6 text-white" />
                     </button>
                   </div>
                 </Transition.Child>
-                
+
                 <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white">
                   <SidebarContent />
                 </div>
@@ -154,5 +157,5 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </div>
       </div>
     </>
-  )
+  );
 }

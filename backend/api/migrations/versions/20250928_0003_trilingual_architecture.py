@@ -1,7 +1,7 @@
 """Tri-lingual Lost & Found architecture with geospatial support
 
 Revision ID: 20250928_0003
-Revises: 20250928_0002
+Revises: 20250928_0002_admin_enhancements
 Create Date: 2025-09-28 20:50:00.000000
 
 """
@@ -12,7 +12,7 @@ import geoalchemy2
 
 # revision identifiers, used by Alembic.
 revision = '20250928_0003'
-down_revision = '20250928_0002'
+down_revision = '20250928_0002_admin_enhancements'
 branch_labels = None
 depends_on = None
 
@@ -21,10 +21,10 @@ def upgrade():
     # Enable PostGIS extension
     op.execute('CREATE EXTENSION IF NOT EXISTS postgis')
     
-    # Add new columns to users table
+    # Add new columns to users table (skip columns that already exist from init migration)
     op.add_column('users', sa.Column('phone', sa.String(length=20), nullable=True))
     op.add_column('users', sa.Column('preferred_language', sa.String(length=5), nullable=False, server_default='en'))
-    op.add_column('users', sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'))
+    # is_active already exists from init migration
     op.add_column('users', sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')))
     
     # Drop old columns from items table
@@ -124,7 +124,7 @@ def upgrade():
     op.create_index('idx_items_geohash6', 'items', ['geohash6'])
     
     # Geospatial index
-    op.execute('CREATE INDEX idx_items_location_point ON items USING GIST (location_point)')
+    op.execute('CREATE INDEX IF NOT EXISTS idx_items_location_point ON items USING GIST (location_point)')
     
     # Matches indexes
     op.create_index('idx_matches_score', 'matches', ['score_final'])

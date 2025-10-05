@@ -1,25 +1,27 @@
-FROM python:3.11-slim AS worker-base
+FROM python:3.11-slim
 
-LABEL org.opencontainers.image.description="Lost & Found background worker service" \
-    org.opencontainers.image.component="worker"
-
-# Prevent Python from writing pyc files and buffering stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
-
-# Set working directory
 WORKDIR /app
 
-# Install Python dependencies
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy project
-COPY . .
+# Copy requirements and install
+COPY backend/worker/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Base user already set
+# Copy common shared module
+COPY backend/common /app/backend/common
 
-# Run worker
-CMD ["python", "-m", "worker.jobs"]
+# Copy application code
+COPY backend/worker /app/backend/worker
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+WORKDIR /app/backend/worker
+
+# Start Celery worker
+CMD ["celery", "-A", "worker.jobs", "worker", "--loglevel=info"]

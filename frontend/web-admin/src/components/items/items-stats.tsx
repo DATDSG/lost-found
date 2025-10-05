@@ -1,15 +1,15 @@
-'use client'
+"use client";
 
-import { useQuery } from '@tanstack/react-query'
-import { systemApi } from '@/lib/api'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { formatNumber } from '@/lib/utils'
+import { useQuery } from "@tanstack/react-query";
+import { systemApi } from "@/lib/api";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { formatNumber } from "@/lib/utils";
 
 export function ItemsStats() {
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['system-stats'],
+    queryKey: ["system-stats"],
     queryFn: () => systemApi.getStats(),
-  })
+  });
 
   if (isLoading) {
     return (
@@ -22,47 +22,47 @@ export function ItemsStats() {
           </div>
         ))}
       </div>
-    )
+    );
   }
 
-  if (!stats?.data) {
-    return null
+  if (!stats) {
+    return null;
   }
 
   const itemStats = [
     {
-      name: 'Lost Items',
-      value: stats.data.itemsByStatus.lost,
-      color: 'text-danger-600',
-      bgColor: 'bg-danger-100',
-      change: '+12%',
-      changeType: 'increase' as const,
+      name: "Lost Items",
+      value: stats.itemsByStatus.lost,
+      color: "text-danger-600",
+      bgColor: "bg-danger-100",
+      change: "+12%",
+      changeType: "increase" as const,
     },
     {
-      name: 'Found Items',
-      value: stats.data.itemsByStatus.found,
-      color: 'text-success-600',
-      bgColor: 'bg-success-100',
-      change: '+8%',
-      changeType: 'increase' as const,
+      name: "Found Items",
+      value: stats.itemsByStatus.found,
+      color: "text-success-600",
+      bgColor: "bg-success-100",
+      change: "+8%",
+      changeType: "increase" as const,
     },
     {
-      name: 'Claimed Items',
-      value: stats.data.itemsByStatus.claimed,
-      color: 'text-primary-600',
-      bgColor: 'bg-primary-100',
-      change: '+15%',
-      changeType: 'increase' as const,
+      name: "Claimed Items",
+      value: stats.itemsByStatus.claimed,
+      color: "text-primary-600",
+      bgColor: "bg-primary-100",
+      change: "+15%",
+      changeType: "increase" as const,
     },
     {
-      name: 'Closed Items',
-      value: stats.data.itemsByStatus.closed,
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-100',
-      change: '+3%',
-      changeType: 'increase' as const,
+      name: "Closed Items",
+      value: stats.itemsByStatus.closed,
+      color: "text-gray-600",
+      bgColor: "bg-gray-100",
+      change: "+3%",
+      changeType: "increase" as const,
     },
-  ]
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -89,5 +89,5 @@ export function ItemsStats() {
         </div>
       ))}
     </div>
-  )
+  );
 }

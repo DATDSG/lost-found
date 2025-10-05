@@ -57,6 +57,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Ignore extra environment variables
 
 settings = Settings()
 app = FastAPI(
@@ -159,16 +160,14 @@ def _load_translator():
         return _translator
     
     try:
-        if settings.TRANSLATION_SERVICE == "google":
-            from googletrans import Translator
-            _translator = Translator()
-        else:
-            from deep_translator import LibreTranslator
-            _translator = LibreTranslator(source='auto', target='en')
-        logger.info(f"Translation service loaded: {settings.TRANSLATION_SERVICE}")
+        from deep_translator import GoogleTranslator
+        _translator = GoogleTranslator(source='auto', target='en')
+        logger.info(f"Translation service loaded: GoogleTranslator (via deep-translator)")
     except Exception as e:
         logger.error(f"Could not load translator: {e}")
         return None
+    
+    return _translator
 
 
 # --- Utility functions ---

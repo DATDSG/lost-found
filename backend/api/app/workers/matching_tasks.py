@@ -86,8 +86,34 @@ def process_item_matching(item_id: int) -> dict:
         db.add(audit_log)
         db.commit()
         
-        # TODO: Send notifications to users about new matches
-        # This would be another background task
+        # Send notifications to users about new matches
+        if saved_matches:
+            try:
+                from app.services.notifications import notification_service, NotificationType
+                
+                # Notify item owner about matches found
+                notification_data = {
+                    "item_id": item.id,
+                    "item_type": item.category,
+                    "match_count": len(saved_matches),
+                    "top_score": max([m.score_final for m in saved_matches])
+                }
+                
+                # Run notification asynchronously
+                import asyncio
+                asyncio.create_task(
+                    notification_service.send_notification(
+                        user_id=item.owner_id,
+                        notification_type=NotificationType.MATCH_FOUND,
+                        data=notification_data
+                    )
+                )
+                
+                logger.info(f"Scheduled notification for user {item.owner_id} about {len(saved_matches)} matches")
+                
+            except Exception as e:
+                logger.error(f"Failed to send match notification: {e}")
+                # Don't fail the task if notification fails
         
         return {
             "status": "success",

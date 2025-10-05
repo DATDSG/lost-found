@@ -9,6 +9,20 @@ import imagehash
 import requests
 from PIL import Image
 from loguru import logger
+from celery import Celery
+
+# Initialize Celery
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+celery = Celery('worker', broker=REDIS_URL, backend=REDIS_URL)
+
+# Configure Celery
+celery.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+)
 
 # --- Optional S3 client (only used if env vars are set) ---
 S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")

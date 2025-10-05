@@ -13,14 +13,14 @@ class CategoryStat(BaseModel):
 
 
 class DashboardStats(BaseModel):
-    users: int
-    items: int
-    resolved_items: int
-    resolution_rate: float
-    open_flags: int
-    average_match_score: float | None
-    average_match_latency_seconds: float | None
-    items_by_category: list[CategoryStat]
+    totalUsers: int
+    totalItems: int
+    totalMatches: int
+    totalClaims: int
+    itemsByStatus: dict[str, int]
+    matchesByStatus: dict[str, int]
+    claimsByStatus: dict[str, int]
+    recentActivity: dict[str, int]
 
 
 class ModerationAction(BaseModel):

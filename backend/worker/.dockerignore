@@ -4,36 +4,41 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
-build/
-.eggs/
-*.egg
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-.ruff_cache/
-.hypothesis/
-
-# Virtual environments
+env/
 venv/
 ENV/
-env/
-.venv
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# IDEs
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
+Thumbs.db
 
 # Environment
 .env
@@ -41,29 +46,8 @@ env/
 
 # Logs
 *.log
+logs/
 
 # Documentation
 *.md
 docs/
-
-# Tests
-tests/
-test/
-
-# Git
-.git/
-.gitignore
-
-# CI/CD
-.github/
-
-# Docker
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# Dev files
-Makefile
-*.sh
-*.bat
-requirements-dev.txt

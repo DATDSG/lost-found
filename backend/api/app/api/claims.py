@@ -62,7 +62,31 @@ def create_claim(
     
     logger.info(f"Created claim {claim.id} for match {payload.match_id} by user {user.id}")
     
-    # TODO: Send notification to the owner
+    # Send notification to the owner
+    try:
+        from app.services.notifications import notification_service, NotificationType
+        import asyncio
+        
+        notification_data = {
+            "claim_id": claim.id,
+            "match_id": payload.match_id,
+            "item_type": match.lost_item.category if match.lost_item else "item",
+            "claimant_name": user.name if hasattr(user, 'name') else "Someone"
+        }
+        
+        asyncio.create_task(
+            notification_service.send_notification(
+                user_id=owner_id,
+                notification_type=NotificationType.CLAIM_SUBMITTED,
+                data=notification_data
+            )
+        )
+        
+        logger.info(f"Scheduled notification for owner {owner_id} about new claim")
+        
+    except Exception as e:
+        logger.error(f"Failed to send claim notification: {e}")
+        # Don't fail the request if notification fails
     
     return ClaimPublic.model_validate(claim)
 
@@ -146,7 +170,39 @@ def update_claim(
     
     logger.info(f"Updated claim {claim_id} status to {payload.status} by user {user.id}")
     
-    # TODO: Send notification to claimant about status change
+    # Send notification to claimant about status change
+    try:
+        from app.services.notifications import notification_service, NotificationType
+        import asyncio
+        
+        # Determine notification type based on status
+        if payload.status == "approved":
+            notif_type = NotificationType.CLAIM_APPROVED
+        elif payload.status == "rejected":
+            notif_type = NotificationType.CLAIM_REJECTED
+        else:
+            notif_type = NotificationType.ITEM_STATUS_CHANGED
+        
+        notification_data = {
+            "claim_id": claim.id,
+            "status": payload.status,
+            "item_type": match.lost_item.category if match.lost_item else "item",
+            "rejection_reason": payload.notes if payload.status == "rejected" else None
+        }
+        
+        asyncio.create_task(
+            notification_service.send_notification(
+                user_id=claim.claimant_id,
+                notification_type=notif_type,
+                data=notification_data
+            )
+        )
+        
+        logger.info(f"Scheduled notification for claimant {claim.claimant_id} about claim status change")
+        
+    except Exception as e:
+        logger.error(f"Failed to send claim status notification: {e}")
+        # Don't fail the request if notification fails
     
     return ClaimPublic.model_validate(claim)
 

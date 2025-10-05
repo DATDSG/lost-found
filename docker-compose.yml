@@ -1,0 +1,178 @@
+services:
+  # PostgreSQL Database with PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: lostfound-postgres
+    environment:
+      POSTGRES_DB: lostfound
+      POSTGRES_USER: lostfound
+      POSTGRES_PASSWORD: lostfound
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lostfound"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: lostfound-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: lostfound-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: backend/api/Dockerfile
+    container_name: lostfound-api
+    environment:
+      - ENV=development
+      - DATABASE_URL=postgresql://lostfound:lostfound@postgres:5432/lostfound
+      - REDIS_URL=redis://redis:6379/0
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_BUCKET=media
+      - JWT_SECRET=your-secret-key-change-in-production
+      - SERVICE_API_KEY=your-service-api-key
+      - NLP_SERVICE_URL=http://nlp:8090
+      - VISION_SERVICE_URL=http://vision:8091
+      - NLP_ON=true
+      - CV_ON=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./backend/api:/app/backend/api
+      - ./backend/common:/app/backend/common
+
+  # NLP Service
+  nlp:
+    build:
+      context: .
+      dockerfile: backend/nlp/Dockerfile
+    container_name: lostfound-nlp
+    environment:
+      - NLP_MODE=real
+      - EMBEDDING_MODEL=intfloat/multilingual-e5-small
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./backend/nlp:/app/backend/nlp
+      - ./backend/common:/app/backend/common
+
+  # Vision Service
+  vision:
+    build:
+      context: .
+      dockerfile: backend/vision/Dockerfile
+    container_name: lostfound-vision
+    environment:
+      - ENABLE_CLIP=false
+      - MAX_IMAGE_SIZE=1024
+    ports:
+      - "8091:8091"
+    volumes:
+      - ./backend/vision:/app/backend/vision
+      - ./backend/common:/app/backend/common
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: backend/worker/Dockerfile
+    container_name: lostfound-worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://lostfound:lostfound@postgres:5432/lostfound
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_BUCKET=media
+      - NLP_URL=http://nlp:8090
+      - VISION_URL=http://vision:8091
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./backend/worker:/app/backend/worker
+      - ./backend/common:/app/backend/common
+
+  # Celery Beat Scheduler
+  worker-beat:
+    build:
+      context: .
+      dockerfile: backend/worker/Dockerfile
+    container_name: lostfound-worker-beat
+    command: ["celery", "-A", "worker.beat", "beat", "--loglevel=info"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://lostfound:lostfound@postgres:5432/lostfound
+      - ENABLE_MV_REFRESH=true
+      - RECENT_ITEMS_MV_REFRESH_MINUTES=10
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/worker:/app/backend/worker
+      - ./backend/common:/app/backend/common
+
+  # Web Admin Panel
+  web-admin:
+    build:
+      context: ./frontend/web-admin
+      dockerfile: Dockerfile
+    container_name: lostfound-web-admin
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3001:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

@@ -1,19 +1,21 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.4.2
-pydantic-settings==2.0.3
-opencv-python-headless==4.8.1.78
-Pillow==10.1.0
-ImageHash==4.3.1
-numpy==1.26.0
-python-multipart==0.0.6
-python-dotenv==1.0.0
+# Core FastAPI dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.0
+pydantic-settings>=2.0.0
+python-multipart>=0.0.6
+loguru>=0.7.2
 
-# Optional heavy ML stack (enable by setting ENABLE_CLIP=true and uncommenting below)
-# torch==2.1.1 ; platform_system != 'Windows' or platform_machine == 'x86_64'
-# torchvision==0.16.1
-# git+https://github.com/openai/CLIP.git@main#egg=clip
+# Computer Vision
+pillow>=10.0.0
+imagehash>=4.3.1
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
 
-# Notes:
-# - Dev/test dependencies removed to keep runtime image lean.
-# - Pin versions for reproducible Docker caching.
+# Optional: CLIP for advanced image similarity (heavy dependency)
+# torch>=2.1.0
+# clip-by-openai>=1.0
+
+# Utilities
+requests>=2.31.0
+httpx>=0.25.0

@@ -175,7 +175,7 @@ class Flag(Base):
     source: Mapped[str] = mapped_column(String(50), default="user", nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
-    metadata = Column(JSON, nullable=True)
+    meta_data = Column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     item = relationship("Item", back_populates="flags")
@@ -190,7 +190,7 @@ class ModerationLog(Base):
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    metadata = Column(JSON, nullable=True)
+    meta_data = Column(JSON, nullable=True)
 
     item = relationship("Item", back_populates="moderation_logs")
     moderator = relationship("User", backref="moderation_logs")
@@ -205,7 +205,7 @@ class AuditLog(Base):
     resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)  # IPv6 support
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    meta_data = Column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     
     user = relationship("User")
