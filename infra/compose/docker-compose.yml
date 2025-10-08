@@ -1,0 +1,340 @@
+﻿# ================================================================
+# Lost & Found - Docker Compose Configuration
+# ================================================================
+# Optimized for development and production deployment
+# All services use health checks and proper dependency management
+# ================================================================
+
+version: "3.8"
+
+services:
+  # ================================================================
+  # Database: PostgreSQL with pgvector extension
+  # ================================================================
+  db:
+    image: pgvector/pgvector:pg18
+    container_name: lost-found-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lostfound}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-lostfound}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-lostfound}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # API Service: Main FastAPI application
+  # ================================================================
+  api:
+    build:
+      context: ../../services/api
+      dockerfile: Dockerfile
+    container_name: lost-found-api
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nlp:
+        condition: service_healthy
+      vision:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../services/api:/app
+      - media_data:${MEDIA_ROOT:-/app/media}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # Background Worker: ARQ task queue worker
+  # ================================================================
+  worker:
+    build:
+      context: ../../services/api
+      dockerfile: Dockerfile
+    container_name: lost-found-worker
+    command: arq app.worker.WorkerSettings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nlp:
+        condition: service_healthy
+      vision:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ../../services/api:/app
+      - media_data:${MEDIA_ROOT:-/app/media}
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # NLP Service: Natural Language Processing
+  # ================================================================
+  nlp:
+    build:
+      context: ../../services/nlp
+      dockerfile: Dockerfile
+    container_name: lost-found-nlp
+    env_file: .env
+    environment:
+      - USE_GPU=${NLP_USE_GPU:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MODEL_NAME=${NLP_MODEL_NAME:-intfloat/e5-small-v2}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../../services/nlp:/app
+      - nlp_models:/root/.cache/huggingface
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # Vision Service: Image processing and computer vision
+  # ================================================================
+  vision:
+    build:
+      context: ../../services/vision
+      dockerfile: Dockerfile
+    container_name: lost-found-vision
+    env_file: .env
+    environment:
+      - USE_GPU=${VISION_USE_GPU:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_OBJECT_DETECTION=${ENABLE_OBJECT_DETECTION:-false}
+      - ENABLE_OCR=${ENABLE_OCR:-false}
+    ports:
+      - "8002:8002"
+    volumes:
+      - ../../services/vision:/app
+      - vision_models:/root/.cache
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # Redis: Cache and message broker
+  # ================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: lost-found-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-LF_Redis_2025_Pass!} --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${REDIS_PASSWORD:-LF_Redis_2025_Pass!}",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # Monitoring Stack
+  # ================================================================
+
+  # Prometheus: Metrics collection and storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lost-found-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9090/-/healthy",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # Loki: Log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: lost-found-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3100/ready",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # Promtail: Log shipping to Loki
+  promtail:
+    image: grafana/promtail:latest
+    container_name: lost-found-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # Grafana: Metrics and logs visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lost-found-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+# ================================================================
+# Networks
+# ================================================================
+networks:
+  lost-found-network:
+    driver: bridge
+    name: lost-found-network
+
+# ================================================================
+# Volumes
+# ================================================================
+volumes:
+  db_data:
+    name: lost-found-db-data
+  media_data:
+    name: lost-found-media
+  redis_data:
+    name: lost-found-redis
+  nlp_models:
+    name: lost-found-nlp-models
+  vision_models:
+    name: lost-found-vision-models
+  prometheus_data:
+    name: lost-found-prometheus
+  grafana_data:
+    name: lost-found-grafana
+  loki_data:
+    name: lost-found-loki

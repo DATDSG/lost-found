@@ -1,0 +1,76 @@
+# ================================================================
+# NLP Service Dockerfile - GPU Version
+# ================================================================
+# WARNING: Image size: 8-10GB+ (requires NVIDIA Docker runtime)
+# For CPU-only lightweight version, use Dockerfile
+# ================================================================
+
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+
+# Install Python 3.11
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set Python 3.11 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements-gpu.txt requirements.txt ./
+
+# Install dependencies
+RUN pip install --no-cache-dir --upgrade pip wheel
+
+# Install lightweight dependencies first
+RUN pip install --no-cache-dir \
+    fastapi==0.109.0 \
+    uvicorn[standard]==0.27.0 \
+    pydantic==2.5.3 \
+    httpx==0.26.0 \
+    python-multipart==0.0.6 \
+    redis[hiredis]==5.0.1 \
+    prometheus-client==0.19.0 \
+    slowapi==0.1.9 \
+    arq==0.25.0 \
+    numpy==1.26.3
+
+# Install PyTorch with CUDA support
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    torchvision==0.16.0 \
+    --index-url https://download.pytorch.org/whl/cu118
+
+# Install transformers and sentence-transformers
+RUN pip install --no-cache-dir \
+    transformers==4.37.2 \
+    sentence-transformers==2.3.1
+
+# Copy application code
+COPY . /app
+
+# Pre-download models (optional)
+# RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/e5-small-v2')"
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    LOG_LEVEL=INFO \
+    USE_GPU=true \
+    CUDA_VISIBLE_DEVICES=0
+
+# Run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]

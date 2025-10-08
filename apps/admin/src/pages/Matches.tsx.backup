@@ -1,0 +1,175 @@
+import { useState, useMemo } from "react";
+import {
+  Box,
+  Paper,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Chip,
+  CircularProgress,
+  LinearProgress,
+  Checkbox,
+  IconButton,
+  Toolbar,
+  Tooltip,
+  TableSortLabel,
+  Menu,
+  FormControlLabel,
+  Switch,
+  Divider,
+  Badge,
+  Button,
+  TextField,
+  MenuItem,
+} from "@mui/material";
+import {
+  CheckCircle as ApproveIcon,
+  Block as RejectIcon,
+  Notifications as NotifyIcon,
+  FileDownload as ExportIcon,
+  ViewColumn as ColumnIcon,
+  FilterList as FilterIcon,
+} from "@mui/icons-material";
+import { format } from "date-fns";
+import { useMatches, useNotification } from "@/hooks";
+import { matchesService } from "@/services/matches.service";
+import type { Match } from "@/services/matches.service";
+import ConfirmDialog from "@/components/ConfirmDialog";
+
+type Order = "asc" | "desc";
+type OrderBy = keyof Match | "";
+
+interface Column {
+  id: keyof Match;
+  label: string;
+  visible: boolean;
+  sortable: boolean;
+}
+
+export default function Matches() {
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  const { data, isLoading } = useMatches({
+    skip: page * rowsPerPage,
+    limit: rowsPerPage,
+  });
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, "default" | "info" | "success" | "error"> = {
+      pending: "info",
+      promoted: "default",
+      confirmed: "success",
+      rejected: "error",
+    };
+    return colors[status] || "default";
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 0.8) return "success";
+    if (score >= 0.6) return "warning";
+    return "error";
+  };
+
+  if (isLoading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Typography variant="h4" gutterBottom>
+        Matches
+      </Typography>
+
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>Lost Report</TableCell>
+              <TableCell>Found Report</TableCell>
+              <TableCell>Overall Score</TableCell>
+              <TableCell>Visual</TableCell>
+              <TableCell>Text</TableCell>
+              <TableCell>Location</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Created</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {data?.items?.map((match: Match) => (
+              <TableRow key={match.id}>
+                <TableCell>{match.id}</TableCell>
+                <TableCell>
+                  {match.lost_report?.title || `#${match.lost_report_id}`}
+                </TableCell>
+                <TableCell>
+                  {match.found_report?.title || `#${match.found_report_id}`}
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ width: 100 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={match.overall_score * 100}
+                      color={getScoreColor(match.overall_score)}
+                    />
+                    <Typography variant="caption">
+                      {(match.overall_score * 100).toFixed(1)}%
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  {match.visual_similarity
+                    ? (match.visual_similarity * 100).toFixed(0)
+                    : "N/A"}
+                  %
+                </TableCell>
+                <TableCell>
+                  {(match.text_similarity * 100).toFixed(0)}%
+                </TableCell>
+                <TableCell>
+                  {(match.location_score * 100).toFixed(0)}%
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={match.status}
+                    size="small"
+                    color={getStatusColor(match.status)}
+                  />
+                </TableCell>
+                <TableCell>
+                  {format(new Date(match.created_at), "MMM dd, yyyy")}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <TablePagination
+          component="div"
+          count={data?.total || 0}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+        />
+      </TableContainer>
+    </Box>
+  );
+}
