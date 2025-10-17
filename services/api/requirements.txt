@@ -1,0 +1,56 @@
+# API Service Production Requirements - Optimized
+# Core Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-dotenv==1.0.1
+pydantic==2.10.3
+pydantic[email]==2.10.3
+python-multipart==0.0.20
+jinja2==3.1.4
+
+# Database & ORM
+psycopg[binary]==3.2.10
+asyncpg==0.29.0
+SQLAlchemy==2.0.36
+alembic==1.14.0
+geoalchemy2==0.15.2
+pgvector==0.2.4
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt,argon2]==1.7.4
+cryptography==43.0.1
+
+# HTTP Client & Media
+httpx==0.28.1
+Pillow==11.0.0
+aiofiles==24.1.0
+
+# Redis & Caching
+redis[hiredis]==5.2.1
+aioredis==2.0.1
+
+# Monitoring & Metrics
+prometheus-client==0.21.1
+structlog==24.4.0
+
+# Rate Limiting
+slowapi==0.1.9
+
+# Logging & Utilities
+python-json-logger==3.2.1
+tenacity==9.0.0
+
+# Performance & Optimization
+orjson==3.10.12
+ujson==5.10.0
+msgpack==1.1.0
+
+# Background Tasks
+celery==5.4.0
+kombu==5.4.0
+
+# MinIO Object Storage
+minio==7.2.5
+boto3==1.35.36
+botocore==1.35.36
