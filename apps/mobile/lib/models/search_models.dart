@@ -179,6 +179,37 @@ class SearchFilters {
   SearchFilters clear() {
     return SearchFilters();
   }
+
+  /// Convert to Map for API calls
+  Map<String, dynamic> toMap() {
+    return {
+      if (search != null && search!.isNotEmpty) 'search': search!,
+      if (type != null && type!.isNotEmpty) 'type': type!,
+      if (category != null && category!.isNotEmpty) 'category': category!,
+      if (status != null && status!.isNotEmpty) 'status': status!,
+      if (city != null && city!.isNotEmpty) 'city': city!,
+      if (minLatitude != null) 'min_latitude': minLatitude!,
+      if (maxLatitude != null) 'max_latitude': maxLatitude!,
+      if (minLongitude != null) 'min_longitude': minLongitude!,
+      if (maxLongitude != null) 'max_longitude': maxLongitude!,
+      if (startDate != null) 'start_date': startDate!.toIso8601String(),
+      if (endDate != null) 'end_date': endDate!.toIso8601String(),
+      if (colors != null && colors!.isNotEmpty) 'colors': colors!,
+      if (rewardOffered != null) 'reward_offered': rewardOffered!,
+      if (maxDistance != null) 'max_distance': maxDistance!,
+      if (sortBy != null && sortBy!.isNotEmpty) 'sort_by': sortBy!,
+      if (page != null) 'page': page!,
+      if (pageSize != null) 'page_size': pageSize!,
+    };
+  }
+
+  /// Get query string for search
+  String? get query => search;
+
+  /// Get latitude bounds
+  double? get latitude => minLatitude;
+  double? get longitude => minLongitude;
+  double? get radiusKm => maxDistance;
 }
 
 /// Search suggestion model
@@ -341,8 +372,8 @@ class SearchAnalytics {
       ),
       typeBreakdown: Map<String, int>.from(json['type_breakdown'] ?? {}),
       monthlyTrend: Map<String, int>.from(json['monthly_trend'] ?? {}),
-      averageResultsPerSearch: (json['average_results_per_search'] ?? 0.0)
-          .toDouble(),
+      averageResultsPerSearch:
+          (json['average_results_per_search'] ?? 0.0).toDouble(),
       searchSuccessRate: (json['search_success_rate'] ?? 0.0).toDouble(),
     );
   }
@@ -368,7 +399,7 @@ class SearchAnalytics {
 }
 
 /// Search state enum
-enum SearchState { idle, searching, loadingMore, error, empty, success }
+enum SearchState { idle, searching, loadingMore, loaded, error, empty, success }
 
 /// Search sort options
 enum SearchSortOption {

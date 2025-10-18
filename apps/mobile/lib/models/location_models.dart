@@ -1,4 +1,5 @@
 /// Location models for the Lost & Found mobile app
+library;
 
 /// Location data model
 class LocationData {

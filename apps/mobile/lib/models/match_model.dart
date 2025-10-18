@@ -174,3 +174,56 @@ class MatchStats {
     };
   }
 }
+
+/// Match component for detailed scoring breakdown
+class MatchComponent {
+  final String name;
+  final double score;
+  final double weight;
+  final String description;
+  final String color;
+
+  MatchComponent({
+    required this.name,
+    required this.score,
+    required this.weight,
+    required this.description,
+    required this.color,
+  });
+
+  factory MatchComponent.fromJson(Map<String, dynamic> json) {
+    return MatchComponent(
+      name: json['name'] ?? '',
+      score: (json['score'] ?? 0.0).toDouble(),
+      weight: (json['weight'] ?? 0.0).toDouble(),
+      description: json['description'] ?? '',
+      color: json['color'] ?? '#000000',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'score': score,
+      'weight': weight,
+      'description': description,
+      'color': color,
+    };
+  }
+
+  MatchComponent copyWith({
+    String? name,
+    double? score,
+    double? weight,
+    String? description,
+    String? color,
+  }) {
+    return MatchComponent(
+      name: name ?? this.name,
+      score: score ?? this.score,
+      weight: weight ?? this.weight,
+      description: description ?? this.description,
+      color: color ?? this.color,
+    );
+  }
+}

@@ -1,4 +1,5 @@
 /// Enhanced Authentication Models for comprehensive auth management
+library;
 
 import 'auth_token.dart';
 import 'user.dart';
@@ -206,8 +207,9 @@ class PasswordValidator {
 
     // Common patterns check (penalty)
     if (password.contains(RegExp(r'(.)\1{2,}'))) score -= 1; // Repeated chars
-    if (password.contains(RegExp(r'(123|abc|qwe)')))
+    if (password.contains(RegExp(r'(123|abc|qwe)'))) {
       score -= 1; // Common sequences
+    }
 
     if (score <= 2) return PasswordStrength.weak;
     if (score <= 4) return PasswordStrength.medium;

@@ -1,5 +1,6 @@
 /// Media Model - represents uploaded images/videos
 /// Comprehensive media management with upload, processing, and metadata
+library;
 import 'package:flutter/material.dart';
 
 /// Media type enum
