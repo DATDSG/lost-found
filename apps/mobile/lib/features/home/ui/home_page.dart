@@ -260,7 +260,7 @@ class _HomePageState extends State<HomePage> {
                         borderRadius: BorderRadius.circular(1.5),
                       ),
                     ),
-                    SizedBox(height: 2.5), // Increased spacing
+                    const SizedBox(height: 2.5), // Increased spacing
                     Container(
                       width: 14, // Increased width
                       height: 2.5, // Increased height
@@ -271,7 +271,7 @@ class _HomePageState extends State<HomePage> {
                         borderRadius: BorderRadius.circular(1.5),
                       ),
                     ),
-                    SizedBox(height: 2.5), // Increased spacing
+                    const SizedBox(height: 2.5), // Increased spacing
                     Container(
                       width: 14, // Increased width
                       height: 2.5, // Increased height
@@ -366,9 +366,9 @@ class _HomePageState extends State<HomePage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -398,7 +398,7 @@ class _HomePageState extends State<HomePage> {
                   Navigator.pop(context);
                 },
               );
-            }).toList(),
+            }),
             SizedBox(height: DT.s.lg),
           ],
         ),
@@ -769,7 +769,7 @@ class _HomePageState extends State<HomePage> {
                 SizedBox(height: DT.s.xl), // Increased spacing between cards
             ],
           );
-        }).toList(),
+        }),
       ],
     );
   }

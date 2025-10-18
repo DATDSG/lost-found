@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/routing/app_routes.dart';
+import '../../../services/api_service.dart';
 
 class SupportPage extends StatefulWidget {
   const SupportPage({super.key});
@@ -12,6 +13,8 @@ class SupportPage extends StatefulWidget {
 class _SupportPageState extends State<SupportPage> {
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final ApiService _apiService = ApiService();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -149,7 +152,7 @@ class _SupportPageState extends State<SupportPage> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(DT.r.md),
                         ),
-                        prefixIcon: Icon(Icons.email_outlined),
+                        prefixIcon: const Icon(Icons.email_outlined),
                       ),
                     ),
                     SizedBox(height: DT.s.md),
@@ -162,15 +165,26 @@ class _SupportPageState extends State<SupportPage> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(DT.r.md),
                         ),
-                        prefixIcon: Icon(Icons.message_outlined),
+                        prefixIcon: const Icon(Icons.message_outlined),
                       ),
                     ),
                     SizedBox(height: DT.s.lg),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _sendMessage,
-                        child: const Text('Send Message'),
+                        onPressed: _isLoading ? null : _sendMessage,
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Text('Send Message'),
                       ),
                     ),
                   ],
@@ -336,7 +350,7 @@ class _SupportPageState extends State<SupportPage> {
                       color: DT.c.text,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: DT.t.body.copyWith(
@@ -362,7 +376,7 @@ class _SupportPageState extends State<SupportPage> {
     );
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     if (_emailController.text.isEmpty || _messageController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
@@ -370,12 +384,42 @@ class _SupportPageState extends State<SupportPage> {
       return;
     }
 
-    // TODO: Implement send message functionality
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Message sent successfully!')));
+    setState(() {
+      _isLoading = true;
+    });
 
-    _emailController.clear();
-    _messageController.clear();
+    try {
+      await _apiService.sendSupportMessage(
+        email: _emailController.text.trim(),
+        message: _messageController.text.trim(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Message sent successfully!'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+
+        _emailController.clear();
+        _messageController.clear();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send message: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }

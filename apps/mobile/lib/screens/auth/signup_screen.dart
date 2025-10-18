@@ -33,11 +33,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   void _handleSignup() async {
     if (_formKey.currentState!.validate()) {
       await ref.read(authProvider.notifier).register(
-            name: _nameController.text,
             email: _emailController.text,
             password: _passwordController.text,
-            phoneNumber:
-                _phoneController.text.isNotEmpty ? _phoneController.text : null,
+            displayName: _nameController.text,
           );
 
       final authState = ref.read(authProvider);

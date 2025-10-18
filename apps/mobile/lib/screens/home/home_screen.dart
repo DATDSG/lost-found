@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/items_provider.dart';
+import '../../providers/chat_provider.dart';
+import '../../services/api_service.dart';
 import '../../widgets/item_card.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/custom_app_bar.dart';
@@ -10,6 +12,7 @@ import '../auth/login_screen.dart';
 import '../report/report_screen.dart';
 import '../profile/profile_screen.dart';
 import '../matches/matches_screen.dart';
+import '../chat/chat_page.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -276,20 +279,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           return ItemCard(
             item: items[index],
             onContactTap: () {
-              // TODO: Navigate to chat with item owner
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Contact feature coming soon')),
-              );
-            },
-            onViewDetailsTap: () {
-              // TODO: Navigate to item details page
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('View details: ${items[index].title}')),
-              );
+              _navigateToChat(items[index]);
             },
           );
         },
       ),
     );
+  }
+
+  Future<void> _navigateToChat(dynamic item) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final apiService = ApiService();
+      final chatProvider = ref.read(chatProviderProvider.notifier);
+
+      // Create or get existing conversation
+      final conversation = await chatProvider.createConversation(
+        item.id,
+        item.userId,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        if (conversation != null) {
+          // Navigate to chat screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatPage(),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to start conversation'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to contact owner: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

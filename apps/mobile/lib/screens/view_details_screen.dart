@@ -17,7 +17,7 @@ class ViewDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Mock data - replace with actual data from API
     final reportData = this.reportData ?? _getMockReportData();
-    final isLost = this.reportType == 'lost';
+    final isLost = reportType == 'lost';
 
     return Scaffold(
       backgroundColor: DT.c.background,

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../models/item.dart';
 import '../../services/api_service.dart';
+import '../../services/location_service.dart';
 
 final itemDetailsProvider =
     FutureProvider.family<Item?, String>((ref, itemId) async {
@@ -57,6 +60,14 @@ class _ItemDetailsContent extends ConsumerStatefulWidget {
 class _ItemDetailsContentState extends ConsumerState<_ItemDetailsContent> {
   int _currentImageIndex = 0;
   bool _isContactingUser = false;
+  String _distance = 'Calculating...';
+  Position? _currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +142,7 @@ class _ItemDetailsContentState extends ConsumerState<_ItemDetailsContent> {
             child: const Icon(Icons.share, color: Colors.black),
           ),
           onPressed: () {
-            // TODO: Implement share functionality
+            _shareItem();
           },
         ),
         const SizedBox(width: 8),
@@ -268,7 +279,7 @@ class _ItemDetailsContentState extends ConsumerState<_ItemDetailsContent> {
             _buildInfoRow(
               Icons.location_on,
               'Distance',
-              _getDistance(),
+              _distance,
             ),
           ],
         ],
@@ -362,10 +373,43 @@ class _ItemDetailsContentState extends ConsumerState<_ItemDetailsContent> {
                         fontSize: 14,
                       ),
                     ),
+                    if (_currentPosition != null &&
+                        widget.item.latitude != null &&
+                        widget.item.longitude != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Distance: $_distance',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              // TODO: Integrate actual map widget (Google Maps/Mapbox)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  onPressed: _openInMaps,
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.navigation, size: 20),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -433,6 +477,145 @@ class _ItemDetailsContentState extends ConsumerState<_ItemDetailsContent> {
     // TODO: Get current location and calculate actual distance
     // For now, return placeholder
     return 'Calculating...';
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _distance = 'Location disabled';
+        });
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _distance = 'Permission denied';
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _distance = 'Permission denied forever';
+        });
+        return;
+      }
+
+      // Get current position
+      _currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Calculate distance if we have item coordinates
+      if (widget.item.latitude != null && widget.item.longitude != null) {
+        final distanceInMeters = Geolocator.distanceBetween(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+          widget.item.latitude!,
+          widget.item.longitude!,
+        );
+
+        setState(() {
+          if (distanceInMeters < 1000) {
+            _distance = '${distanceInMeters.round()}m';
+          } else {
+            _distance = '${(distanceInMeters / 1000).toStringAsFixed(1)}km';
+          }
+        });
+      } else {
+        setState(() {
+          _distance = 'Location unavailable';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _distance = 'Error calculating';
+      });
+    }
+  }
+
+  Future<void> _shareItem() async {
+    try {
+      final shareText = '''
+${widget.item.title}
+${widget.item.type.toUpperCase()} Item
+
+Category: ${widget.item.category}
+Date: ${_formatDate(widget.item.dateLost ?? widget.item.dateReported)}
+${widget.item.location != null ? 'Location: ${widget.item.location}' : ''}
+
+${widget.item.description.isNotEmpty ? widget.item.description : 'No description provided'}
+
+Found this item? Contact the owner through Lost & Found app!
+''';
+
+      await Clipboard.setData(ClipboardData(text: shareText));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Item details copied to clipboard'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openInMaps() async {
+    if (widget.item.latitude == null || widget.item.longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location coordinates not available'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Open in Google Maps
+      final url =
+          'https://www.google.com/maps/search/?api=1&query=${widget.item.latitude},${widget.item.longitude}';
+
+      // In a real app, you would use url_launcher package
+      await Clipboard.setData(ClipboardData(text: url));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Map URL copied to clipboard'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open maps: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleContact() async {

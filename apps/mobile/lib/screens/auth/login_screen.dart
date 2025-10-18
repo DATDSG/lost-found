@@ -27,8 +27,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       await ref.read(authProvider.notifier).login(
-            _emailController.text,
-            _passwordController.text,
+            email: _emailController.text,
+            password: _passwordController.text,
           );
 
       // Check if widget is still mounted before using ref or context

@@ -22,12 +22,10 @@ class ProfilePage extends StatelessWidget {
               .where((r) => r.status == 'approved' && !r.isResolved)
               .length;
           final resolvedReports = myReports.where((r) => r.isResolved).length;
-          final pendingReports = myReports
-              .where((r) => r.status == 'pending')
-              .length;
-          final draftReports = myReports
-              .where((r) => r.status == 'draft')
-              .length;
+          final pendingReports =
+              myReports.where((r) => r.status == 'pending').length;
+          final draftReports =
+              myReports.where((r) => r.status == 'draft').length;
 
           return ListView(
             padding: EdgeInsets.fromLTRB(
@@ -411,7 +409,7 @@ class ProfilePage extends StatelessWidget {
                         context,
                         listen: false,
                       );
-                      await authProvider.logout(context);
+                      await authProvider.logout();
                       Navigator.of(
                         context,
                       ).pushReplacementNamed(AppRoutes.landing);
@@ -544,7 +542,7 @@ class _MenuItem extends StatelessWidget {
                       ),
                     ),
                     if (subtitle != null) ...[
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
                         subtitle!,
                         style: DT.t.body.copyWith(

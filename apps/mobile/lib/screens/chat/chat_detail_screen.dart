@@ -40,9 +40,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   void _sendMessage() {
     final message = _messageController.text.trim();
     if (message.isNotEmpty) {
-      ref
-          .read(chatProvider.notifier)
-          .sendMessage(widget.conversationId, message);
+      ref.read(chatProvider.notifier).sendMessage(message);
       _messageController.clear();
 
       // Scroll to bottom

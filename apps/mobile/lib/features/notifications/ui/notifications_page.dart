@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../providers/notifications_provider.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../models/notification.dart';
+import '../../../models/notification_model.dart';
 import '../../../core/routing/app_routes.dart';
 
 /// Notifications page for system and chat notifications
@@ -46,14 +46,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return Scaffold(
       backgroundColor: DT.c.background,
       appBar: AppBar(
-        title: Text('Notifications'),
+        title: const Text('Notifications'),
         backgroundColor: DT.c.surface,
         foregroundColor: DT.c.textPrimary,
         elevation: 0,
         actions: [
           IconButton(
             onPressed: _markAllAsRead,
-            icon: Icon(Icons.done_all_rounded),
+            icon: const Icon(Icons.done_all_rounded),
           ),
         ],
       ),
@@ -179,7 +179,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     // Handle different notification types
     switch (notification.type) {
-      case NotificationType.message:
+      case 'message':
         // Navigate to chat conversation
         if (notification.referenceId != null &&
             notification.referenceId!.isNotEmpty) {
@@ -188,11 +188,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
           ).pushNamed(AppRoutes.chat, arguments: notification.referenceId);
         }
         break;
-      case NotificationType.match:
+      case 'match':
         // Navigate to matches page
         Navigator.of(context).pushNamed(AppRoutes.matches);
         break;
-      case NotificationType.report:
+      case 'report':
         // Navigate to report details
         if (notification.referenceId != null &&
             notification.referenceId!.isNotEmpty) {
@@ -206,7 +206,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           );
         }
         break;
-      case NotificationType.system:
+      case 'system':
         // Show system notification details
         _showSystemNotificationDialog(notification);
         break;
@@ -222,7 +222,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
+            child: const Text('OK'),
           ),
         ],
       ),

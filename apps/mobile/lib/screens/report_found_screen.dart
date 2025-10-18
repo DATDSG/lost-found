@@ -30,7 +30,7 @@ class _ReportFoundScreenState extends State<ReportFoundScreen> {
   String _category = '';
   String _city = '';
   DateTime? _foundAt;
-  List<String> _colors = [];
+  final List<String> _colors = [];
   String? _locationAddress;
   double? _latitude;
   double? _longitude;
@@ -526,7 +526,7 @@ class _ReportFoundScreenState extends State<ReportFoundScreen> {
                 ),
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

@@ -36,7 +36,7 @@ class StepIndicator extends StatelessWidget {
                     ),
                     child: Center(
                       child: isCompleted
-                          ? Icon(Icons.check, color: Colors.white, size: 18)
+                          ? const Icon(Icons.check, color: Colors.white, size: 18)
                           : Text(
                               '${index + 1}',
                               style: DT.t.body.copyWith(

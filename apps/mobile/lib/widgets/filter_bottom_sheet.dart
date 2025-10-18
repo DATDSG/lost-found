@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import '../services/preferences_storage_service.dart';
 
 class FilterBottomSheet extends StatefulWidget {
   final String? initialType;
   final Function(Map<String, dynamic>) onApply;
+  final Map<String, dynamic>? initialFilters;
 
   const FilterBottomSheet({
     super.key,
     this.initialType,
     required this.onApply,
+    this.initialFilters,
   });
 
   @override
@@ -19,7 +22,12 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   String _selectedTime = 'Any Time';
   String _selectedDistance = 'Any Distance';
   String _selectedCategory = 'All';
+  String _selectedStatus = 'All';
+  String _selectedSortBy = 'Date';
+  String _selectedSortOrder = 'Newest First';
   final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  late PreferencesStorageService _preferencesService;
 
   final List<String> _timeOptions = [
     'Any Time',
@@ -43,20 +51,74 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     'Accessories',
     'Documents',
     'Clothing',
+    'Keys',
+    'Books',
+    'Toys',
+    'Sports',
     'Other',
+  ];
+
+  final List<String> _statusOptions = [
+    'All',
+    'Active',
+    'Resolved',
+    'Pending',
+  ];
+
+  final List<String> _sortByOptions = [
+    'Date',
+    'Distance',
+    'Title',
+    'Category',
+  ];
+
+  final List<String> _sortOrderOptions = [
+    'Newest First',
+    'Oldest First',
+    'Closest First',
+    'Farthest First',
   ];
 
   @override
   void initState() {
     super.initState();
+    _preferencesService = PreferencesStorageService.getInstance();
+    _loadSavedFilters();
+
     if (widget.initialType != null) {
       _selectedType = widget.initialType!;
     }
+
+    if (widget.initialFilters != null) {
+      _applyInitialFilters(widget.initialFilters!);
+    }
+  }
+
+  Future<void> _loadSavedFilters() async {
+    final savedFilters = await _preferencesService.getFilters();
+    if (savedFilters.isNotEmpty) {
+      _applyInitialFilters(savedFilters);
+    }
+  }
+
+  void _applyInitialFilters(Map<String, dynamic> filters) {
+    setState(() {
+      _selectedType = filters['type'] ?? 'lost';
+      _selectedTime = filters['time'] ?? 'Any Time';
+      _selectedDistance = filters['distance'] ?? 'Any Distance';
+      _selectedCategory = filters['category'] ?? 'All';
+      _selectedStatus = filters['status'] ?? 'All';
+      _selectedSortBy = filters['sortBy'] ?? 'Date';
+      _selectedSortOrder = filters['sortOrder'] ?? 'Newest First';
+      _locationController.text = filters['location'] ?? '';
+      _searchController.text = filters['search'] ?? '';
+    });
   }
 
   @override
   void dispose() {
     _locationController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -127,6 +189,26 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     ),
                     const SizedBox(height: 16),
 
+                    // Search Filter
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search items...',
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // Time Filter
                     _buildDropdownFilter(
                       'Time',
@@ -151,6 +233,33 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       _selectedCategory,
                       _categoryOptions,
                       (value) => setState(() => _selectedCategory = value!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Status Filter
+                    _buildDropdownFilter(
+                      'Status',
+                      _selectedStatus,
+                      _statusOptions,
+                      (value) => setState(() => _selectedStatus = value!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sort By Filter
+                    _buildDropdownFilter(
+                      'Sort By',
+                      _selectedSortBy,
+                      _sortByOptions,
+                      (value) => setState(() => _selectedSortBy = value!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sort Order Filter
+                    _buildDropdownFilter(
+                      'Sort Order',
+                      _selectedSortOrder,
+                      _sortOrderOptions,
+                      (value) => setState(() => _selectedSortOrder = value!),
                     ),
                     const SizedBox(height: 16),
 
@@ -309,19 +418,106 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
       _selectedTime = 'Any Time';
       _selectedDistance = 'Any Distance';
       _selectedCategory = 'All';
+      _selectedStatus = 'All';
+      _selectedSortBy = 'Date';
+      _selectedSortOrder = 'Newest First';
       _locationController.clear();
+      _searchController.clear();
     });
   }
 
-  void _applyFilters() {
+  void _applyFilters() async {
     final filters = {
       'type': _selectedType,
       'time': _selectedTime,
       'distance': _selectedDistance,
       'category': _selectedCategory,
+      'status': _selectedStatus,
+      'sortBy': _selectedSortBy,
+      'sortOrder': _selectedSortOrder,
       'location': _locationController.text,
+      'search': _searchController.text,
     };
-    widget.onApply(filters);
+
+    // Save filters to preferences
+    await _preferencesService.setFilters(filters);
+
+    // Convert filters to backend format
+    final backendFilters = _convertToBackendFilters(filters);
+
+    widget.onApply(backendFilters);
     Navigator.pop(context);
+  }
+
+  Map<String, dynamic> _convertToBackendFilters(Map<String, dynamic> filters) {
+    final backendFilters = <String, dynamic>{};
+
+    // Convert type filter
+    if (filters['type'] != null && filters['type'] != 'lost') {
+      backendFilters['type'] = filters['type'];
+    }
+
+    // Convert time filter
+    if (filters['time'] != null && filters['time'] != 'Any Time') {
+      final now = DateTime.now();
+      switch (filters['time']) {
+        case 'Last 24 hours':
+          backendFilters['dateFrom'] =
+              now.subtract(const Duration(hours: 24)).toIso8601String();
+          break;
+        case 'Last 7 days':
+          backendFilters['dateFrom'] =
+              now.subtract(const Duration(days: 7)).toIso8601String();
+          break;
+        case 'Last 30 days':
+          backendFilters['dateFrom'] =
+              now.subtract(const Duration(days: 30)).toIso8601String();
+          break;
+      }
+    }
+
+    // Convert distance filter
+    if (filters['distance'] != null && filters['distance'] != 'Any Distance') {
+      final distanceStr = filters['distance'].toString().replaceAll(' mi', '');
+      final distance = double.tryParse(distanceStr);
+      if (distance != null) {
+        backendFilters['maxDistance'] =
+            distance * 1609.34; // Convert miles to meters
+      }
+    }
+
+    // Convert category filter
+    if (filters['category'] != null && filters['category'] != 'All') {
+      backendFilters['category'] = filters['category'].toLowerCase();
+    }
+
+    // Convert status filter
+    if (filters['status'] != null && filters['status'] != 'All') {
+      backendFilters['status'] = filters['status'].toLowerCase();
+    }
+
+    // Convert search filter
+    if (filters['search'] != null && filters['search'].toString().isNotEmpty) {
+      backendFilters['search'] = filters['search'];
+    }
+
+    // Convert location filter
+    if (filters['location'] != null &&
+        filters['location'].toString().isNotEmpty) {
+      backendFilters['location'] = filters['location'];
+    }
+
+    // Convert sort filters
+    if (filters['sortBy'] != null && filters['sortBy'] != 'Date') {
+      backendFilters['sortBy'] = filters['sortBy'].toLowerCase();
+    }
+
+    if (filters['sortOrder'] != null &&
+        filters['sortOrder'] != 'Newest First') {
+      backendFilters['sortOrder'] =
+          filters['sortOrder'].contains('First') ? 'asc' : 'desc';
+    }
+
+    return backendFilters;
   }
 }

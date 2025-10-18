@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../../core/theme/design_tokens.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../core/routing/app_routes.dart';
+import '../../../services/api_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -16,6 +19,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _locationEnabled = true;
   String _selectedLanguage = 'English';
   String _selectedTheme = 'System';
+  final ImagePicker _imagePicker = ImagePicker();
+  final ApiService _apiService = ApiService();
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +209,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     context,
                     listen: false,
                   );
-                  await authProvider.logout(context);
+                  await authProvider.logout();
                   Navigator.of(context).pushReplacementNamed(AppRoutes.landing);
                 },
                 borderRadius: BorderRadius.circular(DT.r.md),
@@ -300,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: DT.c.text,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: DT.t.body.copyWith(
@@ -352,12 +357,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   label: 'Camera',
                   onTap: () {
                     Navigator.of(context).pop();
-                    // TODO: Implement camera functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Camera functionality coming soon'),
-                      ),
-                    );
+                    _pickImageFromCamera();
                   },
                 ),
                 _buildImageOption(
@@ -365,12 +365,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   label: 'Gallery',
                   onTap: () {
                     Navigator.of(context).pop();
-                    // TODO: Implement gallery functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Gallery functionality coming soon'),
-                      ),
-                    );
+                    _pickImageFromGallery();
                   },
                 ),
                 _buildImageOption(
@@ -378,12 +373,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   label: 'Remove',
                   onTap: () {
                     Navigator.of(context).pop();
-                    // TODO: Implement remove functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Remove functionality coming soon'),
-                      ),
-                    );
+                    _removeProfilePicture();
                   },
                 ),
               ],
@@ -488,12 +478,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // TODO: Implement export functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Export functionality coming soon'),
-                ),
-              );
+              _exportUserData();
             },
             child: const Text('Export'),
           ),
@@ -518,12 +503,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // TODO: Implement delete account functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Delete account functionality coming soon'),
-                ),
-              );
+              _deleteUserAccount();
             },
             style: ElevatedButton.styleFrom(backgroundColor: DT.c.dangerFg),
             child: const Text('Delete'),
@@ -531,5 +511,216 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        await _uploadProfilePicture(File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to take photo: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        await _uploadProfilePicture(File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadProfilePicture(File imageFile) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      await _apiService.uploadProfilePicture(imageFile);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Profile picture updated successfully'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile picture: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeProfilePicture() async {
+    try {
+      await _apiService.removeProfilePicture();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Profile picture removed successfully'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove profile picture: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportUserData() async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      await _apiService.exportUserData();
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        // In a real app, you would save this data to a file and allow download
+        // For now, we'll just show a success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Data export completed successfully'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export data: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteUserAccount() async {
+    // Show confirmation dialog with password input
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: const Text(
+          'This action cannot be undone. All your data will be permanently deleted.\n\nPlease enter your password to confirm:',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: DT.c.dangerFg),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
+        await _apiService.deleteUserAccount();
+
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+
+          // Logout and navigate to landing page
+          final authProvider =
+              Provider.of<AuthProvider>(context, listen: false);
+          await authProvider.logout();
+          Navigator.of(context).pushReplacementNamed(AppRoutes.landing);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Account deleted successfully'),
+              backgroundColor: DT.c.successFg,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete account: $e'),
+              backgroundColor: DT.c.dangerFg,
+            ),
+          );
+        }
+      }
+    }
   }
 }

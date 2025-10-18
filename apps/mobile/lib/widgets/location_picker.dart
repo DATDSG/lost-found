@@ -200,7 +200,7 @@ class _LocationPickerState extends State<LocationPicker> {
               child: ElevatedButton.icon(
                 onPressed: _isLoading ? null : _getCurrentLocation,
                 icon: _isLoading
-                    ? SizedBox(
+                    ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(

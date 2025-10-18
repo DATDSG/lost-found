@@ -152,12 +152,12 @@ class _PhotoPickerState extends State<PhotoPicker> {
                     child: GestureDetector(
                       onTap: () => _removePhoto(index),
                       child: Container(
-                        padding: EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           color: DT.c.error,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.close, color: Colors.white, size: 16),
+                        child: const Icon(Icons.close, color: Colors.white, size: 16),
                       ),
                     ),
                   ),

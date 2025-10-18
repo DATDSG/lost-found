@@ -290,7 +290,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet>
                 SizedBox(height: DT.s.sm),
               ],
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -329,7 +329,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet>
                 SizedBox(height: DT.s.sm),
               ],
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -706,7 +706,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet>
                 SizedBox(height: DT.s.sm),
               ],
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -755,7 +755,7 @@ class _ModernFilterSheetState extends State<ModernFilterSheet>
               ),
             ),
             if (isSelected)
-              Icon(Icons.check_rounded, size: 20, color: Colors.white),
+              const Icon(Icons.check_rounded, size: 20, color: Colors.white),
           ],
         ),
       ),

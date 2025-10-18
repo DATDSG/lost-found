@@ -199,12 +199,12 @@ class _EnhancedActionButton extends StatelessWidget {
                     right: 6,
                     top: 6,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                       decoration: BoxDecoration(
                         color: DT.c.dangerFg,
                         borderRadius: BorderRadius.circular(DT.r.sm),
                       ),
-                      constraints: BoxConstraints(minWidth: 16, minHeight: 16),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                       child: Text(
                         badgeCount! > 99 ? '99+' : '$badgeCount',
                         style: DT.t.caption.copyWith(

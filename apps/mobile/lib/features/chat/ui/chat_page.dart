@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../providers/chat_provider.dart';
-import '../../../models/chat_models.dart';
+import '../../../models/chat_model.dart';
+import '../../../models/notification_model.dart';
 
 /// Chat page with conversations list and individual chat views
 class ChatPage extends StatefulWidget {
@@ -50,26 +51,25 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                   });
                   context.read<ChatProvider>().clearCurrentConversation();
                 },
-                icon: Icon(Icons.arrow_back_rounded),
+                icon: const Icon(Icons.arrow_back_rounded),
               )
             : null,
         actions: _showConversationList
             ? [
                 IconButton(
                   onPressed: _showNewConversationDialog,
-                  icon: Icon(Icons.add_rounded),
+                  icon: const Icon(Icons.add_rounded),
                 ),
               ]
             : [
                 IconButton(
                   onPressed: _showConversationOptions,
-                  icon: Icon(Icons.more_vert_rounded),
+                  icon: const Icon(Icons.more_vert_rounded),
                 ),
               ],
       ),
-      body: _showConversationList
-          ? _buildConversationsList()
-          : _buildChatView(),
+      body:
+          _showConversationList ? _buildConversationsList() : _buildChatView(),
     );
   }
 
@@ -112,9 +112,9 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_rounded, size: 18),
+                        const Icon(Icons.chat_rounded, size: 18),
                         SizedBox(width: DT.s.xs),
-                        Text('Conversations'),
+                        const Text('Conversations'),
                         if (chatProvider.hasUnreadMessages) ...[
                           SizedBox(width: DT.s.xs),
                           Container(
@@ -143,9 +143,9 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_rounded, size: 18),
+                        const Icon(Icons.notifications_rounded, size: 18),
                         SizedBox(width: DT.s.xs),
-                        Text('Notifications'),
+                        const Text('Notifications'),
                         if (chatProvider.hasNotifications) ...[
                           SizedBox(width: DT.s.xs),
                           Container(
@@ -245,11 +245,12 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
           notification: notification,
           onTap: () {
             chatProvider.markNotificationAsRead(notification.id);
-            if (notification.conversationId.isNotEmpty) {
+            if (notification.conversationId?.isNotEmpty == true) {
               setState(() {
                 _showConversationList = false;
               });
-              chatProvider.loadMessages(notification.conversationId);
+              chatProvider.setCurrentConversation(notification.conversationId!);
+              chatProvider.loadMessages(notification.conversationId!);
             }
           },
         );
@@ -270,8 +271,7 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
             Expanded(
               child: ListView.builder(
                 padding: EdgeInsets.all(DT.s.lg),
-                itemCount:
-                    chatProvider.messages.length +
+                itemCount: chatProvider.messages.length +
                     (chatProvider.typingUsers.isNotEmpty ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index < chatProvider.messages.length) {
@@ -387,7 +387,7 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                   vertical: DT.s.md,
                 ),
               ),
-              icon: Icon(Icons.add_rounded),
+              icon: const Icon(Icons.add_rounded),
               label: const Text('Start Conversation'),
             ),
           ],
@@ -400,14 +400,14 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Start New Conversation'),
-        content: Text(
+        title: const Text('Start New Conversation'),
+        content: const Text(
           'This feature will be available soon. You can start conversations from matches.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -415,6 +415,11 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
   }
 
   void _showConversationOptions() {
+    final chatProvider = context.read<ChatProvider>();
+    final currentConversationId = chatProvider.currentConversationId;
+
+    if (currentConversationId == null) return;
+
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
@@ -423,33 +428,138 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(Icons.archive_rounded),
-              title: Text('Archive Conversation'),
-              onTap: () {
+              leading: const Icon(Icons.archive_rounded),
+              title: const Text('Archive Conversation'),
+              onTap: () async {
                 Navigator.pop(context);
-                // TODO: Implement archive functionality
+                await _archiveConversation(currentConversationId);
               },
             ),
             ListTile(
-              leading: Icon(Icons.block_rounded),
-              title: Text('Block User'),
-              onTap: () {
+              leading: const Icon(Icons.block_rounded),
+              title: const Text('Block User'),
+              onTap: () async {
                 Navigator.pop(context);
-                // TODO: Implement block functionality
+                await _blockUser(currentConversationId);
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete_rounded),
-              title: Text('Delete Conversation'),
-              onTap: () {
+              leading: const Icon(Icons.delete_rounded),
+              title: const Text('Delete Conversation'),
+              onTap: () async {
                 Navigator.pop(context);
-                // TODO: Implement delete functionality
+                await _deleteConversation(currentConversationId);
               },
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _archiveConversation(String conversationId) async {
+    try {
+      final chatProvider = context.read<ChatProvider>();
+      await chatProvider.archiveConversation(conversationId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Conversation archived'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to archive conversation: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _blockUser(String conversationId) async {
+    try {
+      final chatProvider = context.read<ChatProvider>();
+      await chatProvider.blockUserInConversation(conversationId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('User blocked'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to block user: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteConversation(String conversationId) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Conversation'),
+        content: const Text(
+          'Are you sure you want to delete this conversation? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: DT.c.dangerFg),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final chatProvider = context.read<ChatProvider>();
+        await chatProvider.deleteConversation(conversationId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Conversation deleted'),
+              backgroundColor: DT.c.successFg,
+            ),
+          );
+
+          // Navigate back to conversation list
+          setState(() {
+            _showConversationList = true;
+          });
+          chatProvider.clearCurrentConversation();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete conversation: $e'),
+              backgroundColor: DT.c.dangerFg,
+            ),
+          );
+        }
+      }
+    }
   }
 }
 
@@ -487,14 +597,12 @@ class _ConversationCard extends StatelessWidget {
               : null,
         ),
         title: Text(
-          conversation.title,
+          conversation.title ?? conversation.userName,
           style: DT.t.title.copyWith(
-            fontWeight: conversation.isUnread
-                ? FontWeight.w600
-                : FontWeight.w500,
-            color: conversation.isUnread
-                ? DT.c.textPrimary
-                : DT.c.textSecondary,
+            fontWeight:
+                conversation.isUnread ? FontWeight.w600 : FontWeight.w500,
+            color:
+                conversation.isUnread ? DT.c.textPrimary : DT.c.textSecondary,
           ),
         ),
         subtitle: conversation.lastMessage != null
@@ -560,7 +668,7 @@ class _ConversationCard extends StatelessWidget {
 
 /// Notification card widget
 class _NotificationCard extends StatelessWidget {
-  final ChatNotification notification;
+  final AppNotification notification;
   final VoidCallback onTap;
 
   const _NotificationCard({required this.notification, required this.onTap});
@@ -587,7 +695,8 @@ class _NotificationCard extends StatelessWidget {
           radius: 20,
           backgroundColor: DT.c.brand.withValues(alpha: 0.1),
           child: Icon(
-            _getNotificationIcon(notification.notificationType),
+            _getNotificationIcon(
+                _parseNotificationType(notification.notificationType)),
             color: DT.c.brand,
             size: 20,
           ),
@@ -629,6 +738,21 @@ class _NotificationCard extends StatelessWidget {
     );
   }
 
+  NotificationType _parseNotificationType(String type) {
+    switch (type.toLowerCase()) {
+      case 'message':
+        return NotificationType.message;
+      case 'match':
+        return NotificationType.match;
+      case 'report':
+        return NotificationType.report;
+      case 'system':
+        return NotificationType.system;
+      default:
+        return NotificationType.system;
+    }
+  }
+
   IconData _getNotificationIcon(NotificationType type) {
     switch (type) {
       case NotificationType.message:
@@ -666,16 +790,14 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMe =
-        message.senderId ==
+    final isMe = message.senderId ==
         'current_user'; // This should come from auth provider
 
     return Container(
       margin: EdgeInsets.only(bottom: DT.s.sm),
       child: Row(
-        mainAxisAlignment: isMe
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
@@ -718,7 +840,7 @@ class _MessageBubble extends StatelessWidget {
                 children: [
                   if (!isMe)
                     Text(
-                      message.senderName,
+                      message.senderName ?? 'Unknown',
                       style: DT.t.caption.copyWith(
                         color: DT.c.brand,
                         fontWeight: FontWeight.w600,
@@ -746,7 +868,7 @@ class _MessageBubble extends StatelessWidget {
                       if (isMe) ...[
                         SizedBox(width: DT.s.xs),
                         Icon(
-                          _getStatusIcon(message.status),
+                          _getStatusIcon(_parseMessageStatus(message.status)),
                           size: 12,
                           color: Colors.white.withValues(alpha: 0.7),
                         ),
@@ -768,6 +890,23 @@ class _MessageBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  MessageStatus _parseMessageStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'sending':
+        return MessageStatus.sending;
+      case 'sent':
+        return MessageStatus.sent;
+      case 'delivered':
+        return MessageStatus.delivered;
+      case 'read':
+        return MessageStatus.read;
+      case 'failed':
+        return MessageStatus.failed;
+      default:
+        return MessageStatus.sent;
+    }
   }
 
   IconData _getStatusIcon(MessageStatus status) {
@@ -957,7 +1096,8 @@ class _MessageInputState extends State<_MessageInput> {
                 color: DT.c.brand,
                 borderRadius: BorderRadius.circular(DT.r.xl),
               ),
-              child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child:
+                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],

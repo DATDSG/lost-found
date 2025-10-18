@@ -170,7 +170,7 @@ class _NotificationTile extends ConsumerWidget {
         if (!notification.isRead) {
           ref.read(notificationsProvider.notifier).markAsRead(notification.id);
         }
-        // TODO: Navigate to related item/match/message based on type
+        _navigateToRelatedContent(context, notification);
       },
       leading: Container(
         padding: const EdgeInsets.all(12),
@@ -221,5 +221,51 @@ class _NotificationTile extends ConsumerWidget {
           : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
     );
+  }
+
+  void _navigateToRelatedContent(
+      BuildContext context, AppNotification notification) {
+    switch (notification.type) {
+      case 'match':
+        // Navigate to match details or item details
+        if (notification.itemId != null) {
+          Navigator.pushNamed(
+            context,
+            '/item-details',
+            arguments: notification.itemId,
+          );
+        } else {
+          Navigator.pushNamed(context, '/matches');
+        }
+        break;
+      case 'message':
+        // Navigate to chat conversation
+        if (notification.conversationId != null) {
+          Navigator.pushNamed(
+            context,
+            '/chat',
+            arguments: notification.conversationId,
+          );
+        } else {
+          Navigator.pushNamed(context, '/chat');
+        }
+        break;
+      case 'update':
+        // Navigate to item details or user's items
+        if (notification.itemId != null) {
+          Navigator.pushNamed(
+            context,
+            '/item-details',
+            arguments: notification.itemId,
+          );
+        } else {
+          Navigator.pushNamed(context, '/my-items');
+        }
+        break;
+      default:
+        // Navigate to home or show a generic message
+        Navigator.pushNamed(context, '/home');
+        break;
+    }
   }
 }

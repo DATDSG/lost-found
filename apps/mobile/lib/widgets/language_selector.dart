@@ -282,7 +282,7 @@ class LanguagePickerSheet extends StatelessWidget {
                       ),
                     ),
                   );
-                }).toList(),
+                }),
 
                 SizedBox(height: DT.s.lg),
 
@@ -305,8 +305,8 @@ class LanguagePickerSheet extends StatelessWidget {
                         onLanguageChanged!(nextLanguage.code);
                       }
                     },
-                    icon: Icon(Icons.refresh_rounded),
-                    label: Text('Cycle Language'),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Cycle Language'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: DT.c.brand,
                       side: BorderSide(color: DT.c.brand),

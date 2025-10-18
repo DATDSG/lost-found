@@ -232,7 +232,7 @@ class _ModernSearchBarState extends State<ModernSearchBar>
                   child: Container(
                     height: 8,
                     width: 8,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
                     ),

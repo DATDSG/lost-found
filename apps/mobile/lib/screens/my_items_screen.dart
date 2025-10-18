@@ -271,16 +271,56 @@ class _MyItemsPageState extends State<MyItemsPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // TODO: Implement resolve functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Report marked as resolved')),
-              );
+              _resolveReport(report);
             },
             child: const Text('Resolve'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _resolveReport(Report report) async {
+    try {
+      final reportsProvider =
+          Provider.of<ReportsProvider>(context, listen: false);
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      await reportsProvider.resolveReport(report.id);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Report marked as resolved'),
+            backgroundColor: DT.c.successFg,
+          ),
+        );
+
+        // Reload reports to reflect the change
+        await _loadUserReports();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to resolve report: $e'),
+            backgroundColor: DT.c.dangerFg,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -408,7 +448,7 @@ class _ReportItemCard extends StatelessWidget {
                             size: 12,
                             color: DT.c.textMuted,
                           ),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
                             '${report.city} • ${dateFormat.format(report.occurredAt)}',
                             style: DT.t.body.copyWith(
@@ -426,7 +466,7 @@ class _ReportItemCard extends StatelessWidget {
                             size: 12,
                             color: DT.c.textMuted,
                           ),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
                             report.category,
                             style: DT.t.body.copyWith(
@@ -445,7 +485,7 @@ class _ReportItemCard extends StatelessWidget {
                               size: 12,
                               color: DT.c.brand,
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
                               'Awaiting approval',
                               style: DT.t.body.copyWith(
@@ -513,9 +553,8 @@ class _ReportItemCard extends StatelessWidget {
                                   ? Icons.edit_rounded
                                   : Icons.check_rounded,
                               size: 16,
-                              color: onEdit != null
-                                  ? DT.c.brand
-                                  : DT.c.successFg,
+                              color:
+                                  onEdit != null ? DT.c.brand : DT.c.successFg,
                             ),
                             SizedBox(width: DT.s.xs),
                             Text(

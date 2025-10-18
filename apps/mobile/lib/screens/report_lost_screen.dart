@@ -30,7 +30,7 @@ class _ReportLostScreenState extends State<ReportLostScreen> {
   String _category = '';
   String _city = '';
   DateTime? _occurredAt;
-  List<String> _colors = [];
+  final List<String> _colors = [];
   String? _locationAddress;
   double? _latitude;
   double? _longitude;
@@ -509,7 +509,7 @@ class _ReportLostScreenState extends State<ReportLostScreen> {
                 ),
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

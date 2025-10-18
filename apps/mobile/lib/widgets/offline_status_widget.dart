@@ -98,9 +98,9 @@ class _OfflineStatusWidgetState extends State<OfflineStatusWidget> {
           bottom: false,
           child: Row(
             children: [
-              Icon(Icons.wifi_off, color: Colors.white, size: 16),
+              const Icon(Icons.wifi_off, color: Colors.white, size: 16),
               const SizedBox(width: 8),
-              Expanded(
+              const Expanded(
                 child: Text(
                   'You\'re offline. Changes will sync when you\'re back online.',
                   style: TextStyle(
@@ -156,7 +156,7 @@ class _OfflineStatusWidgetState extends State<OfflineStatusWidget> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.sync, color: Colors.white, size: 14),
+            const Icon(Icons.sync, color: Colors.white, size: 14),
             const SizedBox(width: 4),
             Text(
               '$_queueCount',

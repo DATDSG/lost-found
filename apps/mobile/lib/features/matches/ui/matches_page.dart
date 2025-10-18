@@ -6,6 +6,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/reports_provider.dart';
 import '../../../providers/matches_provider.dart';
 import '../../../models/report.dart';
+import '../../../models/match_model.dart';
 import 'package:intl/intl.dart';
 
 class MatchesPage extends StatefulWidget {
@@ -75,36 +76,62 @@ class _MatchesPageState extends State<MatchesPage> {
           // Stats Cards
           Consumer<MatchesProvider>(
             builder: (context, matchesProvider, _) {
-              final stats = matchesProvider.getMatchStats();
-              return Padding(
-                padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        'Active Reports',
-                        '${stats['total']}',
-                        DT.c.brand,
+              return FutureBuilder<MatchStats?>(
+                future: matchesProvider.getMatchStats(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
+                      child: Row(
+                        children: [
+                          Expanded(
+                              child: _buildStatCard(
+                                  'Active Reports', '...', DT.c.brand)),
+                          SizedBox(width: DT.s.md),
+                          Expanded(
+                              child: _buildStatCard(
+                                  'Potential Matches', '...', DT.c.successFg)),
+                          SizedBox(width: DT.s.md),
+                          Expanded(
+                              child: _buildStatCard(
+                                  'Confirmed Matches', '...', DT.c.brand)),
+                        ],
                       ),
+                    );
+                  }
+
+                  final stats = snapshot.data;
+                  return Padding(
+                    padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            'Active Reports',
+                            '${stats?.totalMatches ?? 0}',
+                            DT.c.brand,
+                          ),
+                        ),
+                        SizedBox(width: DT.s.md),
+                        Expanded(
+                          child: _buildStatCard(
+                            'Potential Matches',
+                            '${stats?.pendingMatches ?? 0}',
+                            DT.c.successFg,
+                          ),
+                        ),
+                        SizedBox(width: DT.s.md),
+                        Expanded(
+                          child: _buildStatCard(
+                            'Confirmed Matches',
+                            '${stats?.confirmedMatches ?? 0}',
+                            DT.c.brand,
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(width: DT.s.md),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Potential Matches',
-                        '${stats['pending']}',
-                        DT.c.successFg,
-                      ),
-                    ),
-                    SizedBox(width: DT.s.md),
-                    Expanded(
-                      child: _buildStatCard(
-                        'Confirmed Matches',
-                        '${stats['confirmed']}',
-                        DT.c.brand,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
@@ -221,9 +248,8 @@ class _MatchesPageState extends State<MatchesPage> {
                                 AppRoutes.viewDetails,
                                 arguments: {
                                   'reportId': report.id,
-                                  'reportType': report.isLost
-                                      ? 'lost'
-                                      : 'found',
+                                  'reportType':
+                                      report.isLost ? 'lost' : 'found',
                                   'reportData': {
                                     'title': report.title,
                                     'description': report.description,
@@ -238,8 +264,7 @@ class _MatchesPageState extends State<MatchesPage> {
                                     'phone': 'Not provided',
                                     'email': 'Not provided',
                                     'preferredContact': 'Any',
-                                    'address':
-                                        report.locationAddress ??
+                                    'address': report.locationAddress ??
                                         'Not specified',
                                     'city': report.city,
                                     'state': 'Unknown',
@@ -252,9 +277,8 @@ class _MatchesPageState extends State<MatchesPage> {
                                     'date': DateFormat(
                                       'MMM d, yyyy',
                                     ).format(report.createdAt),
-                                    'images': report.media
-                                        .map((m) => m.url)
-                                        .toList(),
+                                    'images':
+                                        report.media.map((m) => m.url).toList(),
                                   },
                                 },
                               );
@@ -281,9 +305,9 @@ class _MatchesPageState extends State<MatchesPage> {
                               // Load matches for this specific report
                               final matchesProvider =
                                   Provider.of<MatchesProvider>(
-                                    context,
-                                    listen: false,
-                                  );
+                                context,
+                                listen: false,
+                              );
                               await matchesProvider.loadMatchesForReport(
                                 report.id,
                               );
@@ -358,269 +382,301 @@ class _ReportMatchCard extends StatelessWidget {
     // Get real match data for this report
     return Consumer<MatchesProvider>(
       builder: (context, matchesProvider, _) {
-        final matches = matchesProvider.getMatchesForReport(report.id);
-        final pendingMatches = matches.where((m) => m.isPending).toList();
+        return FutureBuilder<List<Match>>(
+          future: matchesProvider.getMatchesForReport(report.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildLoadingCard();
+            }
 
-        // Calculate average score
-        final averageScore = matches.isNotEmpty
-            ? matches.fold<double>(
-                    0.0,
-                    (sum, match) => sum + match.overallScore,
-                  ) /
-                  matches.length
-            : 0.0;
+            final matches = snapshot.data ?? [];
+            final pendingMatches = matches.where((m) => m.isPending).toList();
 
-        // Get last match date
-        final lastMatchDate = matches.isNotEmpty
-            ? matches.first.timeAgo
-            : 'No matches yet';
+            // Calculate average score
+            final averageScore = matches.isNotEmpty
+                ? matches.fold<double>(
+                      0.0,
+                      (sum, match) => sum + match.overallScore,
+                    ) /
+                    matches.length
+                : 0.0;
 
-        final matchScore = averageScore;
-        final potentialMatchesCount = pendingMatches.length;
-        final lastMatch = lastMatchDate;
+            // Get last match date
+            final lastMatchDate =
+                matches.isNotEmpty ? matches.first.timeAgo : 'No matches yet';
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(DT.r.lg),
-            boxShadow: [
-              BoxShadow(
-                color: DT.c.shadow.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
+            final matchScore = averageScore;
+            final potentialMatchesCount = pendingMatches.length;
+            final lastMatch = lastMatchDate;
+
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(DT.r.lg),
+                boxShadow: [
+                  BoxShadow(
+                    color: DT.c.shadow.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Header with report info
-              Padding(
-                padding: EdgeInsets.all(DT.s.md),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Report image
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        height: 60,
-                        width: 60,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              statusColor.withValues(alpha: 0.15),
-                              statusColor.withValues(alpha: 0.05),
-                            ],
-                          ),
-                        ),
-                        child: report.media.isNotEmpty
-                            ? Image.network(
-                                report.media.first.url,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
+              child: Column(
+                children: [
+                  // Header with report info
+                  Padding(
+                    padding: EdgeInsets.all(DT.s.md),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Report image
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            height: 60,
+                            width: 60,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  statusColor.withValues(alpha: 0.15),
+                                  statusColor.withValues(alpha: 0.05),
+                                ],
+                              ),
+                            ),
+                            child: report.media.isNotEmpty
+                                ? Image.network(
+                                    report.media.first.url,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        report.isLost
+                                            ? Icons.search_off_rounded
+                                            : Icons
+                                                .check_circle_outline_rounded,
+                                        size: 24,
+                                        color:
+                                            statusColor.withValues(alpha: 0.4),
+                                      );
+                                    },
+                                  )
+                                : Icon(
                                     report.isLost
                                         ? Icons.search_off_rounded
                                         : Icons.check_circle_outline_rounded,
                                     size: 24,
                                     color: statusColor.withValues(alpha: 0.4),
-                                  );
-                                },
-                              )
-                            : Icon(
-                                report.isLost
-                                    ? Icons.search_off_rounded
-                                    : Icons.check_circle_outline_rounded,
-                                size: 24,
-                                color: statusColor.withValues(alpha: 0.4),
-                              ),
-                      ),
-                    ),
-                    SizedBox(width: DT.s.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  report.title,
-                                  style: DT.t.title.copyWith(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: DT.s.sm,
-                                  vertical: DT.s.xs,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: statusBg,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  report.isLost ? 'Lost' : 'Found',
-                                  style: DT.t.label.copyWith(
-                                    color: statusColor,
-                                    fontSize: 10,
+                          ),
+                        ),
+                        SizedBox(width: DT.s.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      report.title,
+                                      style: DT.t.title.copyWith(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: DT.s.sm,
+                                      vertical: DT.s.xs,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusBg,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      report.isLost ? 'Lost' : 'Found',
+                                      style: DT.t.label.copyWith(
+                                        color: statusColor,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          SizedBox(height: DT.s.xs),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.location_on_rounded,
-                                size: 12,
-                                color: DT.c.textMuted,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                '${report.city} • ${dateFormat.format(report.occurredAt)}',
-                                style: DT.t.body.copyWith(
-                                  fontSize: 12,
-                                  color: DT.c.textMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Matching Stats Section
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: DT.s.md,
-                  vertical: DT.s.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: DT.c.surface.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(DT.r.lg),
-                    bottomRight: Radius.circular(DT.r.lg),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    // Match Score
-                    Expanded(
-                      child: _buildMatchStat(
-                        'Match Score',
-                        '${(matchScore * 100).toInt()}%',
-                        _getScoreColor(matchScore),
-                        Icons.auto_awesome_rounded,
-                      ),
-                    ),
-                    Container(width: 1, height: 30, color: DT.c.divider),
-
-                    // Potential Matches
-                    Expanded(
-                      child: _buildMatchStat(
-                        'Potential',
-                        '$potentialMatchesCount',
-                        DT.c.brand,
-                        Icons.search_rounded,
-                      ),
-                    ),
-                    Container(width: 1, height: 30, color: DT.c.divider),
-
-                    // Last Match
-                    Expanded(
-                      child: _buildMatchStat(
-                        'Last Match',
-                        lastMatch,
-                        DT.c.textMuted,
-                        Icons.schedule_rounded,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Action Buttons
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: DT.c.divider, width: 1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: onTap,
-                        child: Padding(
-                          padding: EdgeInsets.all(DT.s.md),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.visibility_outlined,
-                                size: 16,
-                                color: DT.c.brand,
-                              ),
-                              SizedBox(width: DT.s.xs),
-                              Text(
-                                'View Report',
-                                style: DT.t.body.copyWith(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: DT.c.brand,
-                                ),
+                              SizedBox(height: DT.s.xs),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    size: 12,
+                                    color: DT.c.textMuted,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${report.city} • ${dateFormat.format(report.occurredAt)}',
+                                    style: DT.t.body.copyWith(
+                                      fontSize: 12,
+                                      color: DT.c.textMuted,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  // Matching Stats Section
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: DT.s.md,
+                      vertical: DT.s.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: DT.c.surface.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(DT.r.lg),
+                        bottomRight: Radius.circular(DT.r.lg),
                       ),
                     ),
-                    Container(width: 1, height: 40, color: DT.c.divider),
-                    Expanded(
-                      child: InkWell(
-                        onTap: onViewMatches,
-                        child: Padding(
-                          padding: EdgeInsets.all(DT.s.md),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.auto_awesome_rounded,
-                                size: 16,
-                                color: DT.c.successFg,
-                              ),
-                              SizedBox(width: DT.s.xs),
-                              Text(
-                                'View Matches',
-                                style: DT.t.body.copyWith(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: DT.c.successFg,
-                                ),
-                              ),
-                            ],
+                    child: Row(
+                      children: [
+                        // Match Score
+                        Expanded(
+                          child: _buildMatchStat(
+                            'Match Score',
+                            '${(matchScore * 100).toInt()}%',
+                            _getScoreColor(matchScore),
+                            Icons.auto_awesome_rounded,
                           ),
                         ),
+                        Container(width: 1, height: 30, color: DT.c.divider),
+
+                        // Potential Matches
+                        Expanded(
+                          child: _buildMatchStat(
+                            'Potential',
+                            '$potentialMatchesCount',
+                            DT.c.brand,
+                            Icons.search_rounded,
+                          ),
+                        ),
+                        Container(width: 1, height: 30, color: DT.c.divider),
+
+                        // Last Match
+                        Expanded(
+                          child: _buildMatchStat(
+                            'Last Match',
+                            lastMatch,
+                            DT.c.textMuted,
+                            Icons.schedule_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Action Buttons
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: DT.c.divider, width: 1),
                       ),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: onTap,
+                            child: Padding(
+                              padding: EdgeInsets.all(DT.s.md),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.visibility_outlined,
+                                    size: 16,
+                                    color: DT.c.brand,
+                                  ),
+                                  SizedBox(width: DT.s.xs),
+                                  Text(
+                                    'View Report',
+                                    style: DT.t.body.copyWith(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: DT.c.brand,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(width: 1, height: 40, color: DT.c.divider),
+                        Expanded(
+                          child: InkWell(
+                            onTap: onViewMatches,
+                            child: Padding(
+                              padding: EdgeInsets.all(DT.s.md),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 16,
+                                    color: DT.c.successFg,
+                                  ),
+                                  SizedBox(width: DT.s.xs),
+                                  Text(
+                                    'View Matches',
+                                    style: DT.t.body.copyWith(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: DT.c.successFg,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildLoadingCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(DT.r.lg),
+        boxShadow: [
+          BoxShadow(
+            color: DT.c.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(DT.s.lg),
+        child: Center(
+          child: CircularProgressIndicator(color: DT.c.brand),
+        ),
+      ),
     );
   }
 
@@ -637,7 +693,7 @@ class _ReportMatchCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 12, color: color),
-            SizedBox(width: 2),
+            const SizedBox(width: 2),
             Flexible(
               child: Text(
                 value,
@@ -651,7 +707,7 @@ class _ReportMatchCard extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: 2),
+        const SizedBox(height: 2),
         Text(
           label,
           style: DT.t.label.copyWith(fontSize: 9, color: DT.c.textMuted),

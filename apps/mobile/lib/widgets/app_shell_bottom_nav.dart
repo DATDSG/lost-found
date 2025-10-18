@@ -199,7 +199,7 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeInOut,
-                      padding: EdgeInsets.all(6), // Increased padding
+                      padding: const EdgeInsets.all(6), // Increased padding
                       decoration: BoxDecoration(
                         color: widget.isActive
                             ? DT.c.brand.withValues(alpha: 0.12)
@@ -227,7 +227,7 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
                       ),
                     ),
 
-                    SizedBox(height: 3), // Reduced spacing to fit better
+                    const SizedBox(height: 3), // Reduced spacing to fit better
                     // Label with enhanced animation
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 250),
@@ -248,7 +248,7 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
                       ),
                     ),
 
-                    SizedBox(height: 3), // Reduced spacing to fit better
+                    const SizedBox(height: 3), // Reduced spacing to fit better
                     // Enhanced active indicator
                     if (widget.isActive)
                       AnimatedContainer(
