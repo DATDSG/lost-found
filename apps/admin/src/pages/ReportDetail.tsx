@@ -16,10 +16,10 @@ import { useReport, useUpdateReportStatus } from "@/hooks/useReports";
 
 export default function ReportDetail() {
   const { id } = useParams();
-  const { data: report, isLoading } = useReport(id || "");
+  const { data: report, isPending } = useReport(id || "");
   const updateStatus = useUpdateReportStatus();
 
-  if (isLoading) {
+  if (isPending) {
     return (
       <Box
         display="flex"
@@ -56,7 +56,7 @@ export default function ReportDetail() {
                   data: { status: "approved" },
                 })
               }
-              disabled={updateStatus.isLoading}
+              disabled={updateStatus.isPending}
             >
               Approve
             </Button>
@@ -69,7 +69,7 @@ export default function ReportDetail() {
                   data: { status: "hidden" },
                 })
               }
-              disabled={updateStatus.isLoading}
+              disabled={updateStatus.isPending}
             >
               Reject
             </Button>

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   usersService,
   type UserFilters,
@@ -10,7 +10,7 @@ export const useUsers = (filters: UserFilters = {}) => {
   return useQuery({
     queryKey: ["users", filters],
     queryFn: () => usersService.getUsers(filters),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -38,9 +38,9 @@ export const useUpdateUser = () => {
     mutationFn: ({ id, data }: { id: string; data: UpdateUserRequest }) =>
       usersService.updateUser(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries(["users"]);
-      queryClient.invalidateQueries(["user", variables.id]);
-      queryClient.invalidateQueries(["userStats"]);
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["userStats"] });
       enqueueSnackbar("User updated successfully", { variant: "success" });
     },
     onError: () => {
@@ -56,8 +56,8 @@ export const useDeleteUser = () => {
   return useMutation({
     mutationFn: (id: string) => usersService.deleteUser(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(["users"]);
-      queryClient.invalidateQueries(["userStats"]);
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["userStats"] });
       enqueueSnackbar("User deleted successfully", { variant: "success" });
     },
     onError: () => {

@@ -20,14 +20,18 @@ export const useCurrentUser = () => {
   const token = useAuthStore((state) => state.token);
   const setUser = useAuthStore((state) => state.setUser);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["currentUser"],
     queryFn: authService.getCurrentUser,
     enabled: !!token,
-    onSuccess: (data) => {
-      setUser(data);
-    },
   });
+
+  // Handle success in useEffect or use the data directly
+  if (query.data) {
+    setUser(query.data);
+  }
+
+  return query;
 };
 
 export const useLogout = () => {

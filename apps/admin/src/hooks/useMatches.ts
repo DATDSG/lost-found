@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { matchesService, type MatchFilters } from "@/services";
 import { useSnackbar } from "notistack";
 
@@ -6,7 +6,7 @@ export const useMatches = (filters: MatchFilters = {}) => {
   return useQuery({
     queryKey: ["matches", filters],
     queryFn: () => matchesService.getMatches(filters),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -33,8 +33,8 @@ export const useTriggerMatching = () => {
   return useMutation({
     mutationFn: (reportId: string) => matchesService.triggerMatching(reportId),
     onSuccess: () => {
-      queryClient.invalidateQueries(["matches"]);
-      queryClient.invalidateQueries(["matchStats"]);
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["matchStats"] });
       enqueueSnackbar("Matching triggered successfully", {
         variant: "success",
       });

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   reportsService,
   type ReportFilters,
@@ -10,7 +10,7 @@ export const useReports = (filters: ReportFilters = {}) => {
   return useQuery({
     queryKey: ["reports", filters],
     queryFn: () => reportsService.getReports(filters),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -43,9 +43,9 @@ export const useUpdateReportStatus = () => {
       data: UpdateReportStatusRequest;
     }) => reportsService.updateReportStatus(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries(["reports"]);
-      queryClient.invalidateQueries(["report", variables.id]);
-      queryClient.invalidateQueries(["reportStats"]);
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["report", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["reportStats"] });
       enqueueSnackbar("Report status updated successfully", {
         variant: "success",
       });
@@ -63,8 +63,8 @@ export const useDeleteReport = () => {
   return useMutation({
     mutationFn: (id: string) => reportsService.deleteReport(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(["reports"]);
-      queryClient.invalidateQueries(["reportStats"]);
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["reportStats"] });
       enqueueSnackbar("Report deleted successfully", { variant: "success" });
     },
     onError: () => {
