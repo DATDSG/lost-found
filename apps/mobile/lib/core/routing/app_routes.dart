@@ -846,7 +846,7 @@ class DeepLinkHandler {
         final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
         return DeepLinkResult(route: AppRoutes.chat, arguments: id);
       case 'profile':
-        return DeepLinkResult(route: AppRoutes.profile);
+        return const DeepLinkResult(route: AppRoutes.profile);
       default:
         return null;
     }

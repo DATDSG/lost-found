@@ -2,6 +2,7 @@
 ///
 /// This file provides API configuration that can be changed based on
 /// the build environment (development, staging, production)
+library;
 
 class ApiConfig {
   // Private constructor
