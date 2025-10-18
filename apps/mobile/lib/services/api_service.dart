@@ -1,20 +1,26 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
 import '../config/api_config.dart';
 import '../models/match_model.dart';
 import '../models/chat_model.dart';
 import '../models/item.dart';
 import '../models/notification_model.dart';
 import 'storage_service.dart';
+import 'base_api_service.dart';
 
 /// Simple API service using Dio
-class ApiService {
-  late final Dio _dio;
+class ApiService extends BaseApiService {
   final StorageService _storage = StorageService();
 
-  ApiService() {
-    _dio = Dio(
+  ApiService() : super() {
+    _initializeDio();
+  }
+
+  void _initializeDio() {
+    // Reinitialize _dio with proper configuration
+    dio = Dio(
       BaseOptions(
         baseUrl: ApiConfig.baseUrl,
         connectTimeout: ApiConfig.timeout,
@@ -27,7 +33,7 @@ class ApiService {
     );
 
     // Add interceptor to attach token to requests
-    _dio.interceptors.add(
+    dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           // Add token if available
@@ -60,81 +66,60 @@ class ApiService {
 
   // Authentication methods
   /// Login user
-  Future<Map<String, dynamic>?> login(String email, String password) async {
-    try {
-      final response = await post('/auth/login', data: {
+  Future<Map<String, dynamic>?> login(
+      {required String email, required String password}) async {
+    return await executeRequest(
+      () => post('/auth/login', data: {
         'email': email,
         'password': password,
-      });
-      return response.data;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error logging in: $e');
-      }
-      rethrow;
-    }
+      }),
+      operation: 'logging in',
+    );
   }
 
   /// Register user
   Future<Map<String, dynamic>?> register(
-      String email, String password, String displayName) async {
-    try {
-      final response = await post('/auth/register', data: {
+      {required String email,
+      required String password,
+      required String displayName}) async {
+    return await executeRequest(
+      () => post('/auth/register', data: {
         'email': email,
         'password': password,
         'display_name': displayName,
-      });
-      return response.data;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error registering: $e');
-      }
-      rethrow;
-    }
+      }),
+      operation: 'registering',
+    );
   }
 
   /// Logout user
   Future<void> logout() async {
-    try {
-      await post('/auth/logout');
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error logging out: $e');
-      }
-      rethrow;
-    }
+    await executeVoidRequest(
+      () => post('/auth/logout'),
+      operation: 'logging out',
+    );
   }
 
   /// Get user profile
   Future<Map<String, dynamic>?> getProfile() async {
-    try {
-      final response = await get('/auth/me');
-      return response.data;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error getting profile: $e');
-      }
-      rethrow;
-    }
+    return await executeRequest(
+      () => get('/auth/me'),
+      operation: 'getting profile',
+    );
   }
 
   /// Update user profile
   Future<Map<String, dynamic>?> updateProfile(
       Map<String, dynamic> profileData) async {
-    try {
-      final response = await put('/auth/profile', data: profileData);
-      return response.data;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error updating profile: $e');
-      }
-      rethrow;
-    }
+    return await executeRequest(
+      () => put('/auth/profile', data: profileData),
+      operation: 'updating profile',
+    );
   }
 
   /// Change password
   Future<void> changePassword(
-      String currentPassword, String newPassword) async {
+      {required String currentPassword, required String newPassword}) async {
     try {
       await put('/auth/change-password', data: {
         'current_password': currentPassword,
@@ -143,6 +128,38 @@ class ApiService {
     } catch (e) {
       if (kDebugMode) {
         print('Error changing password: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Send password reset email
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await post('/auth/forgot-password', data: {
+        'email': email,
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error sending password reset email: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Send support message
+  Future<void> sendSupportMessage({
+    required String email,
+    required String message,
+  }) async {
+    try {
+      await post('/support/message', data: {
+        'email': email,
+        'message': message,
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error sending support message: $e');
       }
       rethrow;
     }
@@ -203,119 +220,41 @@ class ApiService {
     }
   }
 
-  /// GET request
-  Future<Response> get(String path,
-      {Map<String, dynamic>? queryParameters}) async {
-    try {
-      return await _dio.get(path, queryParameters: queryParameters);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// POST request
-  Future<Response> post(String path,
-      {Map<String, dynamic>? data,
-      Map<String, dynamic>? queryParameters}) async {
-    try {
-      return await _dio.post(path,
-          data: data, queryParameters: queryParameters);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// PUT request
-  Future<Response> put(String path,
-      {Map<String, dynamic>? data,
-      Map<String, dynamic>? queryParameters}) async {
-    try {
-      return await _dio.put(path, data: data, queryParameters: queryParameters);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// DELETE request
-  Future<Response> delete(String path,
-      {Map<String, dynamic>? queryParameters}) async {
-    try {
-      return await _dio.delete(path, queryParameters: queryParameters);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Upload file with multipart
-  Future<Response> uploadFile(
-    String path,
-    String filePath,
-    String fieldName,
-  ) async {
-    try {
-      final formData = FormData.fromMap({
-        fieldName: await MultipartFile.fromFile(filePath),
-      });
-      return await _dio.post(path, data: formData);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
   // Matches API
   Future<List<Match>> getMatches() async {
-    try {
-      final response = await get('/matches');
-      final data = response.data as List;
-      return data.map((json) => Match.fromJson(json)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading matches: $e');
-      }
-      // Return empty list for now during development
-      return [];
-    }
+    return await executeListRequest(
+      () => get('/matches'),
+      operation: 'loading matches',
+      fromJson: Match.fromJson,
+    );
   }
 
   // Chat API
   Future<List<ChatConversation>> getConversations() async {
-    try {
-      final response = await get('/chat/conversations');
-      final data = response.data as List;
-      return data.map((json) => ChatConversation.fromJson(json)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading conversations: $e');
-      }
-      // Return empty list for now during development
-      return [];
-    }
+    return await executeListRequest(
+      () => get('/chat/conversations'),
+      operation: 'loading conversations',
+      fromJson: ChatConversation.fromJson,
+    );
   }
 
   Future<List<ChatMessage>> getMessages(String conversationId) async {
-    try {
-      final response =
-          await get('/chat/conversations/$conversationId/messages');
-      final data = response.data as List;
-      return data.map((json) => ChatMessage.fromJson(json)).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading messages: $e');
-      }
-      return [];
-    }
+    return await executeListRequest(
+      () => get('/chat/conversations/$conversationId/messages'),
+      operation: 'loading messages',
+      fromJson: ChatMessage.fromJson,
+    );
   }
 
-  Future<ChatMessage> sendMessage(String conversationId, String message) async {
-    try {
-      final response = await post(
+  Future<void> sendMessage(
+      {required String conversationId, required String content}) async {
+    await executeVoidRequest(
+      () => post(
         '/chat/conversations/$conversationId/messages',
-        data: {'message': message},
-      );
-      return ChatMessage.fromJson(response.data);
-    } catch (e) {
-      rethrow;
-    }
+        data: {'message': content},
+      ),
+      operation: 'sending message',
+    );
   }
 
   // Items API with search and filters
@@ -428,6 +367,18 @@ class ApiService {
     }
   }
 
+  Future<bool> deleteNotification(String notificationId) async {
+    try {
+      await delete('/notifications/$notificationId');
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error deleting notification: $e');
+      }
+      rethrow;
+    }
+  }
+
   Future<int> getUnreadNotificationCount() async {
     try {
       final response = await get('/notifications/unread-count');
@@ -469,7 +420,7 @@ class ApiService {
   }
 
   /// Update current location
-  Future<void> updateCurrentLocation({
+  Future<bool> updateCurrentLocation({
     required double latitude,
     required double longitude,
     String? address,
@@ -477,17 +428,19 @@ class ApiService {
     String? country,
   }) async {
     try {
-      await _dio.post('/location/current', data: {
+      await dio.post('/location/current', data: {
         'latitude': latitude,
         'longitude': longitude,
         if (address != null) 'address': address,
         if (city != null) 'city': city,
         if (country != null) 'country': country,
       });
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error updating current location: $e');
       }
+      rethrow;
     }
   }
 
@@ -507,7 +460,7 @@ class ApiService {
   }
 
   /// Reverse geocode coordinates to address
-  Future<List<Map<String, dynamic>>> reverseGeocode({
+  Future<Map<String, dynamic>> reverseGeocode({
     required double latitude,
     required double longitude,
   }) async {
@@ -516,7 +469,13 @@ class ApiService {
         'latitude': latitude,
         'longitude': longitude,
       });
-      return List<Map<String, dynamic>>.from(response.data);
+      final data = response.data;
+      if (data is List && data.isNotEmpty) {
+        return data.first as Map<String, dynamic>;
+      } else if (data is Map<String, dynamic>) {
+        return data;
+      }
+      throw Exception('Invalid response format');
     } catch (e) {
       if (kDebugMode) {
         print('Error reverse geocoding: $e');
@@ -616,7 +575,7 @@ class ApiService {
   }
 
   /// Calculate distance between two points
-  Future<double> calculateDistance({
+  Future<Map<String, dynamic>> calculateDistance({
     required double fromLatitude,
     required double fromLongitude,
     required double toLatitude,
@@ -631,7 +590,7 @@ class ApiService {
         'to_longitude': toLongitude,
         if (unit != null) 'unit': unit,
       });
-      return response.data['distance']?.toDouble() ?? 0.0;
+      return response.data;
     } catch (e) {
       if (kDebugMode) {
         print('Error calculating distance: $e');
@@ -692,7 +651,7 @@ class ApiService {
   }
 
   /// Save location to history
-  Future<void> saveLocationToHistory({
+  Future<bool> saveLocationToHistory({
     required double latitude,
     required double longitude,
     required String address,
@@ -709,6 +668,7 @@ class ApiService {
         if (country != null) 'country': country,
         if (metadata != null) 'metadata': metadata,
       });
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error saving location to history: $e');
@@ -975,16 +935,63 @@ class ApiService {
   // ==================== REPORTS METHODS ====================
 
   /// Get reports with filters
-  Future<List<Map<String, dynamic>>> getReportsWithFilters(
-      Map<String, dynamic> filters) async {
+  Future<Map<String, dynamic>> getReportsWithFilters({
+    int? page,
+    int? pageSize,
+    String? search,
+    String? type,
+    String? category,
+    String? status,
+    String? city,
+    double? latitude,
+    double? longitude,
+    double? radiusKm,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<String>? colors,
+    bool? rewardOffered,
+    String? sortBy,
+    String? sortOrder,
+  }) async {
     try {
+      final filters = <String, dynamic>{};
+      if (page != null) filters['page'] = page;
+      if (pageSize != null) filters['page_size'] = pageSize;
+      if (search != null) filters['search'] = search;
+      if (type != null) filters['type'] = type;
+      if (category != null) filters['category'] = category;
+      if (status != null) filters['status'] = status;
+      if (city != null) filters['city'] = city;
+      if (latitude != null) filters['latitude'] = latitude;
+      if (longitude != null) filters['longitude'] = longitude;
+      if (radiusKm != null) filters['radius_km'] = radiusKm;
+      if (startDate != null) {
+        filters['start_date'] = startDate.toIso8601String();
+      }
+      if (endDate != null) filters['end_date'] = endDate.toIso8601String();
+      if (colors != null) filters['colors'] = colors;
+      if (rewardOffered != null) filters['reward_offered'] = rewardOffered;
+      if (sortBy != null) filters['sort_by'] = sortBy;
+      if (sortOrder != null) filters['sort_order'] = sortOrder;
+
       final response = await get('/reports', queryParameters: filters);
-      return List<Map<String, dynamic>>.from(response.data);
+      final data = response.data as Map<String, dynamic>;
+
+      return {
+        'reports': data['items'] ?? data['reports'] ?? [],
+        'pagination': data['pagination'] ??
+            {
+              'has_more': false,
+              'total': 0,
+              'page': page ?? 1,
+              'page_size': pageSize ?? 20,
+            },
+      };
     } catch (e) {
       if (kDebugMode) {
         print('Error getting reports with filters: $e');
       }
-      return [];
+      rethrow;
     }
   }
 
@@ -1002,20 +1009,27 @@ class ApiService {
   }
 
   /// Get nearby reports
-  Future<List<Map<String, dynamic>>> getNearbyReports(
-      double latitude, double longitude, double radius) async {
+  Future<List<Map<String, dynamic>>> getNearbyReports({
+    required double latitude,
+    required double longitude,
+    required double radiusKm,
+    String? type,
+    String? category,
+  }) async {
     try {
       final response = await get('/reports/nearby', queryParameters: {
         'latitude': latitude,
         'longitude': longitude,
-        'radius': radius,
+        'radius_km': radiusKm,
+        if (type != null) 'type': type,
+        if (category != null) 'category': category,
       });
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
       if (kDebugMode) {
         print('Error getting nearby reports: $e');
       }
-      return [];
+      rethrow;
     }
   }
 
@@ -1033,44 +1047,93 @@ class ApiService {
   }
 
   /// Create report with media
-  Future<Map<String, dynamic>?> createReportWithMedia(
-      Map<String, dynamic> reportData, List<String> mediaPaths) async {
+  Future<Map<String, dynamic>?> createReportWithMedia({
+    required String type,
+    required String title,
+    required String description,
+    required String category,
+    required String city,
+    required DateTime occurredAt,
+    List<String>? colors,
+    String? locationAddress,
+    double? latitude,
+    double? longitude,
+    double? rewardOffered,
+    required List<String> imagePaths,
+    Function(double)? onProgress,
+  }) async {
     try {
       final formData = FormData();
 
       // Add report data
-      formData.fields.addAll(
-          reportData.entries.map((e) => MapEntry(e.key, e.value.toString())));
+      formData.fields.addAll([
+        MapEntry('type', type),
+        MapEntry('title', title),
+        MapEntry('description', description),
+        MapEntry('category', category),
+        MapEntry('city', city),
+        MapEntry('occurred_at', occurredAt.toIso8601String()),
+        if (colors != null) MapEntry('colors', colors.join(',')),
+        if (locationAddress != null)
+          MapEntry('location_address', locationAddress),
+        if (latitude != null) MapEntry('latitude', latitude.toString()),
+        if (longitude != null) MapEntry('longitude', longitude.toString()),
+        if (rewardOffered != null)
+          MapEntry('reward_offered', rewardOffered.toString()),
+      ]);
 
       // Add media files
-      for (int i = 0; i < mediaPaths.length; i++) {
+      for (int i = 0; i < imagePaths.length; i++) {
         formData.files.add(MapEntry(
           'media_$i',
-          await MultipartFile.fromFile(mediaPaths[i]),
+          await MultipartFile.fromFile(imagePaths[i]),
         ));
       }
 
-      final response = await _dio.post('/reports', data: formData);
+      final response = await dio.post('/reports', data: formData);
       return response.data;
     } catch (e) {
       if (kDebugMode) {
         print('Error creating report with media: $e');
       }
-      return null;
+      rethrow;
     }
   }
 
   /// Create report
-  Future<Map<String, dynamic>?> createReport(
-      Map<String, dynamic> reportData) async {
+  Future<Map<String, dynamic>?> createReport({
+    required String type,
+    required String title,
+    required String description,
+    required String category,
+    required String city,
+    required DateTime occurredAt,
+    List<String>? colors,
+    String? locationAddress,
+    double? latitude,
+    double? longitude,
+    double? rewardOffered,
+  }) async {
     try {
-      final response = await post('/reports', data: reportData);
+      final response = await post('/reports', data: {
+        'type': type,
+        'title': title,
+        'description': description,
+        'category': category,
+        'city': city,
+        'occurred_at': occurredAt.toIso8601String(),
+        if (colors != null) 'colors': colors,
+        if (locationAddress != null) 'location_address': locationAddress,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (rewardOffered != null) 'reward_offered': rewardOffered,
+      });
       return response.data;
     } catch (e) {
       if (kDebugMode) {
         print('Error creating report: $e');
       }
-      return null;
+      rethrow;
     }
   }
 
@@ -1089,24 +1152,28 @@ class ApiService {
   }
 
   /// Delete report
-  Future<void> deleteReport(String reportId) async {
+  Future<bool> deleteReport(String reportId) async {
     try {
       await delete('/reports/$reportId');
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error deleting report: $e');
       }
+      rethrow;
     }
   }
 
   /// Resolve report
-  Future<void> resolveReport(String reportId) async {
+  Future<bool> resolveReport(String reportId) async {
     try {
       await put('/reports/$reportId/resolve');
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error resolving report: $e');
       }
+      rethrow;
     }
   }
 
@@ -1119,29 +1186,33 @@ class ApiService {
       if (kDebugMode) {
         print('Error duplicating report: $e');
       }
-      return null;
+      rethrow;
     }
   }
 
   /// Archive report
-  Future<void> archiveReport(String reportId) async {
+  Future<bool> archiveReport(String reportId) async {
     try {
       await put('/reports/$reportId/archive');
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error archiving report: $e');
       }
+      rethrow;
     }
   }
 
   /// Restore report
-  Future<void> restoreReport(String reportId) async {
+  Future<bool> restoreReport(String reportId) async {
     try {
       await put('/reports/$reportId/restore');
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error restoring report: $e');
       }
+      rethrow;
     }
   }
 
@@ -1227,7 +1298,8 @@ class ApiService {
         if (pageSize != null) 'page_size': pageSize,
       };
       if (additionalFilters != null) {
-        queryParams.addAll(additionalFilters);
+        queryParams.addAll(additionalFilters.map((key, value) => MapEntry(
+            key, value is int || value is double ? value : value.toString())));
       }
       final response =
           await get('/search/reports', queryParameters: queryParams);
@@ -1350,7 +1422,8 @@ class ApiService {
         if (pageSize != null) 'page_size': pageSize,
       };
       if (additionalFilters != null) {
-        queryParams.addAll(additionalFilters);
+        queryParams.addAll(additionalFilters.map((key, value) => MapEntry(
+            key, value is int || value is double ? value : value.toString())));
       }
       final response =
           await get('/search/location', queryParameters: queryParams);
@@ -1537,20 +1610,6 @@ class ApiService {
     }
   }
 
-  /// Update profile
-  Future<Map<String, dynamic>?> updateProfile(
-      Map<String, dynamic> profileData) async {
-    try {
-      final response = await put('/user/profile', data: profileData);
-      return response.data;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error updating profile: $e');
-      }
-      return null;
-    }
-  }
-
   /// Delete user account
   Future<void> deleteUserAccount() async {
     try {
@@ -1559,6 +1618,31 @@ class ApiService {
       if (kDebugMode) {
         print('Error deleting user account: $e');
       }
+    }
+  }
+
+  /// Upload profile picture
+  Future<void> uploadProfilePicture(File imageFile) async {
+    try {
+      await uploadFile(
+          '/user/profile-picture', imageFile.path, 'profile_picture');
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error uploading profile picture: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Remove profile picture
+  Future<void> removeProfilePicture() async {
+    try {
+      await delete('/user/profile-picture');
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error removing profile picture: $e');
+      }
+      rethrow;
     }
   }
 

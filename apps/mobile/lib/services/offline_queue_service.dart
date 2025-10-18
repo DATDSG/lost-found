@@ -309,7 +309,7 @@ class OfflineQueueService {
       if (updatedOperation.retryCount >= _maxRetries) {
         _operations.removeAt(index);
         debugPrint(
-          '🗑️ Removed operation ${operation.type.name} after ${_maxRetries} retries',
+          '🗑️ Removed operation ${operation.type.name} after $_maxRetries retries',
         );
       } else {
         _operations[index] = updatedOperation;
