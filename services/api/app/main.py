@@ -16,6 +16,7 @@ from .routers.admin import router as admin_router
 from .config import config
 from .clients import get_nlp_client, get_vision_client
 from .error_handlers import register_exception_handlers
+from .csrf import csrf_middleware
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -104,6 +105,12 @@ async def metrics_middleware(request: Request, call_next):
     ).observe(duration)
     
     return response
+
+# CSRF protection middleware
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    """CSRF protection middleware."""
+    return await csrf_middleware(request, call_next)
 
 # Mount Prometheus metrics endpoint
 metrics_app = make_asgi_app()

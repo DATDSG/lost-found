@@ -10,20 +10,15 @@ from datetime import datetime, timedelta, timezone
 from ...database import get_db
 from ...models import User, Report, Match, AuditLog
 from ...dependencies import get_current_admin
-from ...session_manager import session_manager
+from ...csrf import get_csrf_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
-async def get_csrf_token(request: Request) -> str:
-    """Get CSRF token from session."""
-    session_id = request.cookies.get("admin_session")
-    if session_id:
-        session_data = await session_manager.get_session(session_id)
-        if session_data:
-            return session_data.get("csrf_token", "")
-    return ""
+async def get_csrf_token_for_dashboard(request: Request) -> str:
+    """Get CSRF token for dashboard."""
+    return get_csrf_token(request)
 
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)
@@ -79,7 +74,7 @@ async def dashboard(
     )
     recent_activity = recent_activity_result.scalars().all()
     
-    csrf_token = await get_csrf_token(request)
+    csrf_token = await get_csrf_token_for_dashboard(request)
     return templates.TemplateResponse(
         "admin/dashboard.html",
         {

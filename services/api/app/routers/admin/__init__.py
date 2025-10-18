@@ -1,12 +1,13 @@
 """Admin router initialization."""
 
 from fastapi import APIRouter
-from . import dashboard, users, reports, audit, bulk_operations, matches
+from . import dashboard, users, reports, audit, bulk_operations, matches, csrf
 
 # Create main admin router
 router = APIRouter()
 
 # Include all admin sub-routers
+router.include_router(csrf.router, prefix="/csrf", tags=["admin-csrf"])
 router.include_router(dashboard.router, prefix="/dashboard", tags=["admin-dashboard"])
 router.include_router(users.router, prefix="/users", tags=["admin-users"])
 router.include_router(reports.router, prefix="/reports", tags=["admin-reports"])
