@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { systemService, type AuditLogFilters } from "@/services";
 import { useSnackbar } from "notistack";
 
