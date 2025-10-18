@@ -15,6 +15,7 @@ from .routers import auth, reports, media, matches, notifications, messages, tax
 from .routers.admin import router as admin_router
 from .config import config
 from .clients import get_nlp_client, get_vision_client
+from .error_handlers import register_exception_handlers
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -61,6 +62,9 @@ app = FastAPI(
     version="2.0.0",
     description="API for Lost & Found matching system with multi-signal scoring"
 )
+
+# Register exception handlers
+register_exception_handlers(app)
 
 # Rate limiter
 limiter = Limiter(
