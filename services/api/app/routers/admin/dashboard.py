@@ -10,16 +10,19 @@ from datetime import datetime, timedelta, timezone
 from ...database import get_db
 from ...models import User, Report, Match, AuditLog
 from ...dependencies import get_current_admin
+from ...session_manager import session_manager
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
-def get_csrf_token(request: Request) -> str:
+async def get_csrf_token(request: Request) -> str:
     """Get CSRF token from session."""
     session_id = request.cookies.get("admin_session")
-    if session_id and session_id in sessions:
-        return sessions[session_id].get("csrf_token", "")
+    if session_id:
+        session_data = await session_manager.get_session(session_id)
+        if session_data:
+            return session_data.get("csrf_token", "")
     return ""
 
 
@@ -58,12 +61,13 @@ async def dashboard(
         .all()
     )
     
+    csrf_token = await get_csrf_token(request)
     return templates.TemplateResponse(
         "admin/dashboard.html",
         {
             "request": request,
             "user": user,
-            "csrf_token": get_csrf_token(request),
+            "csrf_token": csrf_token,
             "stats": stats,
             "recent_reports": recent_reports,
             "recent_activity": recent_activity,
@@ -221,33 +225,40 @@ async def get_recent_activity(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_admin)
 ):
-    """Get recent system activity from audit logs."""
-    
-    audit_logs = db.query(AuditLog).order_by(
-        AuditLog.created_at.desc()
-    ).limit(limit).all()
-    
+    """Get recent system activity from audit logs (async-safe)."""
+
+    # Fetch recent audit logs
+    logs_result = await db.execute(
+        select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    )
+    audit_logs = logs_result.scalars().all()
+
+    # Fetch users in a single query
+    user_ids = {log.user_id for log in audit_logs if getattr(log, "user_id", None)}
+    users_by_id = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(list(user_ids))))
+        users = users_result.scalars().all()
+        users_by_id = {u.id: u for u in users}
+
     activity_items = []
     for log in audit_logs:
-        user_obj = db.query(User).filter(User.id == log.user_id).first()
+        u = users_by_id.get(getattr(log, "user_id", None))
         activity_items.append({
-            "id": log.id,
+            "id": str(log.id),
             "user": {
-                "id": user_obj.id if user_obj else None,
-                "email": user_obj.email if user_obj else "Unknown",
-                "display_name": user_obj.display_name if user_obj else "Unknown"
+                "id": str(u.id) if u else None,
+                "email": getattr(u, "email", None) or "Unknown",
+                "display_name": getattr(u, "display_name", None) or "Unknown",
             },
-            "action": log.action,
-            "resource_type": log.resource_type,
-            "resource_id": log.resource_id,
-            "details": log.details,
-            "created_at": log.created_at.isoformat()
+            "action": getattr(log, "action", None),
+            "resource_type": getattr(log, "resource_type", None),
+            "resource_id": str(getattr(log, "resource_id", "")) if getattr(log, "resource_id", None) else None,
+            "details": getattr(log, "details", None),
+            "created_at": getattr(log, "created_at").isoformat() if getattr(log, "created_at", None) else None,
         })
-    
-    return {
-        "activity": activity_items,
-        "count": len(activity_items)
-    }
+
+    return {"activity": activity_items, "count": len(activity_items)}
 
 
 @router.get("/system/health")

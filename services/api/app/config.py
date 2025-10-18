@@ -37,9 +37,7 @@ class Config:
     DB_ECHO: bool = os.getenv("DB_ECHO", "false").lower() == "true"
     
     # ========== JWT Authentication ==========
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY")
-    if not JWT_SECRET_KEY:
-        raise ValueError("JWT_SECRET_KEY environment variable is required")
+    JWT_SECRET_KEY: Optional[str] = os.getenv("JWT_SECRET_KEY")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -134,7 +132,8 @@ class Config:
         if not cls.DATABASE_URL:
             errors.append("DATABASE_URL is required")
         
-        # JWT secret validation is now handled at class level
+        if not cls.JWT_SECRET_KEY:
+            errors.append("JWT_SECRET_KEY environment variable is required")
         
         # Validate service URLs
         if not cls.NLP_SERVICE_URL.startswith(("http://", "https://")):

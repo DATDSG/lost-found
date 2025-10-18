@@ -7,10 +7,28 @@ S3-compatible object storage client for Lost & Found platform
 import os
 import logging
 from typing import Optional, BinaryIO, Union
-from minio import Minio
-from minio.error import S3Error
-import boto3
-from botocore.exceptions import ClientError
+
+try:
+    from minio import Minio  # type: ignore
+    from minio.error import S3Error  # type: ignore
+except ImportError as exc:  # pragma: no cover - optional dependency handling
+    Minio = None  # type: ignore
+    S3Error = Exception  # type: ignore
+    _MINIO_IMPORT_ERROR = exc
+else:
+    _MINIO_IMPORT_ERROR = None
+
+try:
+    import boto3  # type: ignore
+    from botocore.exceptions import ClientError  # type: ignore
+except ImportError as exc:  # pragma: no cover - optional dependency handling
+    boto3 = None  # type: ignore
+    ClientError = Exception  # type: ignore
+    _BOTO_IMPORT_ERROR = exc
+else:
+    _BOTO_IMPORT_ERROR = None
+
+from .config import config
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +56,22 @@ class MinIOClient:
             secure: Use HTTPS (default: False)
             region: AWS region (default: us-east-1)
         """
-        self.endpoint = endpoint or os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
-        self.access_key = access_key or os.getenv("MINIO_ACCESS_KEY", "admin")
-        self.secret_key = secret_key or os.getenv("MINIO_SECRET_KEY", "admin")
-        self.bucket_name = bucket_name or os.getenv("MINIO_BUCKET_NAME", "lost-found-media")
-        self.secure = secure if secure is not None else os.getenv("MINIO_SECURE", "false").lower() == "true"
-        self.region = region or os.getenv("MINIO_REGION", "us-east-1")
+        if _MINIO_IMPORT_ERROR:
+            raise RuntimeError("minio package is required for object storage support") from _MINIO_IMPORT_ERROR
+        if _BOTO_IMPORT_ERROR:
+            raise RuntimeError("boto3 package is required for object storage support") from _BOTO_IMPORT_ERROR
+
+        self.endpoint = endpoint or config.MINIO_ENDPOINT
+        self.access_key = access_key or config.MINIO_ACCESS_KEY
+        self.secret_key = secret_key or config.MINIO_SECRET_KEY
+        self.bucket_name = bucket_name or config.MINIO_BUCKET_NAME
+        self.secure = secure if secure is not None else config.MINIO_SECURE
+        self.region = region or config.MINIO_REGION
         
         # Initialize MinIO client
+        endpoint_host = self.endpoint.replace("http://", "").replace("https://", "")
         self.client = Minio(
-            endpoint=self.endpoint.replace("http://", "").replace("https://", ""),
+            endpoint=endpoint_host,
             access_key=self.access_key,
             secret_key=self.secret_key,
             secure=self.secure
@@ -419,10 +443,12 @@ class MinIOClient:
             return []
 
 
-# Global MinIO client instance
-minio_client = MinIOClient()
+_minio_client: Optional[MinIOClient] = None
 
 
 def get_minio_client() -> MinIOClient:
-    """Get the global MinIO client instance."""
-    return minio_client
+    """Get or create the global MinIO client instance."""
+    global _minio_client
+    if _minio_client is None:
+        _minio_client = MinIOClient()
+    return _minio_client

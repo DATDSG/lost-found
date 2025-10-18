@@ -12,6 +12,7 @@ import time
 import json
 import logging
 import structlog
+from pathlib import Path
 from tenacity import retry, stop_after_attempt, wait_exponential
 from contextlib import asynccontextmanager
 
@@ -185,11 +186,20 @@ app.mount("/metrics", metrics_app)
 # Startup/shutdown handled by lifespan manager above
 
 
-# Mount static files for admin panel
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files for admin panel if available
+static_dir = Path(__file__).resolve().parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+else:
+    logger.warning("Static directory missing; skipping mount", static_dir=str(static_dir))
 
-# Setup Jinja2 templates for admin panel
-templates = Jinja2Templates(directory="templates")
+# Setup Jinja2 templates for admin panel if available
+templates_dir = Path(__file__).resolve().parent / "templates"
+if templates_dir.exists():
+    templates = Jinja2Templates(directory=str(templates_dir))
+else:
+    templates = None  # type: ignore[assignment]
+    logger.warning("Templates directory missing; skipping setup", templates_dir=str(templates_dir))
 
 # Include health check router (no authentication required)
 app.include_router(health.router, tags=["health"])

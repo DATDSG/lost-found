@@ -149,10 +149,16 @@ async def get_report_stats(
     
     total_count = pending_count + approved_count + hidden_count + removed_count
     
-    # Type counts - temporarily disabled due to schema mismatch
-    # The database uses 'report_type' column but model uses 'type'
-    lost_count = 0
-    found_count = 0
+    # Type counts (best-effort, using string literals)
+    lost_result = await db.execute(
+        select(func.count()).select_from(Report).where(Report.type == "lost")
+    )
+    lost_count = lost_result.scalar() or 0
+
+    found_result = await db.execute(
+        select(func.count()).select_from(Report).where(Report.type == "found")
+    )
+    found_count = found_result.scalar() or 0
     
     return {
         "total": total_count,
@@ -175,8 +181,8 @@ async def get_report_stats(
     }
 
 
-@router.get("/{report_id}")
-def get_report_details(
+@router.get("/deprecated/{report_id}")
+def get_report_details_deprecated(
     report_id: str,
     current_user: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
@@ -219,8 +225,8 @@ def get_report_details(
     }
 
 
-@router.post("/{report_id}/approve")
-def approve_report(
+@router.post("/deprecated/{report_id}/approve")
+def approve_report_deprecated(
     report_id: str,
     current_user: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
@@ -240,6 +246,7 @@ def approve_report(
     db.commit()
     
     # Create audit log
+    # NOTE: deprecated synchronous path
     create_audit_log(
         db=db,
         user_id=current_user.id,
@@ -261,8 +268,8 @@ def approve_report(
     }
 
 
-@router.post("/{report_id}/reject")
-def reject_report(
+@router.post("/deprecated/{report_id}/reject")
+def reject_report_deprecated(
     report_id: str,
     reason: Optional[str] = None,
     current_user: User = Depends(get_current_admin),
@@ -283,6 +290,7 @@ def reject_report(
     db.commit()
     
     # Create audit log
+    # NOTE: deprecated synchronous path
     create_audit_log(
         db=db,
         user_id=current_user.id,
@@ -305,8 +313,8 @@ def reject_report(
     }
 
 
-@router.post("/{report_id}/remove")
-def remove_report(
+@router.post("/deprecated/{report_id}/remove")
+def remove_report_deprecated(
     report_id: str,
     reason: str,
     current_user: User = Depends(get_current_admin),
@@ -390,9 +398,9 @@ async def update_report_status(
     report.status = request_data.status
     
     # Create audit log
-    create_audit_log(
+    await create_audit_log(
         db=db,
-        user_id=current_user.id,
+        user_id=str(current_user.id),
         action="report_status_updated",
         resource_type="report",
         resource_id=report_id,
@@ -441,9 +449,9 @@ async def delete_report(
         )
     
     # Create audit log before deletion
-    create_audit_log(
+    await create_audit_log(
         db=db,
-        user_id=current_user.id,
+        user_id=str(current_user.id),
         action="report_deleted",
         resource_type="report",
         resource_id=report_id,
@@ -515,15 +523,15 @@ async def bulk_update_report_status(
             # Create audit log
             await create_audit_log(
                 db=db,
-                actor_id=current_user.id,
+                user_id=str(current_user.id),
                 action="bulk_update_status",
-                resource="report",
+                resource_type="report",
                 resource_id=report.id,
-                changes={
+                details=json.dumps({
                     "old_status": old_status,
                     "new_status": new_status,
                     "reason": reason
-                }
+                })
             )
             
             updated_count += 1
@@ -663,15 +671,15 @@ async def reject_report(
     # Create audit log
     await create_audit_log(
         db=db,
-        actor_id=current_user.id,
+        user_id=str(current_user.id),
         action="reject",
-        resource="report",
+        resource_type="report",
         resource_id=report.id,
-        changes={
+        details=json.dumps({
             "old_status": old_status,
             "new_status": "REJECTED",
             "reason": reason
-        }
+        })
     )
     
     await db.commit()
@@ -702,14 +710,14 @@ async def approve_report(
     # Create audit log
     await create_audit_log(
         db=db,
-        actor_id=current_user.id,
+        user_id=str(current_user.id),
         action="approve",
-        resource="report",
+        resource_type="report",
         resource_id=report.id,
-        changes={
+        details=json.dumps({
             "old_status": old_status,
             "new_status": "APPROVED"
-        }
+        })
     )
     
     await db.commit()

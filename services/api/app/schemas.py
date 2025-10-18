@@ -15,6 +15,7 @@ class ReportStatus(str, Enum):
     APPROVED = "approved"
     HIDDEN = "hidden"
     REMOVED = "removed"
+    REJECTED = "rejected"
 
 
 # Auth schemas
@@ -82,14 +83,14 @@ class ReportCreate(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     description: str
     category: str
-    colors: Optional[List[str]] = []
+    colors: List[str] = Field(default_factory=list)
     occurred_at: datetime
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     location_city: Optional[str] = None
     location_address: Optional[str] = None
     reward_offered: Optional[bool] = False
-    media_ids: Optional[List[str]] = []
+    media_ids: List[str] = Field(default_factory=list)
 
 
 class ReportSummary(BaseModel):

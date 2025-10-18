@@ -10,6 +10,7 @@ import json
 
 from ...database import get_db
 from ...models import User, Match, MatchStatus, Report, AuditLog, Media
+from ...helpers import create_audit_log
 from ...dependencies import get_current_admin
 
 router = APIRouter()
@@ -116,14 +117,14 @@ class UpdateMatchStatusRequest(BaseModel):
 @router.patch("/{match_id}/status")
 async def update_match_status(
     match_id: str,
-    request: dict,
+    request_data: UpdateMatchStatusRequest,
     current_user: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """Update match status."""
     # Validate status
     valid_statuses = ["candidate", "promoted", "suppressed", "dismissed", "confirmed"]
-    if "status" not in request or request["status"] not in valid_statuses:
+    if request_data.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
@@ -140,7 +141,7 @@ async def update_match_status(
         )
     
     old_status = match.status
-    match.status = request["status"]
+    match.status = request_data.status
     match.reviewed_by = current_user.id
     
     from datetime import datetime, timezone
@@ -149,15 +150,15 @@ async def update_match_status(
     # Create audit log
     await create_audit_log(
         db=db,
-        actor_id=current_user.id,
+        user_id=str(current_user.id),
         action="update_status",
-        resource="match",
+        resource_type="match",
         resource_id=match.id,
-        changes={
+        details=json.dumps({
             "old_status": old_status,
-            "new_status": request["status"],
-            "reason": request.get("reason")
-        }
+            "new_status": request_data.status,
+            "reason": request_data.reason
+        })
     )
     
     await db.commit()
@@ -196,20 +197,20 @@ async def delete_match(
         )
     
     # Create audit log before deletion
-    audit_log = AuditLog(
-        actor_id=current_user.id,
+    await create_audit_log(
+        db=db,
+        user_id=str(current_user.id),
         action="match_deleted",
-        resource="match",
+        resource_type="match",
         resource_id=match_id,
-        reason=reason,
-        metadata={
+        details=json.dumps({
+            "reason": reason,
             "source_report_id": match.source_report_id,
             "candidate_report_id": match.candidate_report_id,
             "score_total": match.score_total,
             "status": match.status
-        }
+        })
     )
-    db.add(audit_log)
     
     # Delete match
     await db.delete(match)
@@ -383,17 +384,16 @@ async def promote_match(
     match.reviewed_at = func.now()
     
     # Create audit log
-    from ...helpers import create_audit_log
     await create_audit_log(
         db=db,
-        actor_id=current_user.id,
+        user_id=str(current_user.id),
         action="promote",
-        resource="match",
+        resource_type="match",
         resource_id=match.id,
-        changes={
+        details=json.dumps({
             "old_status": old_status,
             "new_status": "promoted"
-        }
+        })
     )
     
     await db.commit()
@@ -425,18 +425,17 @@ async def suppress_match(
     match.reviewed_at = func.now()
     
     # Create audit log
-    from ...helpers import create_audit_log
     await create_audit_log(
         db=db,
-        actor_id=current_user.id,
+        user_id=str(current_user.id),
         action="suppress",
-        resource="match",
+        resource_type="match",
         resource_id=match.id,
-        changes={
+        details=json.dumps({
             "old_status": old_status,
             "new_status": "suppressed",
             "reason": reason
-        }
+        })
     )
     
     await db.commit()

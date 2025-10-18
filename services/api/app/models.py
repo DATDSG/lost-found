@@ -21,6 +21,7 @@ class ReportStatus(str, enum.Enum):
     APPROVED = "approved"
     HIDDEN = "hidden"
     REMOVED = "removed"
+    REJECTED = "rejected"
 
 
 class MatchStatus(str, enum.Enum):
