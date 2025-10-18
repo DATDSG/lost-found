@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   dio: ^5.4.0
   flutter_riverpod: ^2.5.0
+  provider: ^6.1.1
   intl: any
   shared_preferences: ^2.2.3
   flutter_secure_storage: ^9.0.0
@@ -29,6 +30,8 @@ dependencies:
   crypto: ^3.0.3 # For password encryption and hashing
   http: ^1.2.0 # For API calls
   geolocator: ^10.1.0 # For geolocation and distance calculation
+  google_maps_flutter: ^2.5.0
+  geocoding: ^2.1.1
 
 dev_dependencies:
   flutter_test:

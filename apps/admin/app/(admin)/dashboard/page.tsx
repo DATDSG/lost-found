@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import apiClient from "@/lib/api";
 import { StatsCard } from "@/components/dashboard/StatsCard";
@@ -34,7 +34,11 @@ export default function DashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   // Real-time dashboard stats with shorter refresh interval
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<DashboardStats>(
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useQuery<DashboardStats>(
     "dashboard-stats",
     async () => {
       return await apiClient.getDashboardStats();
@@ -195,8 +199,16 @@ export default function DashboardPage() {
           title="Resolution Rate"
           value={`${Math.round(stats?.resolution_rate || 0)}%`}
           change=""
-          changeType={stats?.resolution_rate && stats.resolution_rate > 70 ? "positive" : "neutral"}
-          trend={stats?.resolution_rate && stats.resolution_rate > 70 ? "up" : "stable"}
+          changeType={
+            stats?.resolution_rate && stats.resolution_rate > 70
+              ? "positive"
+              : "neutral"
+          }
+          trend={
+            stats?.resolution_rate && stats.resolution_rate > 70
+              ? "up"
+              : "stable"
+          }
           icon="✅"
           description="Successfully resolved cases"
           color="indigo"
@@ -241,7 +253,7 @@ export default function DashboardPage() {
                   Recent Reports
                 </h3>
                 <button
-                  onClick={() => window.location.href = "/reports"}
+                  onClick={() => (window.location.href = "/reports")}
                   className="text-sm text-indigo-600 hover:text-indigo-500"
                 >
                   View all
@@ -260,7 +272,9 @@ export default function DashboardPage() {
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
+                <h3 className="text-lg font-medium text-gray-900">
+                  Recent Activity
+                </h3>
                 <div className="flex items-center text-xs text-gray-500">
                   <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
                   Live
@@ -275,7 +289,9 @@ export default function DashboardPage() {
           {/* Enhanced Quick Actions */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Quick Actions</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                Quick Actions
+              </h3>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -288,8 +304,12 @@ export default function DashboardPage() {
                       <DocumentTextIcon className="h-6 w-6 text-blue-500 group-hover:text-blue-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">View Reports</h4>
-                      <p className="text-xs text-gray-500">Manage all reports</p>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        View Reports
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        Manage all reports
+                      </p>
                     </div>
                   </div>
                 </button>
@@ -303,8 +323,12 @@ export default function DashboardPage() {
                       <LinkIcon className="h-6 w-6 text-purple-500 group-hover:text-purple-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">Review Matches</h4>
-                      <p className="text-xs text-gray-500">Check potential matches</p>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Review Matches
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        Check potential matches
+                      </p>
                     </div>
                   </div>
                 </button>
@@ -318,7 +342,9 @@ export default function DashboardPage() {
                       <UsersIcon className="h-6 w-6 text-green-500 group-hover:text-green-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">Manage Users</h4>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Manage Users
+                      </h4>
                       <p className="text-xs text-gray-500">User management</p>
                     </div>
                   </div>
@@ -333,8 +359,12 @@ export default function DashboardPage() {
                       <ArrowPathIcon className="h-6 w-6 text-yellow-500 group-hover:text-yellow-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">Clear Cache</h4>
-                      <p className="text-xs text-gray-500">Refresh system cache</p>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Clear Cache
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        Refresh system cache
+                      </p>
                     </div>
                   </div>
                 </button>
@@ -355,7 +385,7 @@ export default function DashboardPage() {
                 Recent Matches
               </h3>
               <button
-                onClick={() => window.location.href = "/matches"}
+                onClick={() => (window.location.href = "/matches")}
                 className="text-sm text-indigo-600 hover:text-indigo-500"
               >
                 View all
@@ -371,7 +401,9 @@ export default function DashboardPage() {
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">System Health</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                System Health
+              </h3>
               <div className="flex items-center text-xs text-gray-500">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
                 Live

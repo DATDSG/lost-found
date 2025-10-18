@@ -2,6 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/chat_model.dart';
+import '../models/match_model.dart';
+import '../models/notification_model.dart';
+import 'api_service.dart';
+import 'storage_service.dart';
+import '../config/api_config.dart';
 
 enum WebSocketStatus {
   connecting,
@@ -35,6 +42,9 @@ class WebSocketService {
 
   /// Current connection status
   WebSocketStatus get status => _status;
+
+  /// Check if WebSocket is connected
+  bool get isConnected => _status == WebSocketStatus.connected;
 
   /// Connect to WebSocket server
   Future<void> connect(String url, {String? token}) async {
@@ -218,6 +228,38 @@ class WebSocketService {
     _channel = null;
 
     _updateStatus(WebSocketStatus.disconnected);
+  }
+
+  /// Send a message through WebSocket
+  void sendMessage(String conversationId, String content) {
+    if (_status == WebSocketStatus.connected) {
+      send({
+        'type': 'message',
+        'conversation_id': conversationId,
+        'content': content,
+      });
+    }
+  }
+
+  /// Send typing indicator
+  void sendTypingIndicator(String conversationId, bool isTyping) {
+    if (_status == WebSocketStatus.connected) {
+      send({
+        'type': 'typing',
+        'conversation_id': conversationId,
+        'is_typing': isTyping,
+      });
+    }
+  }
+
+  /// Mark conversation as read
+  void markAsRead(String conversationId) {
+    if (_status == WebSocketStatus.connected) {
+      send({
+        'type': 'mark_read',
+        'conversation_id': conversationId,
+      });
+    }
   }
 
   /// Dispose resources
