@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { matchesService, type MatchFilters } from "@/services";
 import { useSnackbar } from "notistack";
 

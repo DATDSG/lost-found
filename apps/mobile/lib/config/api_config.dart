@@ -43,6 +43,22 @@ class ApiConfig {
   static const String messages = '/messages';
   static const String media = '/media';
 
+  // Auth endpoints
+  static String get authLogin => login;
+  static String get authRegister => register;
+  static String get authRefresh => refreshToken;
+  static String get authMe => profile;
+  static String get authUpdateProfile => '/auth/profile';
+  static String get authChangePassword => '/auth/change-password';
+  static String get authLogout => logout;
+
+  // Conversation endpoints
+  static String get conversations => '/conversations';
+  static String get messagesCreate => '/messages';
+
+  // Media endpoints
+  static String get mediaUpload => '/media/upload';
+
   /// Timeout duration
   static const Duration timeout = Duration(seconds: 30);
   static const Duration connectTimeout = Duration(seconds: 10);

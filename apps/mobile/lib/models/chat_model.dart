@@ -51,6 +51,10 @@ class ChatConversation {
   final String? userAvatar;
   final ChatMessage? lastMessage;
   final int unreadCount;
+  final String itemId;
+  final List<String> participants;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
   ChatConversation({
     required this.id,
@@ -59,6 +63,10 @@ class ChatConversation {
     this.userAvatar,
     this.lastMessage,
     this.unreadCount = 0,
+    required this.itemId,
+    required this.participants,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
@@ -71,6 +79,58 @@ class ChatConversation {
           ? ChatMessage.fromJson(json['last_message'])
           : null,
       unreadCount: json['unread_count'] ?? json['unreadCount'] ?? 0,
+      itemId: json['item_id'] ?? json['itemId'] ?? '',
+      participants: (json['participants'] as List<dynamic>?)
+              ?.map((p) => p.toString())
+              .toList() ??
+          [],
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'user_name': userName,
+      'user_avatar': userAvatar,
+      'last_message': lastMessage?.toJson(),
+      'unread_count': unreadCount,
+      'item_id': itemId,
+      'participants': participants,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+
+  ChatConversation copyWith({
+    String? id,
+    String? userId,
+    String? userName,
+    String? userAvatar,
+    ChatMessage? lastMessage,
+    int? unreadCount,
+    String? itemId,
+    List<String>? participants,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return ChatConversation(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      userName: userName ?? this.userName,
+      userAvatar: userAvatar ?? this.userAvatar,
+      lastMessage: lastMessage ?? this.lastMessage,
+      unreadCount: unreadCount ?? this.unreadCount,
+      itemId: itemId ?? this.itemId,
+      participants: participants ?? this.participants,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

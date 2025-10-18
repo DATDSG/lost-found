@@ -1,4 +1,5 @@
 """Lost & Found API main application."""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -58,68 +59,12 @@ SERVICE_CALLS = Counter(
     ['service', 'endpoint', 'status']
 )
 
-app = FastAPI(
-    title="Lost & Found API",
-    version="2.0.0",
-    description="API for Lost & Found matching system with multi-signal scoring"
-)
-
-# Register exception handlers
-register_exception_handlers(app)
-
-# Rate limiter
-limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=[],
-    storage_uri=config.REDIS_URL if config.ENABLE_RATE_LIMIT and config.RATE_LIMIT_STORAGE == "redis" else "memory://"
-)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS,
-    allow_credentials=config.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Prometheus metrics middleware
-@app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
-    """Track request metrics."""
-    start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    # Startup
+    logger.info("🚀 Starting Lost & Found API Service...")
     
-    REQUEST_COUNT.labels(
-        method=request.method,
-        endpoint=request.url.path,
-        status=response.status_code
-    ).inc()
-    
-    REQUEST_LATENCY.labels(
-        method=request.method,
-        endpoint=request.url.path
-    ).observe(duration)
-    
-    return response
-
-# CSRF protection middleware
-@app.middleware("http")
-async def csrf_protection_middleware(request: Request, call_next):
-    """CSRF protection middleware."""
-    return await csrf_middleware(request, call_next)
-
-# Mount Prometheus metrics endpoint
-metrics_app = make_asgi_app()
-app.mount("/metrics", metrics_app)
-
-
-@app.on_event("startup")
-async def startup():
-    """Startup event handler."""
     # Validate configuration
     try:
         config.validate()
@@ -177,6 +122,72 @@ async def startup():
                 logger.warning("⚠️ Vision service is unavailable")
     except Exception as e:
         logger.warning(f"⚠️ Vision service connection failed: {e}")
+    
+    logger.info("✅ API Service startup complete")
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 Shutting down Lost & Found API Service...")
+
+app = FastAPI(
+    title="Lost & Found API",
+    version="2.0.0",
+    description="API for Lost & Found matching system with multi-signal scoring",
+    lifespan=lifespan
+)
+
+# Register exception handlers
+register_exception_handlers(app)
+
+# Rate limiter
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri=config.REDIS_URL if config.ENABLE_RATE_LIMIT and config.RATE_LIMIT_STORAGE == "redis" else "memory://"
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ORIGINS,
+    allow_credentials=config.CORS_ALLOW_CREDENTIALS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Prometheus metrics middleware
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Track request metrics."""
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=request.url.path,
+        status=response.status_code
+    ).inc()
+    
+    REQUEST_LATENCY.labels(
+        method=request.method,
+        endpoint=request.url.path
+    ).observe(duration)
+    
+    return response
+
+# CSRF protection middleware
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    """CSRF protection middleware."""
+    return await csrf_middleware(request, call_next)
+
+# Mount Prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 # Include routers

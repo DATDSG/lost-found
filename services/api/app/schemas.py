@@ -1,5 +1,5 @@
 """Pydantic schemas for request/response validation."""
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -46,8 +46,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Media schemas
@@ -73,8 +72,7 @@ class MediaResponse(BaseModel):
             size_bytes=obj.size_bytes
         )
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Report schemas
@@ -127,8 +125,7 @@ class ReportSummary(BaseModel):
             created_at=obj.created_at
         )
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReportDetail(ReportSummary):
@@ -185,8 +182,7 @@ class ReportDetail(ReportSummary):
             is_resolved=obj.is_resolved or False
         )
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Match schemas
@@ -202,8 +198,7 @@ class MatchCandidate(BaseModel):
     counterpart: ReportSummary
     explanation: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Message schemas
@@ -220,8 +215,7 @@ class MessageDetail(BaseModel):
     is_read: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationSummary(BaseModel):
@@ -263,7 +257,7 @@ class ErrorResponse(BaseModel):
 # Bulk operation schemas
 class BulkOperationRequest(BaseModel):
     """Request body for bulk operations."""
-    ids: List[str] = Field(min_items=1, max_items=100, description="List of IDs to operate on")
+    ids: List[str] = Field(min_length=1, max_length=100, description="List of IDs to operate on")
 
 
 class BulkOperationError(BaseModel):
@@ -288,8 +282,7 @@ class CategoryResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ColorResponse(BaseModel):
@@ -300,8 +293,7 @@ class ColorResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Notification schemas  
@@ -315,5 +307,4 @@ class NotificationResponse(BaseModel):
     is_read: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/match_model.dart';
 import '../services/api_service.dart';
@@ -10,6 +9,8 @@ class MatchesState {
   final bool isLoading;
   final String? error;
   final MatchStats? stats;
+  final List<Match> lostMatches;
+  final List<Match> foundMatches;
 
   const MatchesState({
     this.matches = const [],
@@ -17,6 +18,8 @@ class MatchesState {
     this.isLoading = false,
     this.error,
     this.stats,
+    this.lostMatches = const [],
+    this.foundMatches = const [],
   });
 
   MatchesState copyWith({
@@ -25,6 +28,8 @@ class MatchesState {
     bool? isLoading,
     String? error,
     MatchStats? stats,
+    List<Match>? lostMatches,
+    List<Match>? foundMatches,
   }) {
     return MatchesState(
       matches: matches ?? this.matches,
@@ -32,6 +37,8 @@ class MatchesState {
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
       stats: stats ?? this.stats,
+      lostMatches: lostMatches ?? this.lostMatches,
+      foundMatches: foundMatches ?? this.foundMatches,
     );
   }
 }
@@ -101,7 +108,7 @@ class MatchesProvider extends StateNotifier<MatchesState> {
           }
           return match;
         }).toList();
-        
+
         state = state.copyWith(matches: updatedMatches);
         return true;
       }
@@ -124,7 +131,7 @@ class MatchesProvider extends StateNotifier<MatchesState> {
           }
           return match;
         }).toList();
-        
+
         state = state.copyWith(matches: updatedMatches);
         return true;
       }
@@ -144,10 +151,32 @@ class MatchesProvider extends StateNotifier<MatchesState> {
   void clearError() {
     state = state.copyWith(error: null);
   }
+
+  /// Load all matches
+  Future<void> loadAllMatches() async {
+    await loadMatches();
+  }
+
+  /// Load analytics data
+  Future<void> loadAnalytics() async {
+    await getMatchStats();
+  }
+
+  /// Load matches for a specific report
+  Future<void> loadMatchesForReport(String reportId) async {
+    await getMatchesForReport(reportId);
+  }
+
+  /// Get lost matches
+  List<Match> get lostMatches => state.lostMatches;
+
+  /// Get found matches
+  List<Match> get foundMatches => state.foundMatches;
 }
 
 /// Matches provider instance
-final matchesProvider = StateNotifierProvider<MatchesProvider, MatchesState>((ref) {
+final matchesProvider =
+    StateNotifierProvider<MatchesProvider, MatchesState>((ref) {
   final apiService = ApiService();
   return MatchesProvider(apiService);
 });

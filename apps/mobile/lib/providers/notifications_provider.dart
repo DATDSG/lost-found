@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
@@ -10,6 +9,7 @@ class NotificationsState {
   final String? error;
   final int notificationCount;
   final bool hasNotifications;
+  final int unreadCount;
 
   const NotificationsState({
     this.notifications = const [],
@@ -17,6 +17,7 @@ class NotificationsState {
     this.error,
     this.notificationCount = 0,
     this.hasNotifications = false,
+    this.unreadCount = 0,
   });
 
   NotificationsState copyWith({
@@ -25,6 +26,7 @@ class NotificationsState {
     String? error,
     int? notificationCount,
     bool? hasNotifications,
+    int? unreadCount,
   }) {
     return NotificationsState(
       notifications: notifications ?? this.notifications,
@@ -32,6 +34,7 @@ class NotificationsState {
       error: error ?? this.error,
       notificationCount: notificationCount ?? this.notificationCount,
       hasNotifications: hasNotifications ?? this.hasNotifications,
+      unreadCount: unreadCount ?? this.unreadCount,
     );
   }
 }
@@ -70,7 +73,7 @@ class NotificationsProvider extends StateNotifier<NotificationsState> {
   Future<void> markAsRead(String notificationId) async {
     try {
       await _apiService.markNotificationAsRead(notificationId);
-      
+
       // Update the notification in the state
       final updatedNotifications = state.notifications.map((notification) {
         if (notification.id == notificationId) {
@@ -78,7 +81,7 @@ class NotificationsProvider extends StateNotifier<NotificationsState> {
         }
         return notification;
       }).toList();
-      
+
       state = state.copyWith(notifications: updatedNotifications);
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -89,12 +92,12 @@ class NotificationsProvider extends StateNotifier<NotificationsState> {
   Future<void> deleteNotification(String notificationId) async {
     try {
       await _apiService.deleteNotification(notificationId);
-      
+
       // Remove the notification from the state
       final updatedNotifications = state.notifications
           .where((notification) => notification.id != notificationId)
           .toList();
-      
+
       state = state.copyWith(
         notifications: updatedNotifications,
         notificationCount: updatedNotifications.length,
@@ -109,12 +112,12 @@ class NotificationsProvider extends StateNotifier<NotificationsState> {
   Future<void> markAllAsRead() async {
     try {
       await _apiService.markAllNotificationsAsRead();
-      
+
       // Update all notifications to read
       final updatedNotifications = state.notifications.map((notification) {
         return notification.copyWith(isRead: true);
       }).toList();
-      
+
       state = state.copyWith(notifications: updatedNotifications);
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -137,10 +140,22 @@ class NotificationsProvider extends StateNotifier<NotificationsState> {
   void clearError() {
     state = state.copyWith(error: null);
   }
+
+  /// Load stats
+  Future<void> loadStats() async {
+    await getUnreadCount();
+  }
+
+  /// Get notifications
+  List<AppNotification> get notifications => state.notifications;
+
+  /// Get unread count
+  int get unreadCount => state.unreadCount;
 }
 
 /// Notifications provider instance
-final notificationsProvider = StateNotifierProvider<NotificationsProvider, NotificationsState>((ref) {
+final notificationsProvider =
+    StateNotifierProvider<NotificationsProvider, NotificationsState>((ref) {
   final apiService = ApiService();
   return NotificationsProvider(apiService);
 });

@@ -5,9 +5,17 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, AsyncMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.matching import MatchingPipeline, MatchCandidate
+from app.matching import MatchingPipeline
 from app.models import Report
-from app.config import get_config
+from app.config import config
+
+
+class MatchCandidate:
+    """Mock MatchCandidate class for testing."""
+    def __init__(self, report_id: int, score: float, explanation: str):
+        self.report_id = report_id
+        self.score = score
+        self.explanation = explanation
 
 
 @pytest.fixture
@@ -60,7 +68,7 @@ def sample_report():
 @pytest.fixture
 def matching_pipeline(mock_db, mock_config, mock_cache_client):
     """Create a MatchingPipeline instance for testing."""
-    with patch('app.matching.get_config', return_value=mock_config):
+    with patch('app.matching.config', mock_config):
         with patch('app.matching.get_cache_client', return_value=mock_cache_client):
             return MatchingPipeline(mock_db)
 

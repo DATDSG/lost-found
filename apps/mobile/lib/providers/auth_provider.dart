@@ -1,7 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
-import '../models/auth_token.dart';
 import '../services/api_service_manager.dart';
 import '../services/storage_service.dart';
 
@@ -32,6 +30,9 @@ class AuthState {
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
     );
   }
+
+  /// Check if user is logged in
+  bool get isLoggedIn => isAuthenticated && user != null;
 }
 
 /// Authentication provider
@@ -151,7 +152,7 @@ class AuthProvider extends StateNotifier<AuthState> {
     } catch (e) {
       // Continue with logout even if API call fails
     }
-    
+
     // Clear local state
     await _storageService.clearTokens();
     state = state.copyWith(
@@ -189,7 +190,8 @@ class AuthProvider extends StateNotifier<AuthState> {
   }
 
   /// Change password
-  Future<bool> changePassword(String currentPassword, String newPassword) async {
+  Future<bool> changePassword(
+      String currentPassword, String newPassword) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       await _apiService.changePassword(currentPassword, newPassword);
@@ -207,6 +209,30 @@ class AuthProvider extends StateNotifier<AuthState> {
   /// Clear error
   void clearError() {
     state = state.copyWith(error: null);
+  }
+
+  /// Check authentication status
+  Future<void> checkAuth() async {
+    await _initialize();
+  }
+
+  /// Get current user
+  User? get user => state.user;
+
+  /// Check if authenticated
+  bool get isAuthenticated => state.isAuthenticated;
+
+  /// Check if loading
+  bool get isLoading => state.isLoading;
+
+  /// Get current error
+  String? get error => state.error;
+
+  /// Get access token
+  String? get accessToken {
+    // This would need to be implemented based on your token storage
+    // For now, returning null as we don't have direct access to token
+    return null;
   }
 }
 

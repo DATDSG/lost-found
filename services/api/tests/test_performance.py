@@ -151,7 +151,7 @@ class TestServiceClientPerformance:
         assert total_time < 5.0, f"20 concurrent requests took {total_time:.2f}s, expected < 5.0s"
 
 
-@pytest.mark.load
+@pytest.mark.slow
 class TestLoadScenarios:
     """Load testing scenarios."""
 
