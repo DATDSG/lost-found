@@ -12,7 +12,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   dio: ^5.4.0
-  flutter_riverpod: ^2.5.0
+  flutter_riverpod: ^3.0.3
   provider: ^6.1.1
   intl: any
   shared_preferences: ^2.2.3
@@ -22,21 +22,25 @@ dependencies:
   cached_network_image: ^3.3.1
   collection: ^1.18.0
   uuid: ^4.5.0
-  firebase_core: ^3.8.0
+  firebase_core: ^4.2.0
   firebase_messaging: ^15.1.5
   flutter_local_notifications: ^18.0.1
   web_socket_channel: ^3.0.1
   connectivity_plus: ^6.1.0
   crypto: ^3.0.3 # For password encryption and hashing
   http: ^1.2.0 # For API calls
-  geolocator: ^10.1.0 # For geolocation and distance calculation
+  geolocator: ^14.0.2 # For geolocation and distance calculation
   google_maps_flutter: ^2.5.0
   geocoding: ^2.1.1
+  http_parser: ^4.0.2
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  permission_handler: ^11.0.1 # For location permissions
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
   build_runner: ^2.4.11
   mocktail: ^1.0.0
   integration_test:
