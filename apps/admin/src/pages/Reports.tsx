@@ -197,22 +197,76 @@ export default function Reports() {
   };
 
   // Bulk actions
-  const handleBulkDelete = () => {
-    console.log("Bulk delete:", selected);
-    // TODO: Implement bulk delete API call
-    setSelected([]);
+  const handleBulkDelete = async () => {
+    if (selected.length === 0) return;
+
+    try {
+      const response = await fetch("/api/admin/reports/bulk-delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reportIds: selected }),
+      });
+
+      if (response.ok) {
+        // Refresh the data
+        window.location.reload();
+        setSelected([]);
+      } else {
+        console.error("Failed to delete reports");
+      }
+    } catch (error) {
+      console.error("Error deleting reports:", error);
+    }
   };
 
-  const handleBulkApprove = () => {
-    console.log("Bulk approve:", selected);
-    // TODO: Implement bulk approve API call
-    setSelected([]);
+  const handleBulkApprove = async () => {
+    if (selected.length === 0) return;
+
+    try {
+      const response = await fetch("/api/admin/reports/bulk-approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reportIds: selected }),
+      });
+
+      if (response.ok) {
+        // Refresh the data
+        window.location.reload();
+        setSelected([]);
+      } else {
+        console.error("Failed to approve reports");
+      }
+    } catch (error) {
+      console.error("Error approving reports:", error);
+    }
   };
 
-  const handleBulkReject = () => {
-    console.log("Bulk reject:", selected);
-    // TODO: Implement bulk reject API call
-    setSelected([]);
+  const handleBulkReject = async () => {
+    if (selected.length === 0) return;
+
+    try {
+      const response = await fetch("/api/admin/reports/bulk-reject", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reportIds: selected }),
+      });
+
+      if (response.ok) {
+        // Refresh the data
+        window.location.reload();
+        setSelected([]);
+      } else {
+        console.error("Failed to reject reports");
+      }
+    } catch (error) {
+      console.error("Error rejecting reports:", error);
+    }
   };
 
   const getStatusColor = (status: string) => {

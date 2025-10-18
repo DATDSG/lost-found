@@ -41,6 +41,7 @@ import {
   AccountCircle as AccountCircleIcon,
 } from "@mui/icons-material";
 import { useAuthStore } from "@/stores/authStore";
+import { useThemeContext } from "@/contexts/ThemeContext";
 
 const drawerWidthExpanded = 280;
 const drawerWidthCollapsed = 72;
@@ -72,10 +73,10 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const theme = useTheme();
+  const { darkMode, toggleDarkMode } = useThemeContext();
 
   // State management
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -96,11 +97,6 @@ export default function Layout() {
   const handleLogout = () => {
     handleUserMenuClose();
     logout();
-  };
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    // TODO: Implement actual dark mode theme switching
   };
 
   return (
