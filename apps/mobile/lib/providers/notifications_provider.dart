@@ -1,131 +1,146 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
-import 'dart:async';
 
+/// Notifications state
 class NotificationsState {
   final List<AppNotification> notifications;
-  final int unreadCount;
   final bool isLoading;
   final String? error;
+  final int notificationCount;
+  final bool hasNotifications;
 
-  NotificationsState({
+  const NotificationsState({
     this.notifications = const [],
-    this.unreadCount = 0,
     this.isLoading = false,
     this.error,
+    this.notificationCount = 0,
+    this.hasNotifications = false,
   });
 
   NotificationsState copyWith({
     List<AppNotification>? notifications,
-    int? unreadCount,
     bool? isLoading,
     String? error,
+    int? notificationCount,
+    bool? hasNotifications,
   }) {
     return NotificationsState(
       notifications: notifications ?? this.notifications,
-      unreadCount: unreadCount ?? this.unreadCount,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
+      error: error ?? this.error,
+      notificationCount: notificationCount ?? this.notificationCount,
+      hasNotifications: hasNotifications ?? this.hasNotifications,
     );
   }
 }
 
-class NotificationsNotifier extends StateNotifier<NotificationsState> {
+/// Notifications provider
+class NotificationsProvider extends StateNotifier<NotificationsState> {
   final ApiService _apiService;
-  Timer? _pollTimer;
 
-  NotificationsNotifier(this._apiService) : super(NotificationsState()) {
-    _startPolling();
-  }
+  NotificationsProvider(this._apiService) : super(const NotificationsState());
 
-  void _startPolling() {
-    // Poll for new notifications every 30 seconds
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      loadNotifications();
-      getUnreadCount();
-    });
-  }
-
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
-
+  /// Load notifications
   Future<void> loadNotifications() async {
     state = state.copyWith(isLoading: true, error: null);
-
     try {
       final notifications = await _apiService.getNotifications();
-      final unreadCount = await _apiService.getUnreadNotificationCount();
-
       state = state.copyWith(
         notifications: notifications,
-        unreadCount: unreadCount,
         isLoading: false,
+        notificationCount: notifications.length,
+        hasNotifications: notifications.isNotEmpty,
       );
     } catch (e) {
       state = state.copyWith(
-        isLoading: false,
         error: e.toString(),
+        isLoading: false,
       );
     }
   }
 
-  Future<void> getUnreadCount() async {
-    try {
-      final count = await _apiService.getUnreadNotificationCount();
-      state = state.copyWith(unreadCount: count);
-    } catch (e) {
-      // Silently fail for background updates
-    }
+  /// Refresh notifications
+  Future<void> refresh() async {
+    await loadNotifications();
   }
 
+  /// Mark notification as read
   Future<void> markAsRead(String notificationId) async {
     try {
       await _apiService.markNotificationAsRead(notificationId);
-
-      // Update local state
-      final updatedNotifications = state.notifications.map((notif) {
-        if (notif.id == notificationId) {
-          return notif.copyWith(isRead: true);
+      
+      // Update the notification in the state
+      final updatedNotifications = state.notifications.map((notification) {
+        if (notification.id == notificationId) {
+          return notification.copyWith(isRead: true);
         }
-        return notif;
+        return notification;
       }).toList();
+      
+      state = state.copyWith(notifications: updatedNotifications);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
 
-      final unreadCount = updatedNotifications.where((n) => !n.isRead).length;
-
+  /// Delete notification
+  Future<void> deleteNotification(String notificationId) async {
+    try {
+      await _apiService.deleteNotification(notificationId);
+      
+      // Remove the notification from the state
+      final updatedNotifications = state.notifications
+          .where((notification) => notification.id != notificationId)
+          .toList();
+      
       state = state.copyWith(
         notifications: updatedNotifications,
-        unreadCount: unreadCount,
+        notificationCount: updatedNotifications.length,
+        hasNotifications: updatedNotifications.isNotEmpty,
       );
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
 
+  /// Mark all notifications as read
   Future<void> markAllAsRead() async {
     try {
       await _apiService.markAllNotificationsAsRead();
-
-      // Update local state
-      final updatedNotifications = state.notifications.map((notif) {
-        return notif.copyWith(isRead: true);
+      
+      // Update all notifications to read
+      final updatedNotifications = state.notifications.map((notification) {
+        return notification.copyWith(isRead: true);
       }).toList();
-
-      state = state.copyWith(
-        notifications: updatedNotifications,
-        unreadCount: 0,
-      );
+      
+      state = state.copyWith(notifications: updatedNotifications);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
+
+  /// Get unread notification count
+  Future<int> getUnreadCount() async {
+    try {
+      final count = await _apiService.getUnreadNotificationCount();
+      state = state.copyWith(notificationCount: count);
+      return count;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return 0;
+    }
+  }
+
+  /// Clear error
+  void clearError() {
+    state = state.copyWith(error: null);
+  }
 }
 
-final notificationsProvider =
-    StateNotifierProvider<NotificationsNotifier, NotificationsState>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
-  return NotificationsNotifier(apiService);
+/// Notifications provider instance
+final notificationsProvider = StateNotifierProvider<NotificationsProvider, NotificationsState>((ref) {
+  final apiService = ApiService();
+  return NotificationsProvider(apiService);
 });
