@@ -18,20 +18,25 @@ async def list_matches(
     limit: int = Query(10, ge=1, le=100),
     status: Optional[MatchStatus] = None,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """List matches with pagination and filters."""
-    query = db.query(Match)
+    # Build query
+    query = select(Match)
     
     # Apply filters
     if status:
-        query = query.filter(Match.status == status)
+        query = query.where(Match.status == status.value)
     
     # Get total count
-    total = query.count()
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
     
     # Get paginated results
-    matches = query.order_by(Match.created_at.desc()).offset(skip).limit(limit).all()
+    query = query.order_by(Match.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
+    matches = result.scalars().all()
     
     # Format response
     match_list = [
@@ -62,7 +67,7 @@ async def list_matches(
 @router.get("/stats")
 async def get_match_stats(
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get match statistics."""
     

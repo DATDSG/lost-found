@@ -25,28 +25,35 @@ async def list_users(
     status: Optional[str] = None,
     search: Optional[str] = None,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """List users with pagination and filters."""
-    query = db.query(User)
+    # Build query
+    query = select(User)
     
     # Apply filters
     if role:
-        query = query.filter(User.role == role)
+        query = query.where(User.role == role)
     if status:
         is_active = status == "active"
-        query = query.filter(User.is_active == is_active)
+        query = query.where(User.is_active == is_active)
     if search:
-        query = query.filter(
-            (User.email.ilike(f"%{search}%")) | 
-            (User.display_name.ilike(f"%{search}%"))
+        query = query.where(
+            or_(
+                User.email.ilike(f"%{search}%"),
+                User.display_name.ilike(f"%{search}%")
+            )
         )
     
     # Get total count
-    total = query.count()
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
     
     # Get paginated results
-    users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
+    query = query.order_by(User.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
+    users = result.scalars().all()
     
     # Format response
     user_list = [
@@ -87,7 +94,7 @@ async def users_list(
     role: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
     """Display users list with filters."""
@@ -146,7 +153,7 @@ async def users_list(
 async def user_detail(
     request: Request,
     user_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Display user detail page."""
@@ -191,7 +198,7 @@ async def toggle_user_status(
     request: Request,
     user_id: str,
     csrf_token: str = Form(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Toggle user active status."""
@@ -228,7 +235,7 @@ async def update_user_role(
     user_id: str,
     role: str = Form(...),
     csrf_token: str = Form(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Update user role."""
@@ -262,7 +269,7 @@ async def update_user_role(
 @router.get("/stats")
 async def get_user_stats(
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get user statistics."""
     

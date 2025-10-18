@@ -23,7 +23,7 @@ async def list_reports_for_moderation(
     report_type: Optional[str] = None,
     search: Optional[str] = None,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """List reports for moderation with filtering."""
     
@@ -32,44 +32,58 @@ async def list_reports_for_moderation(
         skip = (page - 1) * page_size
         limit = page_size
     
-    query = db.query(Report)
+    # Build query with filters
+    query = select(Report)
     
     # Apply filters
     if status_filter:
-        query = query.filter(Report.status == status_filter)
+        query = query.where(Report.status == status_filter.value)
     else:
         # Default to pending reports for moderation
-        query = query.filter(Report.status == ReportStatus.PENDING)
+        query = query.where(Report.status == "pending")
         
     if report_type:
-        query = query.filter(Report.type == report_type)
+        query = query.where(Report.type == report_type)
         
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
-            (Report.title.ilike(search_pattern)) |
-            (Report.description.ilike(search_pattern))
+        query = query.where(
+            or_(
+                Report.title.ilike(search_pattern),
+                Report.description.ilike(search_pattern)
+            )
         )
     
     # Get total count
-    total = query.count()
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
     
-    # Apply pagination
-    reports = query.order_by(Report.created_at.desc()).offset(skip).limit(limit).all()
+    # Apply pagination and ordering
+    query = query.order_by(Report.created_at.desc()).offset(skip).limit(limit)
+    
+    # Execute query
+    result = await db.execute(query)
+    reports = result.scalars().all()
+    
+    # Get all owner IDs for batch loading
+    owner_ids = [report.owner_id for report in reports]
+    owners_result = await db.execute(select(User).where(User.id.in_(owner_ids)))
+    owners = {owner.id: owner for owner in owners_result.scalars().all()}
     
     # Format response
     report_list = []
     for report in reports:
-        owner = db.query(User).filter(User.id == report.owner_id).first()
+        owner = owners.get(report.owner_id)
         report_list.append({
             "id": report.id,
             "title": report.title,
-            "description": report.description[:200] + "..." if len(report.description) > 200 else report.description,
+            "description": report.description[:200] + "..." if report.description and len(report.description) > 200 else report.description or "",
             "type": report.type,
             "status": report.status,
             "category": report.category,
             "owner": {
-                "id": owner.id if owner else None,
+                "id": str(owner.id) if owner else None,
                 "email": owner.email if owner else "Unknown",
                 "display_name": owner.display_name if owner else "Unknown"
             },
@@ -88,39 +102,43 @@ async def list_reports_for_moderation(
 @router.get("/stats")
 async def get_report_stats(
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get comprehensive report statistics."""
     
-    from sqlalchemy import func
+    # Status counts using async queries
+    pending_result = await db.execute(
+        select(func.count(Report.id)).where(Report.status == "pending")
+    )
+    pending_count = pending_result.scalar() or 0
     
-    # Status counts
-    pending_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.PENDING
-    ).scalar()
+    approved_result = await db.execute(
+        select(func.count(Report.id)).where(Report.status == "approved")
+    )
+    approved_count = approved_result.scalar() or 0
     
-    approved_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.APPROVED
-    ).scalar()
+    hidden_result = await db.execute(
+        select(func.count(Report.id)).where(Report.status == "hidden")
+    )
+    hidden_count = hidden_result.scalar() or 0
     
-    hidden_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.HIDDEN
-    ).scalar()
-    
-    removed_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.REMOVED
-    ).scalar()
+    removed_result = await db.execute(
+        select(func.count(Report.id)).where(Report.status == "removed")
+    )
+    removed_count = removed_result.scalar() or 0
     
     total_count = pending_count + approved_count + hidden_count + removed_count
     
     # Type counts
-    lost_count = db.query(func.count(Report.id)).filter(
-        Report.type == "LOST"
-    ).scalar()
+    lost_result = await db.execute(
+        select(func.count(Report.id)).where(Report.type == "lost")
+    )
+    lost_count = lost_result.scalar() or 0
     
-    found_count = db.query(func.count(Report.id)).filter(
-        Report.type == "FOUND"
-    ).scalar()
+    found_result = await db.execute(
+        select(func.count(Report.id)).where(Report.type == "found")
+    )
+    found_count = found_result.scalar() or 0
     
     return {
         "total": total_count,
@@ -147,7 +165,7 @@ async def get_report_stats(
 def get_report_details(
     report_id: str,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get detailed information about a report for moderation."""
     
@@ -191,7 +209,7 @@ def get_report_details(
 def approve_report(
     report_id: str,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Approve a pending report."""
     
@@ -234,7 +252,7 @@ def reject_report(
     report_id: str,
     reason: Optional[str] = None,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Reject a pending report (hide it)."""
     
@@ -278,7 +296,7 @@ def remove_report(
     report_id: str,
     reason: str,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Remove a report (for policy violations)."""
     
@@ -326,7 +344,7 @@ def remove_report(
 @router.get("/stats/moderation")
 def get_moderation_stats(
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get moderation queue statistics."""
     
