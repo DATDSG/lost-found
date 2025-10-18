@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
-import '../services/api_service_manager.dart';
+import '../services/api_service.dart';
 import '../services/storage_service.dart';
 
 /// Authentication state
@@ -37,7 +37,7 @@ class AuthState {
 
 /// Authentication provider
 class AuthProvider extends StateNotifier<AuthState> {
-  final ApiServiceManager _apiService;
+  final ApiService _apiService;
   final StorageService _storageService;
 
   AuthProvider(this._apiService, this._storageService)
@@ -45,15 +45,20 @@ class AuthProvider extends StateNotifier<AuthState> {
     _initialize();
   }
 
-  void _initialize() async {
+  void _initialize() {
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
     state = state.copyWith(isLoading: true);
     try {
       // Check if user is already authenticated
       final token = await _storageService.getToken();
       if (token != null) {
         // Try to get user profile
-        final user = await _apiService.getProfile();
-        if (user != null) {
+        final userData = await _apiService.getProfile();
+        if (userData != null) {
+          final user = User.fromJson(userData);
           state = state.copyWith(
             user: user,
             isAuthenticated: true,
@@ -83,21 +88,20 @@ class AuthProvider extends StateNotifier<AuthState> {
   }
 
   /// Login user
-  Future<bool> login(String email, String password) async {
+  Future<bool> login({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final token = await _apiService.login(email, password);
-      if (token != null) {
-        // Get user profile
-        final user = await _apiService.getProfile();
-        if (user != null) {
-          state = state.copyWith(
-            user: user,
-            isAuthenticated: true,
-            isLoading: false,
-          );
-          return true;
-        }
+      await _apiService.login(email: email, password: password);
+      // Get user profile
+      final userData = await _apiService.getProfile();
+      if (userData != null) {
+        final user = User.fromJson(userData);
+        state = state.copyWith(
+          user: user,
+          isAuthenticated: true,
+          isLoading: false,
+        );
+        return true;
       }
       state = state.copyWith(
         error: 'Login failed',
@@ -114,21 +118,24 @@ class AuthProvider extends StateNotifier<AuthState> {
   }
 
   /// Register user
-  Future<bool> register(String email, String password, String name) async {
+  Future<bool> register(
+      {required String email,
+      required String password,
+      required String displayName}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final token = await _apiService.register(email, password, name);
-      if (token != null) {
-        // Get user profile
-        final user = await _apiService.getProfile();
-        if (user != null) {
-          state = state.copyWith(
-            user: user,
-            isAuthenticated: true,
-            isLoading: false,
-          );
-          return true;
-        }
+      await _apiService.register(
+          email: email, password: password, displayName: displayName);
+      // Get user profile
+      final userData = await _apiService.getProfile();
+      if (userData != null) {
+        final user = User.fromJson(userData);
+        state = state.copyWith(
+          user: user,
+          isAuthenticated: true,
+          isLoading: false,
+        );
+        return true;
       }
       state = state.copyWith(
         error: 'Registration failed',
@@ -167,8 +174,9 @@ class AuthProvider extends StateNotifier<AuthState> {
   Future<bool> updateProfile(Map<String, dynamic> profileData) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final updatedUser = await _apiService.updateProfile(profileData);
-      if (updatedUser != null) {
+      final updatedUserData = await _apiService.updateProfile(profileData);
+      if (updatedUserData != null) {
+        final updatedUser = User.fromJson(updatedUserData);
         state = state.copyWith(
           user: updatedUser,
           isLoading: false,
@@ -191,10 +199,11 @@ class AuthProvider extends StateNotifier<AuthState> {
 
   /// Change password
   Future<bool> changePassword(
-      String currentPassword, String newPassword) async {
+      {required String currentPassword, required String newPassword}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _apiService.changePassword(currentPassword, newPassword);
+      await _apiService.changePassword(
+          currentPassword: currentPassword, newPassword: newPassword);
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
@@ -206,6 +215,21 @@ class AuthProvider extends StateNotifier<AuthState> {
     }
   }
 
+  /// Send password reset email
+  Future<void> sendPasswordResetEmail(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _apiService.sendPasswordResetEmail(email);
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(
+        error: e.toString(),
+        isLoading: false,
+      );
+      rethrow;
+    }
+  }
+
   /// Clear error
   void clearError() {
     state = state.copyWith(error: null);
@@ -213,7 +237,7 @@ class AuthProvider extends StateNotifier<AuthState> {
 
   /// Check authentication status
   Future<void> checkAuth() async {
-    await _initialize();
+    await _checkAuth();
   }
 
   /// Get current user
@@ -238,7 +262,7 @@ class AuthProvider extends StateNotifier<AuthState> {
 
 /// Auth provider instance
 final authProvider = StateNotifierProvider<AuthProvider, AuthState>((ref) {
-  final apiService = ApiServiceManager();
+  final apiService = ApiService();
   final storageService = StorageService();
   return AuthProvider(apiService, storageService);
 });

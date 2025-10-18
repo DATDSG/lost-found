@@ -151,6 +151,12 @@ class NotificationsProvider extends StateNotifier<NotificationsState> {
 
   /// Get unread count
   int get unreadCount => state.unreadCount;
+
+  /// Get loading state
+  bool get isLoading => state.isLoading;
+
+  /// Get error state
+  String? get error => state.error;
 }
 
 /// Notifications provider instance

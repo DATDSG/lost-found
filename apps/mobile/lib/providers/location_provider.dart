@@ -48,7 +48,7 @@ class LocationProvider with ChangeNotifier {
   LocationStats? _locationStats;
 
   // Distance calculations
-  Map<String, DistanceResult> _distanceCache = {};
+  final Map<String, DistanceResult> _distanceCache = {};
 
   // Location bounds
   LocationBounds? _currentBounds;
@@ -171,7 +171,7 @@ class LocationProvider with ChangeNotifier {
 
     try {
       final result = await _apiService.geocodeAddress(address);
-      final location = LocationData.fromJson(result);
+      final location = LocationData.fromJson(result as Map<String, dynamic>);
 
       _state = LocationState.loaded;
       notifyListeners();
@@ -237,9 +237,8 @@ class LocationProvider with ChangeNotifier {
         limit: limit,
       );
 
-      _searchResults = results
-          .map((json) => LocationSearchResult.fromJson(json))
-          .toList();
+      _searchResults =
+          results.map((json) => LocationSearchResult.fromJson(json)).toList();
 
       _state = LocationState.loaded;
       notifyListeners();
@@ -266,7 +265,11 @@ class LocationProvider with ChangeNotifier {
       );
 
       _autocompleteSuggestions = suggestions
-          .map((json) => LocationSuggestion.fromJson(json))
+          .map((suggestion) => LocationSuggestion(
+                id: suggestion,
+                text: suggestion,
+                description: suggestion,
+              ))
           .toList();
 
       notifyListeners();
@@ -292,9 +295,8 @@ class LocationProvider with ChangeNotifier {
         limit: limit,
       );
 
-      _nearbyLocations = results
-          .map((json) => LocationSearchResult.fromJson(json))
-          .toList();
+      _nearbyLocations =
+          results.map((json) => LocationSearchResult.fromJson(json)).toList();
 
       notifyListeners();
     } catch (e) {
@@ -306,7 +308,7 @@ class LocationProvider with ChangeNotifier {
   Future<LocationSearchResult?> getLocationDetails(String placeId) async {
     try {
       final result = await _apiService.getLocationDetails(placeId);
-      return LocationSearchResult.fromJson(result);
+      return LocationSearchResult.fromJson(result as Map<String, dynamic>);
     } catch (e) {
       _error = ErrorHandler.handleError(e, context: 'Get location details');
       notifyListeners();
@@ -360,7 +362,7 @@ class LocationProvider with ChangeNotifier {
         country: country,
       );
 
-      _currentBounds = LocationBounds.fromJson(result);
+      _currentBounds = LocationBounds.fromJson(result as Map<String, dynamic>);
       notifyListeners();
       return _currentBounds;
     } catch (e) {
@@ -402,12 +404,7 @@ class LocationProvider with ChangeNotifier {
     if (!_hasMoreHistory) return;
 
     try {
-      final historyData = await _apiService.getLocationHistory(
-        page: _historyCurrentPage,
-        pageSize: _historyPageSize,
-        startDate: startDate,
-        endDate: endDate,
-      );
+      final historyData = await _apiService.getLocationHistory();
 
       final entries = historyData
           .map((json) => LocationHistoryEntry.fromJson(json))
@@ -446,7 +443,7 @@ class LocationProvider with ChangeNotifier {
       await _apiService.saveLocationToHistory(
         latitude: latitude,
         longitude: longitude,
-        address: address,
+        address: address ?? '',
         city: city,
         country: country,
         metadata: metadata,
@@ -508,7 +505,8 @@ class LocationProvider with ChangeNotifier {
   Future<void> loadLocationStats() async {
     try {
       final statsData = await _apiService.getLocationStats();
-      _locationStats = LocationStats.fromJson(statsData);
+      _locationStats =
+          LocationStats.fromJson(statsData as Map<String, dynamic>);
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading location stats: $e');
@@ -615,8 +613,7 @@ class LocationProvider with ChangeNotifier {
     final double deltaLngRad =
         (to.longitude - from.longitude) * (math.pi / 180);
 
-    final double a =
-        math.sin(deltaLatRad / 2) * math.sin(deltaLatRad / 2) +
+    final double a = math.sin(deltaLatRad / 2) * math.sin(deltaLatRad / 2) +
         math.cos(lat1Rad) *
             math.cos(lat2Rad) *
             math.sin(deltaLngRad / 2) *

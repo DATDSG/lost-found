@@ -248,7 +248,9 @@ class ReportsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _myReports = await RetryHelper.retry(() => _apiService.getMyReports());
+      final rawReports =
+          await RetryHelper.retry(() => _apiService.getMyReports());
+      _myReports = rawReports.map((json) => Report.fromJson(json)).toList();
       _state = ReportState.loaded;
       notifyListeners();
     } catch (e) {
@@ -280,7 +282,7 @@ class ReportsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _nearbyReports = await RetryHelper.retry(
+      final rawReports = await RetryHelper.retry(
         () => _apiService.getNearbyReports(
           latitude: latitude,
           longitude: longitude,
@@ -289,6 +291,7 @@ class ReportsProvider with ChangeNotifier {
           category: category,
         ),
       );
+      _nearbyReports = rawReports.map((json) => Report.fromJson(json)).toList();
       _state = ReportState.loaded;
       notifyListeners();
     } catch (e) {
@@ -301,10 +304,11 @@ class ReportsProvider with ChangeNotifier {
   /// Get a specific report by ID
   Future<Report?> getReport(String reportId, {int maxRetries = 3}) async {
     try {
-      return await RetryHelper.retry(
+      final rawReport = await RetryHelper.retry(
         () => _apiService.getReport(reportId),
         maxRetries: maxRetries,
       );
+      return rawReport != null ? Report.fromJson(rawReport) : null;
     } catch (e) {
       _error = ErrorHandler.handleError(e, context: 'Get report');
       notifyListeners();
@@ -339,7 +343,7 @@ class ReportsProvider with ChangeNotifier {
       if (photos != null && photos.isNotEmpty) {
         // Create report with media upload
         final imagePaths = photos.map((file) => file.path).toList();
-        report = await RetryHelper.retry(
+        final rawReport = await RetryHelper.retry(
           () => _apiService.createReportWithMedia(
             type: type,
             title: title,
@@ -351,7 +355,8 @@ class ReportsProvider with ChangeNotifier {
             locationAddress: locationAddress,
             latitude: latitude,
             longitude: longitude,
-            rewardOffered: rewardOffered,
+            rewardOffered:
+                rewardOffered != null ? (rewardOffered ? 0.0 : null) : null,
             imagePaths: imagePaths,
             onProgress: (progress) {
               _uploadProgress = progress;
@@ -360,9 +365,10 @@ class ReportsProvider with ChangeNotifier {
           ),
           maxRetries: maxRetries,
         );
+        report = Report.fromJson(rawReport!);
       } else {
         // Create report without media
-        report = await RetryHelper.retry(
+        final rawReport = await RetryHelper.retry(
           () => _apiService.createReport(
             type: type,
             title: title,
@@ -374,10 +380,12 @@ class ReportsProvider with ChangeNotifier {
             locationAddress: locationAddress,
             latitude: latitude,
             longitude: longitude,
-            rewardOffered: rewardOffered,
+            rewardOffered:
+                rewardOffered != null ? (rewardOffered ? 0.0 : null) : null,
           ),
           maxRetries: maxRetries,
         );
+        report = Report.fromJson(rawReport!);
       }
 
       // Add to local lists
@@ -406,9 +414,15 @@ class ReportsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final updatedReport = await RetryHelper.retry(
+      final updatedReportData = await RetryHelper.retry(
         () => _apiService.updateReport(reportId, updates),
       );
+
+      if (updatedReportData == null) {
+        throw Exception('Update failed - no data returned');
+      }
+
+      final updatedReport = Report.fromJson(updatedReportData);
 
       // Update in local lists
       _updateReportInLists(updatedReport);
@@ -499,9 +513,15 @@ class ReportsProvider with ChangeNotifier {
   /// Duplicate a report
   Future<Report?> duplicateReport(String reportId) async {
     try {
-      final duplicatedReport = await RetryHelper.retry(
+      final duplicatedReportData = await RetryHelper.retry(
         () => _apiService.duplicateReport(reportId),
       );
+
+      if (duplicatedReportData == null) {
+        throw Exception('Duplicate failed - no data returned');
+      }
+
+      final duplicatedReport = Report.fromJson(duplicatedReportData);
 
       // Add to local lists
       _myReports.insert(0, duplicatedReport);
@@ -578,11 +598,7 @@ class ReportsProvider with ChangeNotifier {
   }) async {
     try {
       _reportAnalytics = await RetryHelper.retry(
-        () => _apiService.getReportAnalytics(
-          startDate: startDate,
-          endDate: endDate,
-          groupBy: groupBy,
-        ),
+        () => _apiService.getReportAnalytics(),
       );
       notifyListeners();
     } catch (e) {

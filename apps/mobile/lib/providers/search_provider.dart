@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/search_models.dart';
 import '../models/report.dart';
-import '../models/media.dart';
 import '../services/api_service.dart';
-import '../core/error/error_handler.dart';
+import 'base_provider.dart';
 
 /// Search Provider - Manages search and filter functionality
-class SearchProvider with ChangeNotifier {
+class SearchProvider extends BaseProvider {
   final ApiService _apiService = ApiService();
 
   // Search state
@@ -14,7 +13,6 @@ class SearchProvider with ChangeNotifier {
   List<SearchSuggestion> _searchSuggestions = [];
   SearchFilters _currentFilters = SearchFilters();
   SearchState _searchState = SearchState.idle;
-  String? _error;
   String _lastQuery = '';
   bool _hasMoreResults = false;
   int _currentPage = 1;
@@ -25,731 +23,510 @@ class SearchProvider with ChangeNotifier {
   Map<String, dynamic>? _trends;
   Map<String, List<FilterOption>> _filterOptions = {};
 
+  // Search history
+  List<String> _searchHistory = [];
+  List<String> _recentSearches = [];
+
   // Getters
   List<Report> get searchResults => _searchResults;
   List<SearchSuggestion> get searchSuggestions => _searchSuggestions;
   SearchFilters get currentFilters => _currentFilters;
   SearchState get searchState => _searchState;
-  String? get error => _error;
   String get lastQuery => _lastQuery;
   bool get hasMoreResults => _hasMoreResults;
   SearchAnalytics? get analytics => _analytics;
   Map<String, dynamic>? get trends => _trends;
   Map<String, List<FilterOption>> get filterOptions => _filterOptions;
+  List<String> get searchHistory => _searchHistory;
+  List<String> get recentSearches => _recentSearches;
 
-  bool get isLoading =>
+  bool get isSearching =>
       _searchState == SearchState.searching ||
       _searchState == SearchState.loadingMore;
-  bool get hasError => _searchState == SearchState.error;
   bool get isEmpty => _searchState == SearchState.empty;
   bool get hasResults => _searchResults.isNotEmpty;
+  @override
+  bool get hasError => _searchState == SearchState.error;
 
-  /// Perform universal search with current filters
-  Future<void> search({bool loadMore = false}) async {
-    if (loadMore) {
-      _searchState = SearchState.loadingMore;
-      _currentPage++;
-    } else {
-      _searchState = SearchState.searching;
-      _currentPage = 1;
-      _searchResults.clear();
-    }
-
-    _error = null;
+  /// Update search query
+  void updateSearchQuery(String query) {
+    _lastQuery = query;
     notifyListeners();
-
-    try {
-      List<Report> results;
-
-      // If there's a search query, use semantic search for better results
-      if (_currentFilters.search != null &&
-          _currentFilters.search!.trim().isNotEmpty) {
-        // Try semantic search first for better relevance
-        try {
-          final semanticResults = await _apiService.semanticSearch(
-            _currentFilters.search!,
-          );
-          // Convert SearchResult to Report for compatibility
-          results = semanticResults
-              .map(
-                (result) => Report(
-                  id: result.id,
-                  title: result.title,
-                  description: result.description,
-                  type: result.type,
-                  status: 'approved', // Default status for search results
-                  category: result.category,
-                  city: result.city,
-                  occurredAt: result.occurredAt,
-                  createdAt: result.createdAt,
-                  media:
-                      result.media
-                          ?.map(
-                            (url) => Media(
-                              id: url,
-                              url: url,
-                              type: MediaType.image,
-                              filename: url.split('/').last,
-                              mimeType: 'image/jpeg',
-                            ),
-                          )
-                          .toList() ??
-                      [],
-                  colors: result.colors,
-                  rewardOffered: result.rewardOffered,
-                  latitude: result.latitude,
-                  longitude: result.longitude,
-                ),
-              )
-              .toList();
-          // Apply additional filters to semantic results
-          results = _applyFiltersToResults(results);
-        } catch (e) {
-          // Fallback to regular search if semantic search fails
-          results = await _apiService.searchReports(
-            filters: _currentFilters.copyWith(
-              page: _currentPage,
-              pageSize: _pageSize,
-            ),
-            page: _currentPage,
-            pageSize: _pageSize,
-          );
-        }
-      } else {
-        // Regular filtered search when no search query
-        results = await _apiService.searchReports(
-          filters: _currentFilters.copyWith(
-            page: _currentPage,
-            pageSize: _pageSize,
-          ),
-          page: _currentPage,
-          pageSize: _pageSize,
-        );
-      }
-
-      if (loadMore) {
-        _searchResults.addAll(results);
-      } else {
-        _searchResults = results;
-      }
-
-      _hasMoreResults = results.length == _pageSize;
-      _searchState = _searchResults.isEmpty
-          ? SearchState.empty
-          : SearchState.success;
-      notifyListeners();
-    } catch (e) {
-      _error = ErrorHandler.handleError(e, context: 'Search');
-      _searchState = SearchState.error;
-      if (loadMore) {
-        _currentPage--; // Revert page increment on error
-      }
-      notifyListeners();
-    }
   }
 
-  /// Apply additional filters to search results
-  List<Report> _applyFiltersToResults(List<Report> results) {
-    return results.where((result) {
-      // Type filter
-      if (_currentFilters.type != null && result.type != _currentFilters.type) {
-        return false;
-      }
-
-      // Category filter
-      if (_currentFilters.category != null &&
-          result.category != _currentFilters.category) {
-        return false;
-      }
-
-      // City filter
-      if (_currentFilters.city != null &&
-          result.city.toLowerCase() != _currentFilters.city!.toLowerCase()) {
-        return false;
-      }
-
-      // Colors filter
-      if (_currentFilters.colors != null &&
-          _currentFilters.colors!.isNotEmpty) {
-        if (result.colors == null || result.colors!.isEmpty) {
-          return false;
-        }
-        bool hasMatchingColor = _currentFilters.colors!.any(
-          (color) => result.colors!.any(
-            (resultColor) =>
-                resultColor.toLowerCase().contains(color.toLowerCase()),
-          ),
-        );
-        if (!hasMatchingColor) {
-          return false;
-        }
-      }
-
-      // Reward filter
-      if (_currentFilters.rewardOffered != null &&
-          result.rewardOffered != _currentFilters.rewardOffered) {
-        return false;
-      }
-
-      // Date range filter
-      if (_currentFilters.startDate != null &&
-          result.createdAt.isBefore(_currentFilters.startDate!)) {
-        return false;
-      }
-      if (_currentFilters.endDate != null &&
-          result.createdAt.isAfter(_currentFilters.endDate!)) {
-        return false;
-      }
-
-      return true;
-    }).toList();
-  }
-
-  /// Perform quick search (for suggestions)
+  /// Quick search for suggestions
   Future<void> quickSearch(String query) async {
-    if (query.trim().isEmpty) {
-      _searchSuggestions.clear();
+    if (query.isEmpty) {
+      _searchSuggestions = [];
       notifyListeners();
       return;
     }
 
     try {
-      // Get suggestions from API
-      final apiSuggestions = await _apiService.getSearchSuggestions(query);
-
-      // Add recent searches that match the query
-      final recentSuggestions = await _getRecentSuggestions(query);
-
-      // Combine and deduplicate suggestions
-      final allSuggestions = <SearchSuggestion>[];
-      final seenTexts = <String>{};
-
-      // Add API suggestions first (higher priority)
-      for (final suggestion in apiSuggestions) {
-        if (!seenTexts.contains(suggestion.text)) {
-          allSuggestions.add(suggestion);
-          seenTexts.add(suggestion.text);
-        }
-      }
-
-      // Add recent suggestions
-      for (final suggestion in recentSuggestions) {
-        if (!seenTexts.contains(suggestion.text)) {
-          allSuggestions.add(suggestion);
-          seenTexts.add(suggestion.text);
-        }
-      }
-
-      _searchSuggestions = allSuggestions.take(10).toList();
-      notifyListeners();
-    } catch (e) {
-      // Don't show error for suggestions, just clear them
-      _searchSuggestions.clear();
-      notifyListeners();
-    }
-  }
-
-  /// Get recent search suggestions that match the query
-  Future<List<SearchSuggestion>> _getRecentSuggestions(String query) async {
-    try {
-      final recentSearches = await _apiService.getRecentSearches();
-      return recentSearches
-          .where(
-            (search) => search.text.toLowerCase().contains(query.toLowerCase()),
-          )
-          .take(5)
+      setLoading();
+      final suggestions = await _apiService.getSearchSuggestions(query);
+      _searchSuggestions = suggestions
+          .map((text) => SearchSuggestion(
+                text: text,
+                type: 'suggestion',
+              ))
           .toList();
-    } catch (e) {
-      return [];
-    }
-  }
-
-  /// Save search query for future suggestions
-  Future<void> saveSearchQuery(String query) async {
-    if (query.trim().isEmpty) return;
-
-    try {
-      await _apiService.saveSearchQuery(query);
-    } catch (e) {
-      // Silently fail - not critical for user experience
-    }
-  }
-
-  /// Load search analytics
-  Future<void> loadAnalytics() async {
-    try {
-      _analytics = await _apiService.getSearchAnalytics();
+      setLoaded();
       notifyListeners();
     } catch (e) {
-      debugPrint('Error loading search analytics: $e');
+      setError('Failed to get search suggestions: $e');
     }
   }
 
-  /// Load search trends
-  Future<void> loadTrends({DateTime? startDate, DateTime? endDate}) async {
-    try {
-      _trends = await _apiService.getSearchTrends(
-        startDate: startDate,
-        endDate: endDate,
-      );
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error loading search trends: $e');
-    }
-  }
-
-  /// Load filter options
-  Future<void> loadFilterOptions() async {
-    try {
-      _filterOptions = await _apiService.getFilterOptions();
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error loading filter options: $e');
-    }
-  }
-
-  /// Advanced search with complex filters
-  Future<void> advancedSearch({bool loadMore = false}) async {
-    if (loadMore) {
-      _searchState = SearchState.loadingMore;
-      _currentPage++;
-    } else {
-      _searchState = SearchState.searching;
-      _currentPage = 1;
-      _searchResults.clear();
-    }
-
-    _error = null;
+  /// Clear search results
+  void clearResults() {
+    _searchResults = [];
+    _searchState = SearchState.idle;
+    _currentPage = 1;
+    _hasMoreResults = false;
     notifyListeners();
-
-    try {
-      final results = await _apiService.advancedSearch(
-        filters: _currentFilters.copyWith(
-          page: _currentPage,
-          pageSize: _pageSize,
-        ),
-        page: _currentPage,
-        pageSize: _pageSize,
-      );
-
-      if (loadMore) {
-        _searchResults.addAll(results);
-      } else {
-        _searchResults = results;
-      }
-
-      _hasMoreResults = results.length == _pageSize;
-      _searchState = _searchResults.isEmpty
-          ? SearchState.empty
-          : SearchState.success;
-      notifyListeners();
-    } catch (e) {
-      _error = ErrorHandler.handleError(e, context: 'Advanced search');
-      _searchState = SearchState.error;
-      if (loadMore) {
-        _currentPage--; // Revert page increment on error
-      }
-      notifyListeners();
-    }
   }
 
-  /// Search by location
-  Future<void> searchByLocation({
-    required double latitude,
-    required double longitude,
-    double radiusKm = 10.0,
-    bool loadMore = false,
-  }) async {
-    if (loadMore) {
-      _searchState = SearchState.loadingMore;
-      _currentPage++;
-    } else {
-      _searchState = SearchState.searching;
-      _currentPage = 1;
-      _searchResults.clear();
-    }
-
-    _error = null;
-    notifyListeners();
-
-    try {
-      final results = await _apiService.searchByLocation(
-        latitude: latitude,
-        longitude: longitude,
-        radiusKm: radiusKm,
-        additionalFilters: _currentFilters,
-        page: _currentPage,
-        pageSize: _pageSize,
-      );
-
-      if (loadMore) {
-        _searchResults.addAll(results);
-      } else {
-        _searchResults = results;
-      }
-
-      _hasMoreResults = results.length == _pageSize;
-      _searchState = _searchResults.isEmpty
-          ? SearchState.empty
-          : SearchState.success;
-      notifyListeners();
-    } catch (e) {
-      _error = ErrorHandler.handleError(e, context: 'Location search');
-      _searchState = SearchState.error;
-      if (loadMore) {
-        _currentPage--; // Revert page increment on error
-      }
-      notifyListeners();
-    }
-  }
-
-  /// Search by image similarity
-  Future<void> searchByImage({
-    required String imageUrl,
-    double threshold = 0.7,
-    bool loadMore = false,
-  }) async {
-    if (loadMore) {
-      _searchState = SearchState.loadingMore;
-      _currentPage++;
-    } else {
-      _searchState = SearchState.searching;
-      _currentPage = 1;
-      _searchResults.clear();
-    }
-
-    _error = null;
-    notifyListeners();
-
-    try {
-      final results = await _apiService.searchByImage(
-        imageUrl: imageUrl,
-        threshold: threshold,
-        additionalFilters: _currentFilters,
-        page: _currentPage,
-        pageSize: _pageSize,
-      );
-
-      if (loadMore) {
-        _searchResults.addAll(results);
-      } else {
-        _searchResults = results;
-      }
-
-      _hasMoreResults = results.length == _pageSize;
-      _searchState = _searchResults.isEmpty
-          ? SearchState.empty
-          : SearchState.success;
-      notifyListeners();
-    } catch (e) {
-      _error = ErrorHandler.handleError(e, context: 'Image search');
-      _searchState = SearchState.error;
-      if (loadMore) {
-        _currentPage--; // Revert page increment on error
-      }
-      notifyListeners();
-    }
-  }
-
-  /// Update search filters
+  /// Update filters
   void updateFilters(SearchFilters filters) {
     _currentFilters = filters;
     notifyListeners();
   }
 
-  /// Update search query
-  void updateSearchQuery(String query) {
-    _currentFilters = _currentFilters.copyWith(search: query);
-    _lastQuery = query;
-    notifyListeners();
-  }
-
-  /// Add or remove a filter
-  void toggleFilter(String key, dynamic value) {
-    SearchFilters newFilters;
-
-    switch (key) {
-      case 'type':
-        newFilters = _currentFilters.copyWith(type: value);
-        break;
-      case 'category':
-        newFilters = _currentFilters.copyWith(category: value);
-        break;
-      case 'status':
-        newFilters = _currentFilters.copyWith(status: value);
-        break;
-      case 'city':
-        newFilters = _currentFilters.copyWith(city: value);
-        break;
-      case 'rewardOffered':
-        newFilters = _currentFilters.copyWith(rewardOffered: value);
-        break;
+  /// Toggle a specific filter
+  void toggleFilter(String filterType, String value) {
+    switch (filterType) {
       case 'sortBy':
-        newFilters = _currentFilters.copyWith(sortBy: value);
-        break;
-      case 'maxDistance':
-        newFilters = _currentFilters.copyWith(maxDistance: value);
-        break;
-      default:
-        return;
-    }
-
-    updateFilters(newFilters);
-  }
-
-  /// Toggle color filter
-  void toggleColorFilter(String color) {
-    final currentColors = List<String>.from(_currentFilters.colors ?? []);
-
-    if (currentColors.contains(color)) {
-      currentColors.remove(color);
-    } else {
-      currentColors.add(color);
-    }
-
-    updateFilters(
-      _currentFilters.copyWith(
-        colors: currentColors.isEmpty ? null : currentColors,
-      ),
-    );
-  }
-
-  /// Set date range filter
-  void setDateRange(DateTime? startDate, DateTime? endDate) {
-    updateFilters(
-      _currentFilters.copyWith(startDate: startDate, endDate: endDate),
-    );
-  }
-
-  /// Set location filter
-  void setLocationFilter({
-    String? city,
-    double? latitude,
-    double? longitude,
-    double? maxDistance,
-  }) {
-    updateFilters(
-      _currentFilters.copyWith(
-        city: city,
-        minLatitude: latitude != null ? latitude - 0.01 : null,
-        maxLatitude: latitude != null ? latitude + 0.01 : null,
-        minLongitude: longitude != null ? longitude - 0.01 : null,
-        maxLongitude: longitude != null ? longitude + 0.01 : null,
-        maxDistance: maxDistance,
-      ),
-    );
-  }
-
-  /// Clear all filters
-  void clearAllFilters() {
-    _currentFilters = SearchFilters();
-    notifyListeners();
-  }
-
-  /// Clear specific filter
-  void clearFilter(String key) {
-    SearchFilters newFilters;
-
-    switch (key) {
-      case 'search':
-        newFilters = _currentFilters.copyWith(search: null);
+        _currentFilters = _currentFilters.copyWith(sortBy: value);
         break;
       case 'type':
-        newFilters = _currentFilters.copyWith(type: null);
+        _currentFilters = _currentFilters.copyWith(type: value);
         break;
       case 'category':
-        newFilters = _currentFilters.copyWith(category: null);
+        _currentFilters = _currentFilters.copyWith(category: value);
         break;
       case 'status':
-        newFilters = _currentFilters.copyWith(status: null);
+        _currentFilters = _currentFilters.copyWith(status: value);
         break;
       case 'city':
-        newFilters = _currentFilters.copyWith(city: null);
+        _currentFilters = _currentFilters.copyWith(city: value);
         break;
-      case 'colors':
-        newFilters = _currentFilters.copyWith(colors: null);
-        break;
-      case 'rewardOffered':
-        newFilters = _currentFilters.copyWith(rewardOffered: null);
-        break;
-      case 'sortBy':
-        newFilters = _currentFilters.copyWith(sortBy: null);
-        break;
-      case 'maxDistance':
-        newFilters = _currentFilters.copyWith(maxDistance: null);
-        break;
-      case 'dateRange':
-        newFilters = _currentFilters.copyWith(startDate: null, endDate: null);
-        break;
-      default:
-        return;
-    }
-
-    updateFilters(newFilters);
-  }
-
-  /// Load more results (pagination)
-  Future<void> loadMoreResults() async {
-    if (!_hasMoreResults || isLoading) return;
-    await search(loadMore: true);
-  }
-
-  /// Refresh search results
-  Future<void> refresh() async {
-    await search();
-  }
-
-  /// Clear search results
-  void clearResults() {
-    _searchResults.clear();
-    _searchSuggestions.clear();
-    _searchState = SearchState.idle;
-    _error = null;
-    _hasMoreResults = false;
-    _currentPage = 1;
-    notifyListeners();
-  }
-
-  /// Clear error
-  void clearError() {
-    _error = null;
-    if (_searchState == SearchState.error) {
-      _searchState = SearchState.idle;
     }
     notifyListeners();
   }
 
-  /// Reset all search state
-  void reset() {
-    _searchResults.clear();
-    _searchSuggestions.clear();
-    _currentFilters = SearchFilters();
-    _searchState = SearchState.idle;
-    _error = null;
-    _lastQuery = '';
-    _hasMoreResults = false;
-    _currentPage = 1;
-    notifyListeners();
+  /// Save search query to history
+  void saveSearchQuery(String query) {
+    if (query.isNotEmpty && !_searchHistory.contains(query)) {
+      _searchHistory.insert(0, query);
+      if (_searchHistory.length > 50) {
+        _searchHistory = _searchHistory.take(50).toList();
+      }
+      notifyListeners();
+    }
   }
 
-  /// Get filter options for UI
+  /// Get type options for filters
   List<FilterOption> getTypeOptions() {
     return [
-      FilterOption(
-        value: 'lost',
-        label: 'Lost Items',
-        icon: Icons.search_off_rounded,
-        color: const Color(0xFFEF4444),
-      ),
-      FilterOption(
-        value: 'found',
-        label: 'Found Items',
-        icon: Icons.search_rounded,
-        color: const Color(0xFF10B981),
-      ),
+      FilterOption(value: 'lost', label: 'Lost Items', icon: Icons.search_off),
+      FilterOption(value: 'found', label: 'Found Items', icon: Icons.search),
     ];
   }
 
+  /// Get category options for filters
   List<FilterOption> getCategoryOptions() {
     return [
       FilterOption(
-        value: 'electronics',
-        label: 'Electronics',
-        icon: Icons.devices_rounded,
-      ),
+          value: 'electronics', label: 'Electronics', icon: Icons.devices),
+      FilterOption(value: 'clothing', label: 'Clothing', icon: Icons.checkroom),
       FilterOption(
-        value: 'personal_items',
-        label: 'Personal Items',
-        icon: Icons.person_rounded,
-      ),
+          value: 'accessories', label: 'Accessories', icon: Icons.watch),
       FilterOption(
-        value: 'clothing',
-        label: 'Clothing',
-        icon: Icons.checkroom_rounded,
-      ),
-      FilterOption(
-        value: 'documents',
-        label: 'Documents',
-        icon: Icons.description_rounded,
-      ),
-      FilterOption(
-        value: 'jewelry',
-        label: 'Jewelry',
-        icon: Icons.diamond_rounded,
-      ),
-      FilterOption(
-        value: 'bags',
-        label: 'Bags & Accessories',
-        icon: Icons.shopping_bag_rounded,
-      ),
-      FilterOption(value: 'keys', label: 'Keys', icon: Icons.vpn_key_rounded),
-      FilterOption(
-        value: 'other',
-        label: 'Other',
-        icon: Icons.category_rounded,
-      ),
+          value: 'documents', label: 'Documents', icon: Icons.description),
+      FilterOption(value: 'keys', label: 'Keys', icon: Icons.vpn_key),
+      FilterOption(value: 'bags', label: 'Bags', icon: Icons.shopping_bag),
+      FilterOption(value: 'jewelry', label: 'Jewelry', icon: Icons.diamond),
+      FilterOption(value: 'books', label: 'Books', icon: Icons.book),
+      FilterOption(value: 'sports', label: 'Sports', icon: Icons.sports),
+      FilterOption(value: 'other', label: 'Other', icon: Icons.category),
     ];
   }
 
+  /// Get color options for filters
   List<FilterOption> getColorOptions() {
     return [
+      FilterOption(value: 'black', label: 'Black', color: Colors.black),
+      FilterOption(value: 'white', label: 'White', color: Colors.white),
       FilterOption(value: 'red', label: 'Red', color: Colors.red),
       FilterOption(value: 'blue', label: 'Blue', color: Colors.blue),
       FilterOption(value: 'green', label: 'Green', color: Colors.green),
       FilterOption(value: 'yellow', label: 'Yellow', color: Colors.yellow),
-      FilterOption(value: 'black', label: 'Black', color: Colors.black),
-      FilterOption(value: 'white', label: 'White', color: Colors.white),
-      FilterOption(value: 'gray', label: 'Gray', color: Colors.grey),
-      FilterOption(value: 'brown', label: 'Brown', color: Colors.brown),
-      FilterOption(value: 'purple', label: 'Purple', color: Colors.purple),
       FilterOption(value: 'orange', label: 'Orange', color: Colors.orange),
+      FilterOption(value: 'purple', label: 'Purple', color: Colors.purple),
+      FilterOption(value: 'pink', label: 'Pink', color: Colors.pink),
+      FilterOption(value: 'brown', label: 'Brown', color: Colors.brown),
+      FilterOption(value: 'gray', label: 'Gray', color: Colors.grey),
+      FilterOption(
+          value: 'silver', label: 'Silver', color: Colors.grey.shade400),
+      FilterOption(value: 'gold', label: 'Gold', color: Colors.amber),
     ];
   }
 
+  /// Get sort options for filters
   List<FilterOption> getSortOptions() {
-    return SearchSortOption.values
-        .map(
-          (option) => FilterOption(
-            value: option.value,
-            label: option.label,
-            icon: _getSortIcon(option),
-          ),
-        )
-        .toList();
+    return [
+      FilterOption(
+          value: 'date_newest',
+          label: 'Newest First',
+          icon: Icons.arrow_downward),
+      FilterOption(
+          value: 'date_oldest',
+          label: 'Oldest First',
+          icon: Icons.arrow_upward),
+      FilterOption(
+          value: 'relevance', label: 'Most Relevant', icon: Icons.star),
+      FilterOption(
+          value: 'distance', label: 'Nearest First', icon: Icons.location_on),
+      FilterOption(
+          value: 'title', label: 'Alphabetical', icon: Icons.sort_by_alpha),
+    ];
   }
 
-  IconData _getSortIcon(SearchSortOption option) {
-    switch (option) {
-      case SearchSortOption.relevance:
-        return Icons.star_rounded;
-      case SearchSortOption.dateNewest:
-        return Icons.schedule_rounded;
-      case SearchSortOption.dateOldest:
-        return Icons.history_rounded;
-      case SearchSortOption.distance:
-        return Icons.location_on_rounded;
-      case SearchSortOption.title:
-        return Icons.sort_by_alpha_rounded;
+  /// Perform universal search with current filters
+  Future<void> search({bool loadMore = false}) async {
+    try {
+      setLoading();
+
+      if (loadMore) {
+        _searchState = SearchState.loadingMore;
+        _currentPage++;
+      } else {
+        _searchState = SearchState.searching;
+        _currentPage = 1;
+        _searchResults.clear();
+      }
+      notifyListeners();
+
+      final Map<String, dynamic> filters = _currentFilters.toQueryParams();
+      filters['page'] = _currentPage;
+      filters['page_size'] = _pageSize;
+
+      final List<Map<String, dynamic>> rawResults =
+          await _apiService.searchReports(
+        query: _lastQuery.isNotEmpty ? _lastQuery : 'all',
+        additionalFilters: filters,
+      );
+
+      final List<Report> newResults =
+          rawResults.map((json) => Report.fromJson(json)).toList();
+
+      if (loadMore) {
+        _searchResults.addAll(newResults);
+      } else {
+        _searchResults = newResults;
+      }
+
+      _hasMoreResults = newResults.length == _pageSize;
+      _searchState =
+          _searchResults.isEmpty ? SearchState.empty : SearchState.success;
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Search failed: $e');
+      _searchState = SearchState.error;
     }
   }
 
-  /// Get search statistics
-  Map<String, dynamic> getSearchStats() {
-    return {
-      'total_results': _searchResults.length,
-      'active_filters': _currentFilters.activeFilterCount,
-      'has_query':
-          _currentFilters.search != null && _currentFilters.search!.isNotEmpty,
-      'search_state': _searchState.name,
-    };
+  /// Apply filters to search
+  void applyFilters(SearchFilters filters) {
+    _currentFilters = filters;
+    search();
   }
 
-  /// Get popular searches
+  /// Reset filters
+  void resetFilters() {
+    _currentFilters = SearchFilters();
+    search();
+  }
+
+  /// Fetch search suggestions based on query
+  Future<void> fetchSearchSuggestions(String query) async {
+    if (query.isEmpty) {
+      _searchSuggestions = [];
+      notifyListeners();
+      return;
+    }
+
+    try {
+      setLoading();
+      final List<String> rawSuggestions =
+          await _apiService.getSearchSuggestions(query);
+      _searchSuggestions = rawSuggestions
+          .map((text) => SearchSuggestion(
+                text: text,
+                type: 'suggestion',
+              ))
+          .toList();
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Failed to fetch search suggestions: $e');
+    }
+  }
+
+  /// Fetch search analytics
+  Future<void> fetchSearchAnalytics({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      setLoading();
+      final Map<String, dynamic>? rawAnalytics =
+          await _apiService.getSearchAnalytics();
+      _analytics =
+          rawAnalytics != null ? SearchAnalytics.fromJson(rawAnalytics) : null;
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Failed to fetch search analytics: $e');
+    }
+  }
+
+  /// Fetch search trends
+  Future<void> fetchSearchTrends() async {
+    try {
+      setLoading();
+      final List<Map<String, dynamic>> trendsList =
+          await _apiService.getSearchTrends();
+      _trends = {'trends': trendsList};
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Failed to fetch search trends: $e');
+    }
+  }
+
+  /// Fetch filter options
+  Future<void> fetchFilterOptions() async {
+    try {
+      setLoading();
+      final Map<String, dynamic>? rawOptions =
+          await _apiService.getFilterOptions();
+      if (rawOptions != null) {
+        _filterOptions = rawOptions.map((key, value) => MapEntry(
+            key,
+            (value as List)
+                .map((e) => FilterOption(
+                      value: e['value'] ?? '',
+                      label: e['label'] ?? '',
+                      count: e['count'],
+                    ))
+                .toList()));
+      }
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Failed to fetch filter options: $e');
+    }
+  }
+
+  /// Advanced search with specific filters
+  Future<void> advancedSearch({
+    String? query,
+    String? type,
+    String? category,
+    String? status,
+    String? city,
+    DateTime? startDate,
+    DateTime? endDate,
+    double? minReward,
+    double? maxReward,
+    bool loadMore = false,
+  }) async {
+    try {
+      setLoading();
+
+      if (loadMore) {
+        _searchState = SearchState.loadingMore;
+        _currentPage++;
+      } else {
+        _searchState = SearchState.searching;
+        _currentPage = 1;
+        _searchResults.clear();
+      }
+      notifyListeners();
+
+      final Map<String, dynamic> filters = {
+        if (query != null) 'query': query,
+        if (type != null) 'type': type,
+        if (category != null) 'category': category,
+        if (status != null) 'status': status,
+        if (city != null) 'city': city,
+        if (startDate != null) 'start_date': startDate.toIso8601String(),
+        if (endDate != null) 'end_date': endDate.toIso8601String(),
+        if (minReward != null) 'min_reward': minReward,
+        if (maxReward != null) 'max_reward': maxReward,
+        'page': _currentPage,
+        'page_size': _pageSize,
+      };
+
+      final List<Map<String, dynamic>> rawResults =
+          await _apiService.searchReports(
+        query: _lastQuery.isNotEmpty ? _lastQuery : 'all',
+        additionalFilters: filters,
+      );
+
+      final List<Report> newResults =
+          rawResults.map((json) => Report.fromJson(json)).toList();
+
+      if (loadMore) {
+        _searchResults.addAll(newResults);
+      } else {
+        _searchResults = newResults;
+      }
+
+      _hasMoreResults = newResults.length == _pageSize;
+      _searchState =
+          _searchResults.isEmpty ? SearchState.empty : SearchState.success;
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Advanced search failed: $e');
+      _searchState = SearchState.error;
+    }
+  }
+
+  /// Perform image search
+  Future<void> imageSearch(String imageUrl) async {
+    try {
+      setLoading();
+      _searchState = SearchState.searching;
+      _searchResults.clear();
+      notifyListeners();
+
+      final List<Map<String, dynamic>> rawResults =
+          await _apiService.searchReports(
+        query: 'image_search',
+        additionalFilters: {'image_url': imageUrl},
+      );
+
+      _searchResults = rawResults.map((json) => Report.fromJson(json)).toList();
+      _searchState =
+          _searchResults.isEmpty ? SearchState.empty : SearchState.success;
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Image search failed: $e');
+      _searchState = SearchState.error;
+    }
+  }
+
+  /// Perform semantic search
+  Future<void> semanticSearch(String query) async {
+    try {
+      setLoading();
+      _searchState = SearchState.searching;
+      _searchResults.clear();
+      notifyListeners();
+
+      final List<Map<String, dynamic>> rawResults =
+          await _apiService.searchReports(
+        query: query,
+        additionalFilters: {'semantic_search': true},
+      );
+
+      _searchResults = rawResults.map((json) => Report.fromJson(json)).toList();
+      _searchState =
+          _searchResults.isEmpty ? SearchState.empty : SearchState.success;
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Semantic search failed: $e');
+      _searchState = SearchState.error;
+    }
+  }
+
+  /// Perform location search
+  Future<void> locationSearch({
+    required double latitude,
+    required double longitude,
+    double radiusKm = 5.0,
+    bool loadMore = false,
+  }) async {
+    try {
+      setLoading();
+
+      if (loadMore) {
+        _searchState = SearchState.loadingMore;
+        _currentPage++;
+      } else {
+        _searchState = SearchState.searching;
+        _currentPage = 1;
+        _searchResults.clear();
+      }
+      notifyListeners();
+
+      final List<Map<String, dynamic>> rawResults =
+          await _apiService.searchReports(
+        query: 'location_search',
+        latitude: latitude,
+        longitude: longitude,
+        radiusKm: radiusKm,
+        additionalFilters: {
+          'page': _currentPage,
+          'page_size': _pageSize,
+        },
+      );
+
+      final List<Report> newResults =
+          rawResults.map((json) => Report.fromJson(json)).toList();
+
+      if (loadMore) {
+        _searchResults.addAll(newResults);
+      } else {
+        _searchResults = newResults;
+      }
+
+      _hasMoreResults = newResults.length == _pageSize;
+      _searchState =
+          _searchResults.isEmpty ? SearchState.empty : SearchState.success;
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Location search failed: $e');
+      _searchState = SearchState.error;
+    }
+  }
+
+  /// Get recent search suggestions
+  Future<List<SearchSuggestion>> getRecentSuggestions() async {
+    try {
+      final List<String> recent = await _apiService.getRecentSearches();
+      return recent
+          .map((text) => SearchSuggestion(
+                text: text,
+                type: 'recent',
+              ))
+          .toList();
+    } catch (e) {
+      setError('Failed to get recent suggestions: $e');
+      return [];
+    }
+  }
+
+  /// Get popular search suggestions
   Future<List<SearchSuggestion>> getPopularSearches() async {
     try {
-      return await _apiService.getPopularSearches();
+      final List<String> popular = await _apiService.getPopularSearches();
+      return popular
+          .map((text) => SearchSuggestion(
+                text: text,
+                type: 'popular',
+              ))
+          .toList();
     } catch (e) {
-      debugPrint('Error getting popular searches: $e');
+      setError('Failed to get popular searches: $e');
       return [];
     }
   }
@@ -757,10 +534,52 @@ class SearchProvider with ChangeNotifier {
   /// Get recent searches
   Future<List<SearchSuggestion>> getRecentSearches() async {
     try {
-      return await _apiService.getRecentSearches();
+      final List<String> recent = await _apiService.getRecentSearches();
+      return recent
+          .map((text) => SearchSuggestion(
+                text: text,
+                type: 'recent',
+              ))
+          .toList();
     } catch (e) {
-      debugPrint('Error getting recent searches: $e');
+      setError('Failed to get recent searches: $e');
       return [];
+    }
+  }
+
+  /// Clear search history
+  Future<void> clearSearchHistory() async {
+    try {
+      setLoading();
+      // Note: API method not implemented yet
+      _searchHistory.clear();
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Failed to clear search history: $e');
+    }
+  }
+
+  /// Export search results
+  Future<void> exportSearchResults() async {
+    try {
+      setLoading();
+      // Note: API method not implemented yet
+      setLoaded();
+      notifyListeners();
+    } catch (e) {
+      setError('Failed to export search results: $e');
+    }
+  }
+
+  /// Get search statistics
+  Future<Map<String, dynamic>?> getSearchStats() async {
+    try {
+      // Note: API method not implemented yet
+      return null;
+    } catch (e) {
+      setError('Failed to get search stats: $e');
+      return null;
     }
   }
 }

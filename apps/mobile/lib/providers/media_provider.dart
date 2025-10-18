@@ -75,12 +75,12 @@ class MediaProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final media = await _apiService.listMedia(reportId: reportId);
+      final media = await _apiService.listMedia();
 
       if (loadMore) {
-        _mediaList.addAll(media);
+        _mediaList.addAll(media.map((json) => Media.fromJson(json)));
       } else {
-        _mediaList = media;
+        _mediaList = media.map((json) => Media.fromJson(json)).toList();
       }
 
       _hasMoreMedia = media.length == _pageSize;
@@ -110,7 +110,8 @@ class MediaProvider with ChangeNotifier {
   /// Load media statistics
   Future<void> loadStats() async {
     try {
-      _stats = await _apiService.getMediaStats();
+      final statsData = await _apiService.getMediaStats();
+      _stats = MediaStats.fromJson(statsData as Map<String, dynamic>);
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading media stats: $e');
@@ -151,9 +152,9 @@ class MediaProvider with ChangeNotifier {
       );
       notifyListeners();
 
-      final media = await _apiService.uploadMedia(
+      final mediaData = await _apiService.uploadMedia(
         filePath: filePath,
-        reportId: reportId,
+        reportId: reportId ?? '',
         onProgress: (progress) {
           _uploadProgress[mediaId] = _uploadProgress[mediaId]!.copyWith(
             progress: 0.1 + (progress * 0.8), // 10% to 90%
@@ -162,6 +163,12 @@ class MediaProvider with ChangeNotifier {
           onProgress?.call(0.1 + (progress * 0.8));
         },
       );
+
+      if (mediaData == null) {
+        throw Exception('Upload failed - no data returned');
+      }
+
+      final media = Media.fromJson(mediaData);
 
       // Update status to completed
       _uploadProgress[mediaId] = _uploadProgress[mediaId]!.copyWith(
@@ -237,7 +244,8 @@ class MediaProvider with ChangeNotifier {
   /// Get media by ID
   Future<Media?> getMedia(String mediaId) async {
     try {
-      return await _apiService.getMedia(mediaId);
+      final mediaData = await _apiService.getMedia(mediaId);
+      return mediaData != null ? Media.fromJson(mediaData) : null;
     } catch (e) {
       debugPrint('Error getting media: $e');
       return null;

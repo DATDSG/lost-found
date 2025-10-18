@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/chat_model.dart';
-import '../models/notification.dart';
+import '../models/notification_model.dart';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
 
@@ -10,24 +10,32 @@ class ChatState {
   final Map<String, List<ChatMessage>> conversationMessages;
   final Map<String, List<String>> typingUsers;
   final bool isAnyLoading;
+  final bool isLoading;
+  final List<ChatMessage> messages;
   final String? error;
   final int totalUnreadCount;
+  final int unreadCount;
   final bool hasUnreadMessages;
-  final List<Notification> notifications;
+  final List<AppNotification> notifications;
   final int notificationCount;
   final bool hasNotifications;
+  final String? currentConversationId;
 
   const ChatState({
     this.conversations = const [],
     this.conversationMessages = const {},
     this.typingUsers = const {},
     this.isAnyLoading = false,
+    this.isLoading = false,
+    this.messages = const [],
     this.error,
     this.totalUnreadCount = 0,
+    this.unreadCount = 0,
     this.hasUnreadMessages = false,
     this.notifications = const [],
     this.notificationCount = 0,
     this.hasNotifications = false,
+    this.currentConversationId,
   });
 
   ChatState copyWith({
@@ -35,24 +43,33 @@ class ChatState {
     Map<String, List<ChatMessage>>? conversationMessages,
     Map<String, List<String>>? typingUsers,
     bool? isAnyLoading,
+    bool? isLoading,
+    List<ChatMessage>? messages,
     String? error,
     int? totalUnreadCount,
+    int? unreadCount,
     bool? hasUnreadMessages,
-    List<Notification>? notifications,
+    List<AppNotification>? notifications,
     int? notificationCount,
     bool? hasNotifications,
+    String? currentConversationId,
   }) {
     return ChatState(
       conversations: conversations ?? this.conversations,
       conversationMessages: conversationMessages ?? this.conversationMessages,
       typingUsers: typingUsers ?? this.typingUsers,
       isAnyLoading: isAnyLoading ?? this.isAnyLoading,
+      isLoading: isLoading ?? this.isLoading,
+      messages: messages ?? this.messages,
       error: error ?? this.error,
       totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
+      unreadCount: unreadCount ?? this.unreadCount,
       hasUnreadMessages: hasUnreadMessages ?? this.hasUnreadMessages,
       notifications: notifications ?? this.notifications,
       notificationCount: notificationCount ?? this.notificationCount,
       hasNotifications: hasNotifications ?? this.hasNotifications,
+      currentConversationId:
+          currentConversationId ?? this.currentConversationId,
     );
   }
 }
@@ -168,8 +185,10 @@ class ChatProvider extends StateNotifier<ChatState> {
   Future<void> loadMessages(String conversationId) async {
     state = state.copyWith(isAnyLoading: true, error: null);
     try {
-      final messages =
+      final messagesData =
           await _apiService.getConversationMessages(conversationId);
+      final messages =
+          messagesData.map((data) => ChatMessage.fromJson(data)).toList();
       state = state.copyWith(
         conversationMessages: {
           ...state.conversationMessages,
@@ -186,14 +205,17 @@ class ChatProvider extends StateNotifier<ChatState> {
   }
 
   /// Send a message
-  Future<void> sendMessage(String conversationId, String content) async {
+  Future<void> sendMessage(String content) async {
+    if (state.currentConversationId == null) return;
+
     try {
       // Send via WebSocket if connected
       if (_wsService.isConnected) {
-        _wsService.sendMessage(conversationId, content);
+        _wsService.sendMessage(state.currentConversationId!, content);
       } else {
         // Fallback to API
-        await _apiService.sendMessage(conversationId, content);
+        await _apiService.sendMessage(
+            conversationId: state.currentConversationId!, content: content);
       }
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -201,16 +223,18 @@ class ChatProvider extends StateNotifier<ChatState> {
   }
 
   /// Start typing indicator
-  void startTyping(String conversationId) {
+  void startTyping() {
+    if (state.currentConversationId == null) return;
     if (_wsService.isConnected) {
-      _wsService.sendTypingIndicator(conversationId, true);
+      _wsService.sendTypingIndicator(state.currentConversationId!, true);
     }
   }
 
   /// Stop typing indicator
-  void stopTyping(String conversationId) {
+  void stopTyping() {
+    if (state.currentConversationId == null) return;
     if (_wsService.isConnected) {
-      _wsService.sendTypingIndicator(conversationId, false);
+      _wsService.sendTypingIndicator(state.currentConversationId!, false);
     }
   }
 
@@ -240,6 +264,8 @@ class ChatProvider extends StateNotifier<ChatState> {
           (conv) => conv.id == conversationId,
           orElse: () => ChatConversation(
             id: conversationId,
+            userId: recipientId,
+            userName: 'User $recipientId',
             itemId: itemId,
             participants: [recipientId],
             lastMessage: null,
@@ -287,7 +313,7 @@ class ChatProvider extends StateNotifier<ChatState> {
   }
 
   /// Get notifications
-  List<Notification> get notifications => state.notifications;
+  List<AppNotification> get notifications => state.notifications;
 
   /// Mark notification as read
   Future<void> markNotificationAsRead(String notificationId) async {
@@ -318,6 +344,84 @@ class ChatProvider extends StateNotifier<ChatState> {
       );
     } catch (e) {
       state = state.copyWith(error: e.toString());
+    }
+  }
+
+  // Getters for UI components
+  bool get isAnyLoading => state.isAnyLoading;
+  String? get error => state.error;
+  bool get hasUnreadMessages => state.hasUnreadMessages;
+  int get totalUnreadCount => state.totalUnreadCount;
+  bool get hasNotifications => state.hasNotifications;
+  int get notificationCount => state.notificationCount;
+  List<ChatMessage> get messages =>
+      state.conversationMessages.values.expand((list) => list).toList();
+  List<TypingIndicator> get typingUsers {
+    final allTypingUsers = <TypingIndicator>[];
+    for (final entry in state.typingUsers.entries) {
+      for (final userId in entry.value) {
+        allTypingUsers.add(TypingIndicator(
+          userId: userId,
+          userName:
+              'User $userId', // This should be replaced with actual user name
+          timestamp: DateTime.now(),
+        ));
+      }
+    }
+    return allTypingUsers;
+  }
+
+  String? get currentConversationId => state.currentConversationId;
+
+  /// Set current conversation
+  void setCurrentConversation(String conversationId) {
+    state = state.copyWith(currentConversationId: conversationId);
+  }
+
+  /// Archive conversation
+  Future<void> archiveConversation(String conversationId) async {
+    try {
+      await _apiService.archiveConversation(conversationId);
+      // Reload conversations to reflect the change
+      await loadConversations();
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  /// Block user in conversation
+  Future<void> blockUserInConversation(String conversationId) async {
+    try {
+      // Get the other participant's ID from the conversation
+      final conversation = state.conversations.firstWhere(
+        (conv) => conv.id == conversationId,
+        orElse: () => throw Exception('Conversation not found'),
+      );
+
+      // For now, we'll use the first participant that's not the current user
+      // In a real app, you'd get the current user ID from auth provider
+      final otherParticipantId = conversation.participants.first;
+
+      await _apiService.blockUserInConversation(
+          conversationId, otherParticipantId);
+      // Reload conversations to reflect the change
+      await loadConversations();
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  /// Delete conversation
+  Future<void> deleteConversation(String conversationId) async {
+    try {
+      await _apiService.deleteConversation(conversationId);
+      // Reload conversations to reflect the change
+      await loadConversations();
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 }

@@ -57,7 +57,7 @@ class WebSocketNotifier extends StateNotifier<WebSocketState> {
           'WS_URL',
           defaultValue: 'ws://localhost:3000/ws',
         );
-        await _wsService.connect(wsUrl, token: token);
+        await _wsService.connect(wsUrl, token: token.accessToken);
       }
     } catch (e) {
       if (kDebugMode) {

@@ -270,7 +270,7 @@ class UserProfileProvider with ChangeNotifier {
   Future<void> loadUserPreferences() async {
     try {
       final data = await _apiService.getUserPreferences();
-      _userPreferences = UserPreferences.fromJson(data);
+      _userPreferences = UserPreferences.fromJson(data!);
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading user preferences: $e');
@@ -301,7 +301,7 @@ class UserProfileProvider with ChangeNotifier {
   Future<void> loadUserSettings() async {
     try {
       final data = await _apiService.getUserSettings();
-      _userSettings = UserSettings.fromJson(data);
+      _userSettings = UserSettings.fromJson(data!);
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading user settings: $e');
@@ -343,17 +343,10 @@ class UserProfileProvider with ChangeNotifier {
     }
 
     try {
-      final activities = await _apiService.getUserActivity(
-        page: _currentActivityPage,
-        pageSize: _pageSize,
-        activityType: activityType,
-        startDate: startDate,
-        endDate: endDate,
-      );
+      final activities = await _apiService.getUserActivity();
 
-      final activityList = activities
-          .map((json) => UserActivity.fromJson(json))
-          .toList();
+      final activityList =
+          activities.map((json) => UserActivity.fromJson(json)).toList();
 
       if (loadMore) {
         _userActivity.addAll(activityList);
@@ -385,23 +378,15 @@ class UserProfileProvider with ChangeNotifier {
     }
 
     try {
-      final result = await _apiService.getUserReports(
-        page: _currentReportsPage,
-        pageSize: _pageSize,
-        status: status,
-        type: type,
-      );
-
-      final reports = result['reports'] as List<dynamic>;
-      final pagination = result['pagination'] as Map<String, dynamic>;
+      final reports = await _apiService.getUserReports();
 
       if (loadMore) {
-        _userReports.addAll(reports.cast<Map<String, dynamic>>());
+        _userReports.addAll(reports);
       } else {
-        _userReports = reports.cast<Map<String, dynamic>>();
+        _userReports = reports;
       }
 
-      _hasMoreReports = pagination['has_more'] as bool;
+      _hasMoreReports = reports.length == _pageSize;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading user reports: $e');
@@ -421,11 +406,7 @@ class UserProfileProvider with ChangeNotifier {
     }
 
     try {
-      final matches = await _apiService.getUserMatches(
-        page: _currentMatchesPage,
-        pageSize: _pageSize,
-        status: status,
-      );
+      final matches = await _apiService.getUserMatches();
 
       if (loadMore) {
         _userMatches.addAll(matches);
@@ -457,12 +438,7 @@ class UserProfileProvider with ChangeNotifier {
     }
 
     try {
-      final notifications = await _apiService.getUserNotifications(
-        page: _currentNotificationsPage,
-        pageSize: _pageSize,
-        unreadOnly: unreadOnly,
-        type: type,
-      );
+      final notifications = await _apiService.getUserNotifications();
 
       if (loadMore) {
         _userNotifications.addAll(notifications);
@@ -492,17 +468,27 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final updatedUser = await _apiService.updateProfileWithValidation(
-        displayName: displayName,
-        phoneNumber: phoneNumber,
-        bio: bio,
-        preferences: preferences,
-      );
+      final profileData = {
+        'display_name': displayName,
+        if (phoneNumber != null) 'phone_number': phoneNumber,
+        if (bio != null) 'bio': bio,
+        if (preferences != null) 'preferences': preferences,
+      };
 
-      _currentUser = updatedUser;
-      _state = ProfileState.loaded;
-      notifyListeners();
-      return true;
+      final rawUser =
+          await _apiService.updateProfileWithValidation(profileData);
+
+      if (rawUser != null) {
+        _currentUser = User.fromJson(rawUser);
+        _state = ProfileState.loaded;
+        notifyListeners();
+        return true;
+      } else {
+        _error = 'Failed to update profile';
+        _state = ProfileState.error;
+        notifyListeners();
+        return false;
+      }
     } catch (e) {
       _error = ErrorHandler.handleError(e, context: 'Update profile');
       _state = ProfileState.error;
@@ -526,7 +512,7 @@ class UserProfileProvider with ChangeNotifier {
         'avatar_url': avatarUrl,
       });
 
-      _currentUser = updatedUser;
+      _currentUser = User.fromJson(updatedUser!);
       _state = ProfileState.loaded;
       _uploadProgress = 0.0;
       notifyListeners();
@@ -547,19 +533,13 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final success = await _apiService.deleteUserAccount(
-        password: password,
-        reason: reason,
-      );
+      await _apiService.deleteUserAccount();
 
-      if (success) {
-        _currentUser = null;
-        _state = ProfileState.initial;
-        clearAllData();
-      }
-
+      _currentUser = null;
+      _state = ProfileState.initial;
+      clearAllData();
       notifyListeners();
-      return success;
+      return true;
     } catch (e) {
       _error = ErrorHandler.handleError(e, context: 'Delete account');
       _state = ProfileState.error;
@@ -577,13 +557,7 @@ class UserProfileProvider with ChangeNotifier {
     bool includeNotifications = true,
   }) async {
     try {
-      return await _apiService.exportUserData(
-        format: format,
-        includeReports: includeReports,
-        includeMatches: includeMatches,
-        includeMessages: includeMessages,
-        includeNotifications: includeNotifications,
-      );
+      return await _apiService.exportUserData();
     } catch (e) {
       _error = ErrorHandler.handleError(e, context: 'Export data');
       notifyListeners();
@@ -663,7 +637,7 @@ class UserProfileProvider with ChangeNotifier {
       'phone_number': _currentUser?.phoneNumber,
       'role': _currentUser?.role,
       'is_active': _currentUser?.isActive,
-      'created_at': _currentUser?.createdAt.toIso8601String(),
+      'created_at': _currentUser?.createdAt?.toIso8601String(),
       'stats': _userStats,
       'activity_count': _userActivity.length,
       'reports_count': _userReports.length,

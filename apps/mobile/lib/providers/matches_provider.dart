@@ -50,7 +50,7 @@ class MatchesProvider extends StateNotifier<MatchesState> {
   MatchesProvider(this._apiService) : super(const MatchesState());
 
   /// Load matches for a report
-  Future<void> getMatchesForReport(String reportId) async {
+  Future<List<Match>> getMatchesForReport(String reportId) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final matches = await _apiService.getMatchesForReport(reportId);
@@ -61,11 +61,13 @@ class MatchesProvider extends StateNotifier<MatchesState> {
         },
         isLoading: false,
       );
+      return matches;
     } catch (e) {
       state = state.copyWith(
         error: e.toString(),
         isLoading: false,
       );
+      return [];
     }
   }
 
@@ -87,12 +89,18 @@ class MatchesProvider extends StateNotifier<MatchesState> {
   }
 
   /// Get match statistics
-  Future<void> getMatchStats() async {
+  Future<MatchStats?> getMatchStats() async {
     try {
-      final stats = await _apiService.getMatchStats();
-      state = state.copyWith(stats: stats);
+      final statsData = await _apiService.getMatchStats();
+      if (statsData != null) {
+        final stats = MatchStats.fromJson(statsData);
+        state = state.copyWith(stats: stats);
+        return stats;
+      }
+      return null;
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      return null;
     }
   }
 
@@ -104,7 +112,7 @@ class MatchesProvider extends StateNotifier<MatchesState> {
         // Update the match in the state
         final updatedMatches = state.matches.map((match) {
           if (match.id == matchId) {
-            return match.copyWith(status: MatchStatus.confirmed);
+            return match.copyWith(status: 'confirmed');
           }
           return match;
         }).toList();
@@ -127,7 +135,7 @@ class MatchesProvider extends StateNotifier<MatchesState> {
         // Update the match in the state
         final updatedMatches = state.matches.map((match) {
           if (match.id == matchId) {
-            return match.copyWith(status: MatchStatus.rejected);
+            return match.copyWith(status: 'rejected');
           }
           return match;
         }).toList();
@@ -143,13 +151,18 @@ class MatchesProvider extends StateNotifier<MatchesState> {
   }
 
   /// Get matches for a specific report
-  List<Match> getMatchesForReport(String reportId) {
+  List<Match> getMatchesForReportList(String reportId) {
     return state.reportMatches[reportId] ?? [];
   }
 
   /// Clear error
   void clearError() {
     state = state.copyWith(error: null);
+  }
+
+  /// Load matches for a specific report
+  Future<void> loadMatchesForReport(String reportId) async {
+    await getMatchesForReport(reportId);
   }
 
   /// Load all matches
@@ -160,11 +173,6 @@ class MatchesProvider extends StateNotifier<MatchesState> {
   /// Load analytics data
   Future<void> loadAnalytics() async {
     await getMatchStats();
-  }
-
-  /// Load matches for a specific report
-  Future<void> loadMatchesForReport(String reportId) async {
-    await getMatchesForReport(reportId);
   }
 
   /// Get lost matches
