@@ -1,20 +1,21 @@
 """Reports routes."""
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func, select
 from typing import List, Optional
 from uuid import uuid4
 from datetime import datetime
 import logging
-import json
 
 from ..database import get_db
 from ..models import User, Report, Media, ReportType, ReportStatus
-from ..schemas import ReportCreate, ReportSummary, ReportDetail
+from ..schemas import ReportCreate, ReportSummary, ReportDetail, PaginatedResponse
 from ..dependencies import get_current_user, get_current_admin
 from ..clients import get_nlp_client, get_vision_client
 from ..config import config
 from ..helpers import create_audit_log
+import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -28,12 +29,16 @@ except ImportError:
 
 @router.post("/", response_model=ReportDetail, status_code=status.HTTP_201_CREATED)
 async def create_report(
+    request: Request,
     report_data: ReportCreate,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new report with automatic embedding and hash generation."""
+    # Apply rate limiting if available
+    if limiter and config.ENABLE_RATE_LIMIT:
+        await limiter.check_limit(request, config.RATE_LIMIT_CREATE_REPORT)
+    
     report = Report(
         id=str(uuid4()),
         owner_id=current_user.id,
@@ -50,67 +55,66 @@ async def create_report(
     
     # Set geolocation if provided
     if report_data.latitude and report_data.longitude:
-        # Store as TEXT for now (PostGIS not required)
-        report.geo = f'POINT({report_data.longitude} {report_data.latitude})'
+        from geoalchemy2.elements import WKTElement
+        report.location_point = WKTElement(
+            f'POINT({report_data.longitude} {report_data.latitude})',
+            srid=4326
+        )
     
     db.add(report)
     await db.flush()  # Get the ID without committing
     
+    # Generate text embedding using NLP service
+    if report.description and config.ENABLE_NLP_CACHE:
+        try:
+            async with await get_nlp_client() as nlp:
+                embedding = await nlp.get_embedding(report.description)
+                if embedding:
+                    report.embedding = embedding
+                    logger.info(f"Generated embedding for report {report.id}")
+                else:
+                    logger.warning(f"Failed to generate embedding for report {report.id}")
+        except Exception as e:
+            logger.error(f"Error generating embedding for report {report.id}: {e}")
+    
+    # Generate image hash using Vision service (if image URL provided)
+    # Note: In real implementation, this would be called after media upload
+    # For now, we'll add a placeholder for the media upload flow
+    
     await db.commit()
     await db.refresh(report)
     
-    # Trigger background processing for embedding and matching
-    from ..background import process_report_background_task
-    background_tasks.add_task(process_report_background_task, report.id)
-    
-    logger.info(f"Created report {report.id} by user {current_user.id}, background processing queued")
-    
-    return ReportDetail.from_orm(report)
-
-
-@router.get("/me", response_model=List[ReportSummary])
-async def get_my_reports(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get current user's reports."""
-    result = await db.execute(
-        select(Report)
-        .where(Report.owner_id == current_user.id)
-        .order_by(Report.created_at.desc())
-    )
-    reports = result.scalars().all()
-    return [ReportSummary.from_orm(report) for report in reports]
+    return report
 
 
 @router.get("/", response_model=List[ReportSummary])
-async def list_reports(
+def list_reports(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     type: Optional[ReportType] = None,
     category: Optional[str] = None,
     status: Optional[ReportStatus] = None,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """List reports with filters and pagination."""
-    query = select(Report)
+    query = db.query(Report)
     
     # Apply filters
     if status:
-        query = query.where(Report.status == status)
+        query = query.filter(Report.status == status)
     else:
-        query = query.where(Report.status == ReportStatus.APPROVED)
+        query = query.filter(Report.status == ReportStatus.APPROVED)
     
     if type:
-        query = query.where(Report.type == type)
+        query = query.filter(Report.type == type)
     
     if category:
-        query = query.where(Report.category == category)
+        query = query.filter(Report.category == category)
     
     if search:
         search_pattern = f"%{search}%"
-        query = query.where(
+        query = query.filter(
             or_(
                 Report.title.ilike(search_pattern),
                 Report.description.ilike(search_pattern)
@@ -122,21 +126,15 @@ async def list_reports(
     
     # Pagination
     offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
+    reports = query.offset(offset).limit(page_size).all()
     
-    result = await db.execute(query)
-    reports = result.scalars().all()
-    
-    return [ReportSummary.from_orm(report) for report in reports]
+    return reports
 
 
 @router.get("/{report_id}", response_model=ReportDetail)
-async def get_report(report_id: str, db: AsyncSession = Depends(get_db)):
+def get_report(report_id: str, db: Session = Depends(get_db)):
     """Get a specific report by ID."""
-    result = await db.execute(
-        select(Report).where(Report.id == report_id)
-    )
-    report = result.scalar_one_or_none()
+    report = db.query(Report).filter(Report.id == report_id).first()
     
     if not report:
         raise HTTPException(
@@ -150,37 +148,31 @@ async def get_report(report_id: str, db: AsyncSession = Depends(get_db)):
             detail="Report not available"
         )
     
-    return ReportDetail.from_orm(report)
+    return report
 
 
 @router.get("/my/reports", response_model=List[ReportSummary])
-async def get_my_reports_alt(
+def get_my_reports(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
-    """Get all reports created by the current user (alternative endpoint)."""
-    result = await db.execute(
-        select(Report)
-        .where(Report.owner_id == current_user.id)
-        .order_by(Report.created_at.desc())
-    )
-    reports = result.scalars().all()
+    """Get all reports created by the current user."""
+    reports = db.query(Report).filter(
+        Report.owner_id == current_user.id
+    ).order_by(Report.created_at.desc()).all()
     
-    return [ReportSummary.from_orm(report) for report in reports]
+    return reports
 
 
 @router.patch("/{report_id}/status")
-async def update_report_status(
+def update_report_status(
     report_id: str,
     new_status: ReportStatus,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Update report status (moderator only)."""
-    result = await db.execute(
-        select(Report).where(Report.id == report_id)
-    )
-    report = result.scalar_one_or_none()
+    report = db.query(Report).filter(Report.id == report_id).first()
     
     if not report:
         raise HTTPException(
@@ -188,19 +180,18 @@ async def update_report_status(
             detail="Report not found"
         )
     
-    old_status = report.status
     report.status = new_status
-    await db.commit()
+    db.commit()
     
     # Create audit log entry
-    await create_audit_log(
+    create_audit_log(
         db=db,
-        user_id=str(current_user.id),
+        user_id=current_user.id,
         action="report_status_updated",
         resource_type="report",
         resource_id=report_id,
         details=json.dumps({
-            "old_status": str(old_status),
+            "old_status": str(report.status),
             "new_status": str(new_status),
             "moderator": current_user.email
         })

@@ -29,7 +29,7 @@ class Config:
     # ========== Database Configuration ==========
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://postgres:postgres@postgres:5432/lostfound"
+        "postgresql+psycopg://postgres:postgres@host.docker.internal:5432/lostfound"
     )
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
@@ -37,7 +37,7 @@ class Config:
     DB_ECHO: bool = os.getenv("DB_ECHO", "false").lower() == "true"
     
     # ========== JWT Authentication ==========
-    JWT_SECRET_KEY: Optional[str] = os.getenv("JWT_SECRET_KEY")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -67,32 +67,23 @@ class Config:
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp"]
     STRIP_EXIF: bool = os.getenv("STRIP_EXIF", "true").lower() == "true"
     
-    # MinIO Object Storage Configuration
-    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
-    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "admin")
-    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "admin")
-    MINIO_BUCKET_NAME: str = os.getenv("MINIO_BUCKET_NAME", "lost-found-media")
-    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
-    MINIO_REGION: str = os.getenv("MINIO_REGION", "us-east-1")
-    
     # ========== Matching Configuration ==========
     # Match scoring weights (must sum to ~1.0)
-    # Match weights (optimized for better accuracy)
-    MATCH_WEIGHT_TEXT: float = float(os.getenv("MATCH_WEIGHT_TEXT", "0.50"))  # Increased from 0.45
-    MATCH_WEIGHT_IMAGE: float = float(os.getenv("MATCH_WEIGHT_IMAGE", "0.30"))  # Decreased from 0.35
-    MATCH_WEIGHT_GEO: float = float(os.getenv("MATCH_WEIGHT_GEO", "0.15"))  # Same
-    MATCH_WEIGHT_TIME: float = float(os.getenv("MATCH_WEIGHT_TIME", "0.05"))  # Same
+    MATCH_WEIGHT_TEXT: float = float(os.getenv("MATCH_WEIGHT_TEXT", "0.45"))
+    MATCH_WEIGHT_IMAGE: float = float(os.getenv("MATCH_WEIGHT_IMAGE", "0.35"))
+    MATCH_WEIGHT_GEO: float = float(os.getenv("MATCH_WEIGHT_GEO", "0.15"))
+    MATCH_WEIGHT_TIME: float = float(os.getenv("MATCH_WEIGHT_TIME", "0.05"))
     
-    # Match thresholds (optimized for better recall)
-    MATCH_MIN_SCORE: float = float(os.getenv("MATCH_MIN_SCORE", "0.60"))  # Lowered from 0.65
-    MATCH_TEXT_THRESHOLD: float = float(os.getenv("MATCH_TEXT_THRESHOLD", "0.65"))  # Lowered from 0.70
-    MATCH_IMAGE_THRESHOLD: float = float(os.getenv("MATCH_IMAGE_THRESHOLD", "0.70"))  # Lowered from 0.75
-    MATCH_GEO_RADIUS_KM: float = float(os.getenv("MATCH_GEO_RADIUS_KM", "10.0"))  # Increased from 5.0
-    MATCH_TIME_WINDOW_DAYS: int = int(os.getenv("MATCH_TIME_WINDOW_DAYS", "45"))  # Increased from 30
+    # Match thresholds
+    MATCH_MIN_SCORE: float = float(os.getenv("MATCH_MIN_SCORE", "0.65"))
+    MATCH_TEXT_THRESHOLD: float = float(os.getenv("MATCH_TEXT_THRESHOLD", "0.70"))
+    MATCH_IMAGE_THRESHOLD: float = float(os.getenv("MATCH_IMAGE_THRESHOLD", "0.75"))
+    MATCH_GEO_RADIUS_KM: float = float(os.getenv("MATCH_GEO_RADIUS_KM", "5.0"))
+    MATCH_TIME_WINDOW_DAYS: int = int(os.getenv("MATCH_TIME_WINDOW_DAYS", "30"))
     
-    # ANN search parameters (optimized for better coverage)
-    ANN_TOP_K: int = int(os.getenv("ANN_TOP_K", "100"))  # Increased from 50
-    MATCH_MAX_RESULTS: int = int(os.getenv("MATCH_MAX_RESULTS", "25"))  # Increased from 20
+    # ANN search parameters
+    ANN_TOP_K: int = int(os.getenv("ANN_TOP_K", "50"))  # Initial candidates from text similarity
+    MATCH_MAX_RESULTS: int = int(os.getenv("MATCH_MAX_RESULTS", "20"))  # Final matches returned
     
     # ========== Pagination ==========
     DEFAULT_PAGE_SIZE: int = int(os.getenv("DEFAULT_PAGE_SIZE", "20"))
@@ -109,7 +100,7 @@ class Config:
     # ========== Security & CORS ==========
     CORS_ORIGINS: List[str] = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://10.0.2.2:8000,http://localhost:8000"
+        "http://localhost:3000,http://localhost:3001,http://10.0.2.2:8000"
     ).split(",")
     CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
     
@@ -122,6 +113,29 @@ class Config:
     
     # ========== Notifications ==========
     ENABLE_NOTIFICATIONS: bool = os.getenv("ENABLE_NOTIFICATIONS", "true").lower() == "true"
+    NOTIFICATION_BATCH_SIZE: int = int(os.getenv("NOTIFICATION_BATCH_SIZE", "100"))
+    
+    # ========== Admin Panel ==========
+    ADMIN_SESSION_SECRET: str = os.getenv("ADMIN_SESSION_SECRET", "change-in-production")
+    ADMIN_SESSION_LIFETIME_HOURS: int = int(os.getenv("ADMIN_SESSION_LIFETIME_HOURS", "8"))
+    ENABLE_ADMIN_PANEL: bool = os.getenv("ENABLE_ADMIN_PANEL", "true").lower() == "true"
+    
+    # ========== Localization ==========
+    SUPPORTED_LANGUAGES: List[str] = ["en", "si", "ta"]  # English, Sinhala, Tamil
+    DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "en")
+    
+    # ========== Background Tasks ==========
+    ENABLE_BACKGROUND_TASKS: bool = os.getenv("ENABLE_BACKGROUND_TASKS", "true").lower() == "true"
+    ARQ_REDIS_URL: str = os.getenv("ARQ_REDIS_URL", REDIS_URL)
+    
+    # ========== Feature Flags ==========
+    ENABLE_WEBSOCKETS: bool = os.getenv("ENABLE_WEBSOCKETS", "false").lower() == "true"
+    ENABLE_PUSH_NOTIFICATIONS: bool = os.getenv("ENABLE_PUSH_NOTIFICATIONS", "false").lower() == "true"
+    ENABLE_AUDIT_LOG: bool = os.getenv("ENABLE_AUDIT_LOG", "true").lower() == "true"
+    
+    # ========== Timeouts ==========
+    REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
+    BACKGROUND_TASK_TIMEOUT: int = int(os.getenv("BACKGROUND_TASK_TIMEOUT", "300"))
     
     @classmethod
     def validate(cls) -> bool:
@@ -132,8 +146,9 @@ class Config:
         if not cls.DATABASE_URL:
             errors.append("DATABASE_URL is required")
         
-        if not cls.JWT_SECRET_KEY:
-            errors.append("JWT_SECRET_KEY environment variable is required")
+        # Validate JWT secret in production
+        if cls.ENVIRONMENT == "production" and cls.JWT_SECRET_KEY == "your-secret-key-change-in-production":
+            errors.append("JWT_SECRET_KEY must be changed in production")
         
         # Validate service URLs
         if not cls.NLP_SERVICE_URL.startswith(("http://", "https://")):
@@ -168,7 +183,7 @@ class Config:
     @classmethod
     def get_db_url_sync(cls) -> str:
         """Get synchronous database URL (for Alembic migrations)."""
-        return cls.DATABASE_URL.replace("+asyncpg", "+psycopg")
+        return cls.DATABASE_URL.replace("+asyncpg", "")
     
     @classmethod
     def summary(cls) -> dict:
@@ -190,6 +205,8 @@ class Config:
                 "metrics": cls.ENABLE_METRICS,
                 "rate_limit": cls.ENABLE_RATE_LIMIT,
                 "notifications": cls.ENABLE_NOTIFICATIONS,
+                "admin_panel": cls.ENABLE_ADMIN_PANEL,
+                "audit_log": cls.ENABLE_AUDIT_LOG,
             },
             "matching": {
                 "weights": {
@@ -206,12 +223,6 @@ class Config:
                 "root": cls.MEDIA_ROOT,
                 "max_size_mb": cls.MAX_UPLOAD_SIZE_MB,
                 "strip_exif": cls.STRIP_EXIF,
-            },
-            "minio": {
-                "endpoint": cls.MINIO_ENDPOINT,
-                "bucket": cls.MINIO_BUCKET_NAME,
-                "secure": cls.MINIO_SECURE,
-                "region": cls.MINIO_REGION,
             }
         }
 

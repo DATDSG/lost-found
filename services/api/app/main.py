@@ -1,8 +1,7 @@
+"""Lost & Found API main application."""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from prometheus_client import make_asgi_app, Counter, Histogram
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -11,38 +10,15 @@ import os
 import time
 import json
 import logging
-import structlog
-from pathlib import Path
-from tenacity import retry, stop_after_attempt, wait_exponential
-from contextlib import asynccontextmanager
 
-from .routers import auth, reports, media, matches, notifications, taxonomy, messages, health, websocket, items
+from .routers import auth, reports, media, matches, notifications, messages, taxonomy
 from .routers.admin import router as admin_router
 from .config import config
 from .clients import get_nlp_client, get_vision_client
-from .session_manager import session_manager
-from .minio_client import get_minio_client
 
-# Setup structured logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-
-logger = structlog.get_logger(__name__)
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
@@ -80,63 +56,10 @@ SERVICE_CALLS = Counter(
     ['service', 'endpoint', 'status']
 )
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager for startup/shutdown."""
-    # Startup
-    logger.info("Starting Lost & Found API", version="2.1.0")
-    
-    # Validate configuration
-    try:
-        config.validate()
-        logger.info("Configuration validated successfully")
-    except Exception as e:
-        logger.error("Configuration validation failed", error=str(e))
-        raise
-    
-    # Test service connections
-    try:
-        nlp_client = get_nlp_client()
-        vision_client = get_vision_client()
-        logger.info("Service connections established")
-    except Exception as e:
-        logger.warning("Service connection test failed", error=str(e))
-    
-    # Initialize MinIO client
-    try:
-        minio_client = get_minio_client()
-        logger.info("MinIO client initialized", 
-                   endpoint=config.MINIO_ENDPOINT, 
-                   bucket=config.MINIO_BUCKET_NAME)
-    except Exception as e:
-        logger.error("Failed to initialize MinIO client", error=str(e))
-        raise
-    
-    # Initialize Redis session manager
-    try:
-        await session_manager.initialize()
-        logger.info("Redis session manager initialized")
-    except Exception as e:
-        logger.error("Failed to initialize Redis session manager", error=str(e))
-        # Continue without Redis sessions (fallback to in-memory)
-    
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down Lost & Found API")
-    
-    # Close Redis session manager
-    try:
-        await session_manager.close()
-        logger.info("Redis session manager closed")
-    except Exception as e:
-        logger.error("Error closing Redis session manager", error=str(e))
-
 app = FastAPI(
     title="Lost & Found API",
-    version="2.1.0",
-    description="API for Lost & Found matching system with multi-signal scoring",
-    lifespan=lifespan
+    version="2.0.0",
+    description="API for Lost & Found matching system with multi-signal scoring"
 )
 
 # Rate limiter
@@ -153,8 +76,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
     allow_credentials=config.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Prometheus metrics middleware
@@ -183,75 +106,132 @@ metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 
-# Startup/shutdown handled by lifespan manager above
+@app.on_event("startup")
+async def startup():
+    """Startup event handler."""
+    # Validate configuration
+    try:
+        config.validate()
+        logger.info("✅ Configuration validated successfully")
+    except Exception as e:
+        logger.error(f"❌ Configuration validation failed: {e}")
+        raise
+    
+    # Log configuration summary
+    logger.info("API Service Configuration:")
+    logger.info(json.dumps(config.summary(), indent=2))
+    
+    # Test database connection
+    try:
+        from .database import engine
+        from sqlalchemy import text
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT version()"))
+            version = result.fetchone()[0]
+            logger.info(f"✅ Database connected: {version.split(',')[0]}")
+            
+            # Check if tables exist
+            result = conn.execute(text("""
+                SELECT COUNT(*) FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """))
+            table_count = result.fetchone()[0]
+            logger.info(f"📊 Found {table_count} tables in database")
+            
+            if table_count == 0:
+                logger.warning("⚠️  No tables found! Run: python test_db_connection.py")
+                
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        logger.error("   Make sure PostgreSQL is running and DATABASE_URL is correct")
+        logger.error(f"   DATABASE_URL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else 'not set'}")
+    
+    # Test NLP service connection
+    try:
+        async with await get_nlp_client() as nlp:
+            if await nlp.health_check():
+                logger.info("✅ NLP service is healthy")
+            else:
+                logger.warning("⚠️ NLP service is unavailable")
+    except Exception as e:
+        logger.warning(f"⚠️ NLP service connection failed: {e}")
+    
+    # Test Vision service connection
+    try:
+        async with await get_vision_client() as vision:
+            if await vision.health_check():
+                logger.info("✅ Vision service is healthy")
+            else:
+                logger.warning("⚠️ Vision service is unavailable")
+    except Exception as e:
+        logger.warning(f"⚠️ Vision service connection failed: {e}")
 
-
-# Mount static files for admin panel if available
-static_dir = Path(__file__).resolve().parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-else:
-    logger.warning("Static directory missing; skipping mount", static_dir=str(static_dir))
-
-# Setup Jinja2 templates for admin panel if available
-templates_dir = Path(__file__).resolve().parent / "templates"
-if templates_dir.exists():
-    templates = Jinja2Templates(directory=str(templates_dir))
-else:
-    templates = None  # type: ignore[assignment]
-    logger.warning("Templates directory missing; skipping setup", templates_dir=str(templates_dir))
-
-# Include health check router (no authentication required)
-app.include_router(health.router, tags=["health"])
-
-# Include WebSocket router for real-time features
-app.include_router(websocket.router, tags=["websocket"])
 
 # Include routers
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(reports.router, prefix="/api/v1/reports", tags=["reports"])
-app.include_router(items.router, prefix="/api/v1/items", tags=["items"])
-app.include_router(media.router, prefix="/api/v1/media", tags=["media"])
-app.include_router(matches.router, prefix="/api/v1/matches", tags=["matches"])
-app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
-app.include_router(messages.router, prefix="/api/v1/messages", tags=["messages"])
-app.include_router(taxonomy.router, prefix="/api/v1/taxonomy", tags=["taxonomy"])
+app.include_router(auth.router, prefix="/v1/auth", tags=["auth"])
+app.include_router(reports.router, prefix="/v1/reports", tags=["reports"])
+app.include_router(media.router, prefix="/v1/media", tags=["media"])
+app.include_router(matches.router, prefix="/v1/matches", tags=["matches"])
+app.include_router(notifications.router, prefix="/v1/notifications", tags=["notifications"])
+app.include_router(messages.router, prefix="/v1/messages", tags=["messages"])
+app.include_router(taxonomy.router, prefix="/v1/taxonomy", tags=["taxonomy"])
 
 # Include admin router (requires admin/moderator authentication)
-app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(admin_router, prefix="/v1/admin", tags=["admin"])
 
 
 @app.get("/health")
 async def health_root():
-    """Enhanced health check endpoint."""
-    try:
-        # Test service connections
-        nlp_client = get_nlp_client()
-        vision_client = get_vision_client()
-        
-        return {
-            "status": "ok",
-            "service": "api",
-            "version": "2.1.0",
-            "environment": config.ENVIRONMENT,
-            "services": {
-                "nlp": "connected",
-                "vision": "connected"
-            },
-            "timestamp": time.time()
+    """Health check endpoint with service status."""
+    from .database import engine
+    from sqlalchemy import text
+    
+    health_status = {
+        "status": "ok",
+        "service": "api",
+        "version": "2.0.0",
+        "environment": config.ENVIRONMENT,
+        "features": {
+            "metrics": config.ENABLE_METRICS,
+            "rate_limit": config.ENABLE_RATE_LIMIT,
+            "redis_cache": config.ENABLE_REDIS_CACHE,
+            "notifications": config.ENABLE_NOTIFICATIONS,
         }
+    }
+    
+    # Check database health
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            health_status["database"] = "healthy"
     except Exception as e:
-        logger.warning("Health check failed", error=str(e))
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "degraded",
-                "service": "api",
-                "version": "2.1.0",
-                "error": str(e),
-                "timestamp": time.time()
-            }
-        )
+        health_status["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Check service health
+    services = {}
+    try:
+        async with await get_nlp_client() as nlp:
+            services["nlp"] = "healthy" if await nlp.health_check() else "unhealthy"
+    except Exception:
+        services["nlp"] = "unavailable"
+    
+    try:
+        async with await get_vision_client() as vision:
+            services["vision"] = "healthy" if await vision.health_check() else "unhealthy"
+    except Exception:
+        services["vision"] = "unavailable"
+    
+    health_status["services"] = services
+    
+    return health_status
+
+
+@app.get("/v1/health")
+async def health_v1():
+    """Health check endpoint (v1 API version)."""
+    return await health_root()
 
 
 @app.get("/")

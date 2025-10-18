@@ -1,128 +1,31 @@
-"""Messages and conversations routes."""
-from fastapi import APIRouter, Depends, HTTPException, status
+"""Messages routes for chat functionality."""
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_, func
+from sqlalchemy import select, and_, or_, desc
 from typing import List, Optional
-from uuid import uuid4, UUID
-import logging
+from uuid import uuid4
+from datetime import datetime
 
 from ..database import get_db
-from ..models import User, Conversation, Message
-from ..schemas import MessageCreate, MessageDetail, ConversationSummary, ConversationDetail
+from ..models import User, Message, Conversation, Match
+from ..schemas import MessageCreate, MessageDetail, ConversationDetail, ConversationSummary
 from ..dependencies import get_current_user
+import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/conversations", status_code=status.HTTP_201_CREATED)
-async def create_conversation(
-    participant_id: str,
+@router.post("/", response_model=MessageDetail, status_code=status.HTTP_201_CREATED)
+async def send_message(
+    message_data: MessageCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new conversation between two users."""
-    # Check if conversation already exists
-    participant_ids = sorted([current_user.id, UUID(participant_id)])
-    
+    """Send a message in a conversation."""
+    # Verify conversation exists
     result = await db.execute(
-        select(Conversation).where(
-            or_(
-                and_(
-                    Conversation.participant_one_id == participant_ids[0],
-                    Conversation.participant_two_id == participant_ids[1]
-                ),
-                and_(
-                    Conversation.participant_one_id == participant_ids[1],
-                    Conversation.participant_two_id == participant_ids[0]
-                )
-            )
-        )
-    )
-    conversation = result.scalar_one_or_none()
-    
-    if conversation:
-        return {"id": conversation.id, "message": "Conversation already exists"}
-    
-    # Create new conversation
-    conversation = Conversation(
-        id=str(uuid4()),
-        participant_one_id=participant_ids[0],
-        participant_two_id=participant_ids[1]
-    )
-    
-    db.add(conversation)
-    await db.commit()
-    await db.refresh(conversation)
-    
-    logger.info(f"Created conversation {conversation.id} between {current_user.id} and {participant_id}")
-    
-    return {"id": conversation.id, "message": "Conversation created successfully"}
-
-
-@router.get("/conversations", response_model=List[ConversationSummary])
-async def list_conversations(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """List all conversations for the current user."""
-    result = await db.execute(
-        select(Conversation).where(
-            or_(
-                Conversation.participant_one_id == current_user.id,
-                Conversation.participant_two_id == current_user.id
-            )
-        ).order_by(Conversation.updated_at.desc())
-    )
-    conversations = result.scalars().all()
-    
-    # Build response with last message and unread count
-    conversation_summaries = []
-    for conv in conversations:
-        # Get last message
-        last_msg_result = await db.execute(
-            select(Message)
-            .where(Message.conversation_id == conv.id)
-            .order_by(Message.created_at.desc())
-            .limit(1)
-        )
-        last_message = last_msg_result.scalar_one_or_none()
-        
-        # Get unread count
-        unread_result = await db.execute(
-            select(func.count(Message.id))
-            .where(
-                Message.conversation_id == conv.id,
-                Message.sender_id != current_user.id,
-                Message.is_read == False
-            )
-        )
-        unread_count = unread_result.scalar()
-        
-        conversation_summaries.append(
-            ConversationSummary(
-                id=conv.id,
-                match_id=conv.match_id,
-                participant_one_id=conv.participant_one_id,
-                participant_two_id=conv.participant_two_id,
-                last_message=MessageDetail.from_orm(last_message) if last_message else None,
-                unread_count=unread_count,
-                updated_at=conv.updated_at
-            )
-        )
-    
-    return conversation_summaries
-
-
-@router.get("/conversations/{conversation_id}", response_model=ConversationDetail)
-async def get_conversation(
-    conversation_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get a specific conversation with all messages."""
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
+        select(Conversation).where(Conversation.id == message_data.conversation_id)
     )
     conversation = result.scalar_one_or_none()
     
@@ -133,52 +36,8 @@ async def get_conversation(
         )
     
     # Verify user is a participant
-    if conversation.participant_one_id != current_user.id and conversation.participant_two_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this conversation"
-        )
-    
-    # Get all messages
-    messages_result = await db.execute(
-        select(Message)
-        .where(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at.asc())
-    )
-    messages = messages_result.scalars().all()
-    
-    return ConversationDetail(
-        id=conversation.id,
-        match_id=conversation.match_id,
-        participant_one_id=conversation.participant_one_id,
-        participant_two_id=conversation.participant_two_id,
-        messages=[MessageDetail.from_orm(msg) for msg in messages],
-        created_at=conversation.created_at,
-        updated_at=conversation.updated_at
-    )
-
-
-@router.post("/conversations/{conversation_id}/messages", response_model=MessageDetail, status_code=status.HTTP_201_CREATED)
-async def send_message(
-    conversation_id: str,
-    message_data: MessageCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Send a message in a conversation."""
-    # Verify conversation exists and user is a participant
-    result = await db.execute(
-        select(Conversation).where(Conversation.id == conversation_id)
-    )
-    conversation = result.scalar_one_or_none()
-    
-    if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found"
-        )
-    
-    if conversation.participant_one_id != current_user.id and conversation.participant_two_id != current_user.id:
+    if (conversation.participant_one_id != current_user.id and 
+        conversation.participant_two_id != current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to send messages in this conversation"
@@ -187,7 +46,7 @@ async def send_message(
     # Create message
     message = Message(
         id=str(uuid4()),
-        conversation_id=conversation_id,
+        conversation_id=message_data.conversation_id,
         sender_id=current_user.id,
         content=message_data.content,
         is_read=False
@@ -196,26 +55,26 @@ async def send_message(
     db.add(message)
     
     # Update conversation timestamp
-    conversation.updated_at = func.now()
+    conversation.updated_at = datetime.utcnow()
     
     await db.commit()
     await db.refresh(message)
     
-    logger.info(f"Message sent in conversation {conversation_id} by user {current_user.id}")
+    logger.info(f"Message sent in conversation {message_data.conversation_id} by user {current_user.id}")
     
-    return MessageDetail.from_orm(message)
+    return message
 
 
-@router.get("/conversations/{conversation_id}/messages", response_model=List[MessageDetail])
-async def get_messages(
+@router.get("/{conversation_id}", response_model=ConversationDetail)
+async def get_conversation(
     conversation_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    limit: int = 50,
-    offset: int = 0
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get messages from a conversation with pagination."""
-    # Verify user is a participant
+    """Get messages in a conversation with pagination."""
+    # Verify conversation exists and user is participant
     result = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id)
     )
@@ -227,26 +86,178 @@ async def get_messages(
             detail="Conversation not found"
         )
     
-    if conversation.participant_one_id != current_user.id and conversation.participant_two_id != current_user.id:
+    if (conversation.participant_one_id != current_user.id and 
+        conversation.participant_two_id != current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this conversation"
+            detail="Not authorized to view this conversation"
         )
     
-    # Get messages
+    # Get messages with pagination
+    offset = (page - 1) * page_size
+    
     result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at.desc())
-        .limit(limit)
+        .order_by(desc(Message.created_at))
         .offset(offset)
+        .limit(page_size)
     )
     messages = result.scalars().all()
     
-    return [MessageDetail.from_orm(msg) for msg in reversed(messages)]
+    # Mark messages as read for current user
+    for message in messages:
+        if message.sender_id != current_user.id and not message.is_read:
+            message.is_read = True
+    
+    await db.commit()
+    
+    return {
+        "id": conversation.id,
+        "match_id": conversation.match_id,
+        "participant_one_id": conversation.participant_one_id,
+        "participant_two_id": conversation.participant_two_id,
+        "messages": messages,
+        "created_at": conversation.created_at,
+        "updated_at": conversation.updated_at
+    }
 
 
-@router.patch("/messages/{message_id}/read", response_model=MessageDetail)
+@router.get("/", response_model=List[ConversationSummary])
+async def list_conversations(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all conversations for the current user."""
+    offset = (page - 1) * page_size
+    
+    result = await db.execute(
+        select(Conversation)
+        .where(
+            or_(
+                Conversation.participant_one_id == current_user.id,
+                Conversation.participant_two_id == current_user.id
+            )
+        )
+        .order_by(desc(Conversation.updated_at))
+        .offset(offset)
+        .limit(page_size)
+    )
+    conversations = result.scalars().all()
+    
+    # Get last message for each conversation
+    conversation_summaries = []
+    for conv in conversations:
+        # Get last message
+        result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conv.id)
+            .order_by(desc(Message.created_at))
+            .limit(1)
+        )
+        last_message = result.scalar_one_or_none()
+        
+        # Count unread messages
+        result = await db.execute(
+            select(Message)
+            .where(
+                and_(
+                    Message.conversation_id == conv.id,
+                    Message.sender_id != current_user.id,
+                    Message.is_read == False
+                )
+            )
+        )
+        unread_count = len(result.scalars().all())
+        
+        conversation_summaries.append({
+            "id": conv.id,
+            "match_id": conv.match_id,
+            "participant_one_id": conv.participant_one_id,
+            "participant_two_id": conv.participant_two_id,
+            "last_message": last_message,
+            "unread_count": unread_count,
+            "updated_at": conv.updated_at
+        })
+    
+    return conversation_summaries
+
+
+@router.post("/conversation/create", response_model=ConversationDetail)
+async def create_conversation(
+    match_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a conversation for a match."""
+    # Verify match exists
+    result = await db.execute(
+        select(Match).where(Match.id == match_id)
+    )
+    match = result.scalar_one_or_none()
+    
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found"
+        )
+    
+    # Get participants from match reports
+    participant_one = match.source_report.owner_id
+    participant_two = match.target_report.owner_id
+    
+    # Verify current user is one of the participants
+    if current_user.id not in [participant_one, participant_two]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create conversation for this match"
+        )
+    
+    # Check if conversation already exists
+    result = await db.execute(
+        select(Conversation).where(Conversation.match_id == match_id)
+    )
+    existing = result.scalar_one_or_none()
+    
+    if existing:
+        return {
+            "id": existing.id,
+            "match_id": existing.match_id,
+            "participant_one_id": existing.participant_one_id,
+            "participant_two_id": existing.participant_two_id,
+            "messages": [],
+            "created_at": existing.created_at,
+            "updated_at": existing.updated_at
+        }
+    
+    # Create new conversation
+    conversation = Conversation(
+        id=str(uuid4()),
+        match_id=match_id,
+        participant_one_id=participant_one,
+        participant_two_id=participant_two
+    )
+    
+    db.add(conversation)
+    await db.commit()
+    await db.refresh(conversation)
+    
+    logger.info(f"Conversation created for match {match_id}")
+    
+    return {
+        "id": conversation.id,
+        "match_id": conversation.match_id,
+        "participant_one_id": conversation.participant_one_id,
+        "participant_two_id": conversation.participant_two_id,
+        "messages": [],
+        "created_at": conversation.created_at,
+        "updated_at": conversation.updated_at
+    }
+
+
+@router.patch("/{message_id}/read", response_model=MessageDetail)
 async def mark_message_read(
     message_id: str,
     current_user: User = Depends(get_current_user),
@@ -276,20 +287,21 @@ async def mark_message_read(
             detail="Conversation not found"
         )
     
-    is_participant = (
-        conversation.participant_one_id == current_user.id or
-        conversation.participant_two_id == current_user.id
-    )
-    
-    if not is_participant or message.sender_id == current_user.id:
+    if (conversation.participant_one_id != current_user.id and 
+        conversation.participant_two_id != current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to mark this message as read"
+            detail="Not authorized"
+        )
+    
+    if message.sender_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot mark own message as read"
         )
     
     message.is_read = True
     await db.commit()
     await db.refresh(message)
     
-    return MessageDetail.from_orm(message)
-
+    return message

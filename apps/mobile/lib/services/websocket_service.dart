@@ -1,246 +1,229 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import '../config/api_config.dart';
+import 'package:flutter/foundation.dart';
 
-/// WebSocket Service - Manages WebSocket connections for real-time messaging
+enum WebSocketStatus {
+  connecting,
+  connected,
+  disconnected,
+  error,
+}
+
+/// Service for handling WebSocket connections for real-time updates
 class WebSocketService {
   WebSocketChannel? _channel;
-  StreamController<Map<String, dynamic>>? _messageController;
-  String? _accessToken;
-  bool _isConnected = false;
-  Timer? _pingTimer;
+  WebSocketStatus _status = WebSocketStatus.disconnected;
+  final _statusController = StreamController<WebSocketStatus>.broadcast();
+  final _messageController = StreamController<Map<String, dynamic>>.broadcast();
+
   Timer? _reconnectTimer;
+  Timer? _heartbeatTimer;
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
   static const Duration _reconnectDelay = Duration(seconds: 3);
+  static const Duration _heartbeatInterval = Duration(seconds: 30);
 
-  // Singleton pattern
-  static final WebSocketService _instance = WebSocketService._internal();
-  factory WebSocketService() => _instance;
-  WebSocketService._internal();
+  String? _url;
+  String? _token;
 
-  bool get isConnected => _isConnected;
-  Stream<Map<String, dynamic>>? get messageStream => _messageController?.stream;
+  /// Stream of connection status changes
+  Stream<WebSocketStatus> get statusStream => _statusController.stream;
+
+  /// Stream of incoming messages
+  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
+
+  /// Current connection status
+  WebSocketStatus get status => _status;
 
   /// Connect to WebSocket server
-  Future<void> connect(String accessToken) async {
-    if (_isConnected) {
-      debugPrint('WebSocket already connected');
+  Future<void> connect(String url, {String? token}) async {
+    if (_status == WebSocketStatus.connected ||
+        _status == WebSocketStatus.connecting) {
+      if (kDebugMode) {
+        print('WebSocket already connected or connecting');
+      }
       return;
     }
 
-    _accessToken = accessToken;
-    _messageController = StreamController<Map<String, dynamic>>.broadcast();
+    _url = url;
+    _token = token;
+    _reconnectAttempts = 0;
+    await _doConnect();
+  }
 
+  Future<void> _doConnect() async {
     try {
-      final wsUrl =
-          '${ApiConfig.wsBaseUrl}${ApiConfig.wsChat}?token=$accessToken';
-      debugPrint('🔌 Connecting to WebSocket: $wsUrl');
+      _updateStatus(WebSocketStatus.connecting);
+
+      // Build WebSocket URL with auth token if provided
+      final wsUrl = _token != null ? '$_url?token=$_token' : _url!;
+
+      if (kDebugMode) {
+        print('Connecting to WebSocket: $wsUrl');
+      }
 
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-      _isConnected = true;
-      _reconnectAttempts = 0;
 
       // Listen to messages
       _channel!.stream.listen(
-        _onMessage,
-        onError: _onError,
-        onDone: _onDone,
+        _handleMessage,
+        onError: _handleError,
+        onDone: _handleDisconnect,
         cancelOnError: false,
       );
 
-      // Start ping timer to keep connection alive
-      _startPingTimer();
+      _updateStatus(WebSocketStatus.connected);
+      _reconnectAttempts = 0;
+      _startHeartbeat();
 
-      debugPrint('✅ WebSocket connected successfully');
+      if (kDebugMode) {
+        print('WebSocket connected successfully');
+      }
     } catch (e) {
-      debugPrint('❌ WebSocket connection error: $e');
-      _isConnected = false;
+      if (kDebugMode) {
+        print('WebSocket connection error: $e');
+      }
+      _updateStatus(WebSocketStatus.error);
       _scheduleReconnect();
     }
   }
 
-  /// Handle incoming messages
-  void _onMessage(dynamic message) {
+  void _handleMessage(dynamic message) {
     try {
-      final data = jsonDecode(message as String) as Map<String, dynamic>;
-      debugPrint('📨 WebSocket message received: ${data['type']}');
-      _messageController?.add(data);
-    } catch (e) {
-      debugPrint('❌ Error parsing WebSocket message: $e');
-    }
-  }
+      if (message is String) {
+        final data = jsonDecode(message) as Map<String, dynamic>;
 
-  /// Handle WebSocket errors
-  void _onError(dynamic error) {
-    debugPrint('❌ WebSocket error: $error');
-    _isConnected = false;
-    _scheduleReconnect();
-  }
-
-  /// Handle WebSocket closure
-  void _onDone() {
-    debugPrint('🔌 WebSocket connection closed');
-    _isConnected = false;
-    _scheduleReconnect();
-  }
-
-  /// Join a conversation
-  void joinConversation(String conversationId) {
-    if (!_isConnected || _channel == null) {
-      debugPrint('⚠️ Cannot join conversation: WebSocket not connected');
-      return;
-    }
-
-    try {
-      final message = jsonEncode({
-        'type': 'join',
-        'conversation_id': conversationId,
-      });
-
-      _channel!.sink.add(message);
-      debugPrint('🚪 Joined conversation: $conversationId');
-    } catch (e) {
-      debugPrint('❌ Error joining conversation: $e');
-    }
-  }
-
-  /// Leave a conversation
-  void leaveConversation(String conversationId) {
-    if (!_isConnected || _channel == null) return;
-
-    try {
-      final message = jsonEncode({
-        'type': 'leave',
-        'conversation_id': conversationId,
-      });
-
-      _channel!.sink.add(message);
-      debugPrint('🚪 Left conversation: $conversationId');
-    } catch (e) {
-      debugPrint('❌ Error leaving conversation: $e');
-    }
-  }
-
-  /// Send a message through WebSocket
-  void sendMessage(String conversationId, String content) {
-    if (!_isConnected || _channel == null) {
-      debugPrint('⚠️ Cannot send message: WebSocket not connected');
-      return;
-    }
-
-    try {
-      final message = jsonEncode({
-        'type': 'message',
-        'conversation_id': conversationId,
-        'content': content,
-      });
-
-      _channel!.sink.add(message);
-      debugPrint('📤 Message sent via WebSocket');
-    } catch (e) {
-      debugPrint('❌ Error sending message: $e');
-    }
-  }
-
-  /// Send typing indicator
-  void sendTypingIndicator(String conversationId, bool isTyping) {
-    if (!_isConnected || _channel == null) return;
-
-    try {
-      final message = jsonEncode({
-        'type': 'typing',
-        'conversation_id': conversationId,
-        'is_typing': isTyping,
-      });
-
-      _channel!.sink.add(message);
-    } catch (e) {
-      debugPrint('❌ Error sending typing indicator: $e');
-    }
-  }
-
-  /// Mark messages as read
-  void markAsRead(String conversationId, List<String> messageIds) {
-    if (!_isConnected || _channel == null) return;
-
-    try {
-      final message = jsonEncode({
-        'type': 'read',
-        'conversation_id': conversationId,
-        'message_ids': messageIds,
-      });
-
-      _channel!.sink.add(message);
-      debugPrint('✅ Marked ${messageIds.length} messages as read');
-    } catch (e) {
-      debugPrint('❌ Error marking messages as read: $e');
-    }
-  }
-
-  /// Start ping timer to keep connection alive
-  void _startPingTimer() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (_isConnected && _channel != null) {
-        try {
-          _channel!.sink.add(jsonEncode({'type': 'ping'}));
-          debugPrint('🏓 Ping sent');
-        } catch (e) {
-          debugPrint('❌ Error sending ping: $e');
-          timer.cancel();
+        // Handle heartbeat/ping messages
+        if (data['type'] == 'ping') {
+          send({'type': 'pong'});
+          return;
         }
-      } else {
-        timer.cancel();
+
+        _messageController.add(data);
+
+        if (kDebugMode) {
+          print('WebSocket message received: ${data['type']}');
+        }
       }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error parsing WebSocket message: $e');
+      }
+    }
+  }
+
+  void _handleError(dynamic error) {
+    if (kDebugMode) {
+      print('WebSocket error: $error');
+    }
+    _updateStatus(WebSocketStatus.error);
+    _scheduleReconnect();
+  }
+
+  void _handleDisconnect() {
+    if (kDebugMode) {
+      print('WebSocket disconnected');
+    }
+    _updateStatus(WebSocketStatus.disconnected);
+    _stopHeartbeat();
+    _scheduleReconnect();
+  }
+
+  void _scheduleReconnect() {
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      if (kDebugMode) {
+        print('Max reconnect attempts reached. Giving up.');
+      }
+      return;
+    }
+
+    _reconnectAttempts++;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(_reconnectDelay, () {
+      if (kDebugMode) {
+        print(
+            'Attempting to reconnect (attempt $_reconnectAttempts/$_maxReconnectAttempts)');
+      }
+      _doConnect();
     });
   }
 
-  /// Schedule reconnection attempt
-  void _scheduleReconnect() {
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      debugPrint('❌ Max reconnect attempts reached. Giving up.');
-      return;
-    }
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (timer) {
+      send({'type': 'ping', 'timestamp': DateTime.now().toIso8601String()});
+    });
+  }
 
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(_reconnectDelay, () {
-      _reconnectAttempts++;
-      debugPrint(
-        '🔄 Reconnect attempt $_reconnectAttempts/$_maxReconnectAttempts',
-      );
-      if (_accessToken != null) {
-        connect(_accessToken!);
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
+  void _updateStatus(WebSocketStatus newStatus) {
+    _status = newStatus;
+    _statusController.add(newStatus);
+  }
+
+  /// Send message to server
+  void send(Map<String, dynamic> message) {
+    if (_status == WebSocketStatus.connected) {
+      try {
+        _channel?.sink.add(jsonEncode(message));
+        if (kDebugMode &&
+            message['type'] != 'ping' &&
+            message['type'] != 'pong') {
+          print('WebSocket message sent: ${message['type']}');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error sending WebSocket message: $e');
+        }
       }
+    } else {
+      if (kDebugMode) {
+        print('Cannot send message: WebSocket not connected');
+      }
+    }
+  }
+
+  /// Subscribe to specific channels
+  void subscribe(List<String> channels) {
+    send({
+      'type': 'subscribe',
+      'channels': channels,
+    });
+  }
+
+  /// Unsubscribe from specific channels
+  void unsubscribe(List<String> channels) {
+    send({
+      'type': 'unsubscribe',
+      'channels': channels,
     });
   }
 
   /// Disconnect from WebSocket
-  Future<void> disconnect() async {
-    debugPrint('🔌 Disconnecting WebSocket');
-    _isConnected = false;
-    _reconnectAttempts = 0;
-
-    _pingTimer?.cancel();
-    _reconnectTimer?.cancel();
-
-    try {
-      await _channel?.sink.close();
-    } catch (e) {
-      debugPrint('❌ Error closing WebSocket: $e');
+  void disconnect() {
+    if (kDebugMode) {
+      print('Disconnecting WebSocket');
     }
 
-    await _messageController?.close();
-    _channel = null;
-    _messageController = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _stopHeartbeat();
 
-    debugPrint('✅ WebSocket disconnected');
+    _channel?.sink.close();
+    _channel = null;
+
+    _updateStatus(WebSocketStatus.disconnected);
   }
 
-  /// Reset reconnection attempts (call after successful manual reconnection)
-  void resetReconnectAttempts() {
-    _reconnectAttempts = 0;
+  /// Dispose resources
+  void dispose() {
+    disconnect();
+    _statusController.close();
+    _messageController.close();
   }
 }

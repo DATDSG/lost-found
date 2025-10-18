@@ -1,66 +1,80 @@
-# Optimized Vision Service Dockerfile - Multi-stage build for image processing
-FROM python:3.12-slim AS builder
+# ================================================================
+# Vision Service Dockerfile - Lightweight (CPU Only)
+# ================================================================
+# Image size: ~800MB-1GB (vs 12-15GB with GPU)
+# Basic image processing without heavy ML models
+# For GPU support with ML models, use Dockerfile.gpu
+# Multi-stage build for optimal image size
+# ================================================================
 
-# Build arguments for optimization
-ARG PIP_NO_CACHE_DIR=1
-ARG PIP_DISABLE_PIP_VERSION_CHECK=1
+# ================================================================
+# Stage 1: Builder
+# ================================================================
+FROM python:3.11-slim AS builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libglib2.0-dev \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set work directory
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libjpeg-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
-# Production stage - Minimal runtime image
-FROM python:3.12-slim
+# Set pip timeout and retry settings
+ENV PIP_DEFAULT_TIMEOUT=300
 
-# Environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    PIP_NO_CACHE_DIR=1
+# Install Python dependencies with increased timeout and retries
+RUN pip install --no-cache-dir --upgrade pip wheel && \
+    pip install --no-cache-dir --retries 5 --user -r requirements.txt
 
-# Install only runtime dependencies
-RUN apt-get update && apt-get install -y \
+# ================================================================
+# Stage 2: Runtime (Minimal)
+# ================================================================
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only runtime dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libjpeg62-turbo \
+    zlib1g \
+    libgl1 \
     libglib2.0-0 \
-    libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Copy Python packages from builder
+COPY --from=builder /root/.local /root/.local
 
-# Set work directory
-WORKDIR /app
+# Copy application files
+COPY . /app
 
-# Copy Python packages from builder stage
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
-COPY config.py main.py minio_client.py ./
-
-# Set proper permissions
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
+# Environment variables
+ENV PATH=/root/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    LOG_LEVEL=INFO \
+    USE_GPU=false \
+    ENABLE_METRICS=true \
+    ENABLE_RATE_LIMIT=true \
+    ENABLE_OBJECT_DETECTION=false \
+    ENABLE_OCR=false \
+    ENABLE_CLIP=false \
+    ENABLE_NSFW_DETECTION=false \
+    REDIS_URL=redis://redis:6379
 
 # Expose port
 EXPOSE 8002
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8002/health || exit 1
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "2"]
+# Run application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "1"]

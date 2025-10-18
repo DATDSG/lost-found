@@ -1,19 +1,20 @@
 ﻿"""Admin authentication and authorization helpers."""
 
 from fastapi import Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy.orm import Session
 from typing import Dict
 import secrets
 
-from ...database import get_db
-from ...models import User
-from ...session_manager import session_manager
+from app.database import get_db
+from app.models import User
+
+# In-memory session storage (should be replaced with Redis in production)
+sessions: Dict[str, dict] = {}
 
 
 async def require_admin(
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ) -> User:
     """
     Dependency that requires admin authentication.
@@ -21,31 +22,22 @@ async def require_admin(
     """
     session_id = request.cookies.get("admin_session")
     
-    if not session_id:
+    if not session_id or session_id not in sessions:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
     
-    session_data = await session_manager.get_session(session_id)
-    if not session_data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session"
-        )
-    
+    session_data = sessions[session_id]
     user_id = session_data.get("user_id")
+    
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session"
         )
     
-    # Get user from database
-    result = await db.execute(
-        select(User).where(User.id == user_id)
-    )
-    user = result.scalar_one_or_none()
+    user = db.query(User).filter(User.id == user_id).first()
     
     if not user:
         raise HTTPException(
@@ -62,34 +54,37 @@ async def require_admin(
     return user
 
 
-async def verify_csrf_token(request: Request, token: str) -> bool:
+def verify_csrf_token(request: Request, token: str) -> bool:
     """
     Verify CSRF token from request.
     Returns True if valid, False otherwise.
     """
     session_id = request.cookies.get("admin_session")
     
-    if not session_id:
+    if not session_id or session_id not in sessions:
         return False
     
-    return await session_manager.verify_csrf_token(session_id, token)
+    session_token = sessions[session_id].get("csrf_token", "")
+    return secrets.compare_digest(token, session_token)
 
 
-async def create_session(user_id: str) -> tuple[str, str]:
+def create_session(user_id: str) -> tuple[str, str]:
     """
     Create a new session for a user.
     Returns tuple of (session_id, csrf_token).
     """
-    return await session_manager.create_session(user_id)
+    session_id = secrets.token_urlsafe(32)
+    csrf_token = secrets.token_urlsafe(32)
+    
+    sessions[session_id] = {
+        "user_id": user_id,
+        "csrf_token": csrf_token
+    }
+    
+    return session_id, csrf_token
 
 
-async def delete_session(session_id: str) -> bool:
-    """
-    Delete a session.
-    Returns True if session was deleted, False if not found.
-    """
-    return await session_manager.delete_session(session_id)
-
-
-# Legacy compatibility - keep for backward compatibility
-sessions: Dict[str, dict] = {}
+def delete_session(session_id: str) -> None:
+    """Delete a session."""
+    if session_id in sessions:
+        del sessions[session_id]

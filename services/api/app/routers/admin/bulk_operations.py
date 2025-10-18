@@ -1,14 +1,14 @@
 """Admin bulk operations router."""
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from typing import List
 import json
 
-from ...database import get_db
-from ...models import User, Report, ReportStatus, Match, MatchStatus
-from ...schemas import BulkOperationRequest, BulkOperationResult, BulkOperationError
-from ...dependencies import get_current_admin
-from ...helpers import create_audit_log
+from app.database import get_db
+from app.models import User, Report, ReportStatus, Match, MatchStatus
+from app.schemas import BulkOperationRequest, BulkOperationResult, BulkOperationError
+from app.dependencies import get_current_admin
+from app.helpers import create_audit_log
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ router = APIRouter()
 def bulk_approve_reports(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Approve multiple reports at once."""
     success_count = 0
@@ -79,7 +79,7 @@ def bulk_approve_reports(
 def bulk_reject_reports(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Reject (hide) multiple reports at once."""
     success_count = 0
@@ -137,7 +137,7 @@ def bulk_reject_reports(
 def bulk_delete_reports(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Delete multiple reports at once (soft delete by setting status to REMOVED)."""
     success_count = 0
@@ -200,7 +200,7 @@ def bulk_delete_reports(
 def bulk_activate_users(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Activate multiple users at once."""
     success_count = 0
@@ -267,7 +267,7 @@ def bulk_activate_users(
 def bulk_deactivate_users(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Deactivate multiple users at once."""
     success_count = 0
@@ -334,7 +334,7 @@ def bulk_deactivate_users(
 def bulk_delete_users(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Delete multiple users at once (soft delete by deactivating)."""
     success_count = 0
@@ -403,7 +403,7 @@ def bulk_delete_users(
 def bulk_approve_matches(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Approve multiple matches at once (promote them)."""
     success_count = 0
@@ -462,7 +462,7 @@ def bulk_approve_matches(
 def bulk_reject_matches(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Reject multiple matches at once (suppress them)."""
     success_count = 0
@@ -520,7 +520,7 @@ def bulk_reject_matches(
 def bulk_notify_matches(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Send notifications to users for multiple matches."""
     from app.models import Notification

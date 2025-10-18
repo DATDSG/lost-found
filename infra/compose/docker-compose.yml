@@ -1,394 +1,340 @@
-# Lost & Found Platform - Docker Compose Configuration
+﻿# ================================================================
+# Lost & Found - Docker Compose Configuration
+# ================================================================
 # Optimized for development and production deployment
+# All services use health checks and proper dependency management
+# ================================================================
+
+version: "3.8"
 
 services:
-  # PostgreSQL Database with pgvector extension
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: lost-found-postgres
-    restart: unless-stopped
+  # ================================================================
+  # Database: PostgreSQL with pgvector extension
+  # ================================================================
+  db:
+    image: pgvector/pgvector:pg18
+    container_name: lost-found-db
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-lost_found}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      POSTGRES_USER: ${POSTGRES_USER:-lostfound}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-lostfound}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-lost_found}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-
-  # Redis Cache and Session Store
-  redis:
-    image: redis:7-alpine
-    container_name: lost-found-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "5432:5432"
     volumes:
-      - redis_data:/data
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-lostfound}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
-
-  # pgAdmin - Database Administration Tool
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: lost-found-pgadmin
     restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@lostfound.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
 
-  # MinIO Object Storage (S3-compatible)
-  minio:
-    image: minio/minio:latest
-    container_name: lost-found-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
-      MINIO_DEFAULT_BUCKETS: lost-found-media,lost-found-backups
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-      start_period: 30s
-    networks:
-      - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 256M
-
-  # API Service - Main Backend
+  # ================================================================
+  # API Service: Main FastAPI application
+  # ================================================================
   api:
     build:
       context: ../../services/api
       dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
     container_name: lost-found-api
-    restart: unless-stopped
-    environment:
-      # Database Configuration
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-lost_found}
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
-      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
-
-      # Redis Configuration
-      REDIS_URL: redis://redis:6379/0
-      REDIS_CACHE_TTL: ${REDIS_CACHE_TTL:-3600}
-
-      # MinIO Object Storage Configuration
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_NAME: lost-found-media
-      MINIO_SECURE: false
-      MINIO_REGION: us-east-1
-
-      # Service URLs
-      NLP_SERVICE_URL: http://nlp:8001
-      VISION_SERVICE_URL: http://vision:8002
-
-      # Security
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-56b629a24dbce2c6bc302b8994d7785f5ffbf3188bf27a2215a4cf791820ca48582efead626aa1153f07ff3ea498f16381f44d91b39f518be96b08695a2c0729}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
-      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
-
-      # Application Configuration
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      DEBUG: ${DEBUG:-true}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      HOST: 0.0.0.0
-      PORT: 8000
-      WORKERS: ${API_WORKERS:-4}
-
-      # Media Configuration
-      MEDIA_ROOT: /app/uploads
-      MEDIA_URL: /media
-      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-10}
-
-      # Feature Flags
-      ENABLE_REDIS_CACHE: ${ENABLE_REDIS_CACHE:-true}
-      ENABLE_METRICS: ${ENABLE_METRICS:-true}
-      ENABLE_RATE_LIMIT: ${ENABLE_RATE_LIMIT:-true}
-
-      # CORS Configuration
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://admin:3000,http://10.0.2.2:8000}
-      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-true}
-
-      # Matching Configuration
-      MATCH_MIN_SCORE: ${MATCH_MIN_SCORE:-0.65}
-      MATCH_TEXT_THRESHOLD: ${MATCH_TEXT_THRESHOLD:-0.70}
-      MATCH_IMAGE_THRESHOLD: ${MATCH_IMAGE_THRESHOLD:-0.75}
-
-    ports:
-      - "${API_PORT:-8000}:8000"
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      nlp:
         condition: service_healthy
+      vision:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
     volumes:
-      - api_uploads:/app/uploads
+      - ../../services/api:/app
+      - media_data:${MEDIA_ROOT:-/app/media}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    restart: unless-stopped
     networks:
       - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
 
-  # NLP Service - Text Embeddings
+  # ================================================================
+  # Background Worker: ARQ task queue worker
+  # ================================================================
+  worker:
+    build:
+      context: ../../services/api
+      dockerfile: Dockerfile
+    container_name: lost-found-worker
+    command: arq app.worker.WorkerSettings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nlp:
+        condition: service_healthy
+      vision:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ../../services/api:/app
+      - media_data:${MEDIA_ROOT:-/app/media}
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # ================================================================
+  # NLP Service: Natural Language Processing
+  # ================================================================
   nlp:
     build:
       context: ../../services/nlp
       dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
     container_name: lost-found-nlp
-    restart: unless-stopped
+    env_file: .env
     environment:
-      # Redis Configuration
-      REDIS_URL: redis://redis:6379/0
-      REDIS_CACHE_TTL: ${REDIS_CACHE_TTL:-86400}
-
-      # Application Configuration
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      HOST: 0.0.0.0
-      PORT: 8001
-      WORKERS: ${NLP_WORKERS:-2}
-
-      # Model Configuration
-      MODEL_NAME: ${NLP_MODEL_NAME:-intfloat/e5-small-v2}
-      MODEL_CACHE_DIR: /app/cache
-      HF_HOME: /app/cache
-      TRANSFORMERS_CACHE: /app/cache
-
-      # Processing Configuration
-      BATCH_SIZE: ${NLP_BATCH_SIZE:-32}
-      MAX_SEQUENCE_LENGTH: ${NLP_MAX_SEQUENCE_LENGTH:-512}
-
-      # Feature Flags
-      ENABLE_REDIS_CACHE: ${ENABLE_REDIS_CACHE:-true}
-      ENABLE_METRICS: ${ENABLE_METRICS:-true}
-
-      # MinIO Object Storage Configuration
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_NAME: lost-found-media
-      MINIO_SECURE: false
-      MINIO_REGION: us-east-1
-
+      - USE_GPU=${NLP_USE_GPU:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MODEL_NAME=${NLP_MODEL_NAME:-intfloat/e5-small-v2}
     ports:
-      - "${NLP_PORT:-8001}:8001"
-    depends_on:
-      redis:
-        condition: service_healthy
+      - "8001:8001"
     volumes:
-      - nlp_cache:/app/cache
+      - ../../services/nlp:/app
+      - nlp_models:/root/.cache/huggingface
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 300s
+    restart: unless-stopped
     networks:
       - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
 
-  # Vision Service - Image Processing
+  # ================================================================
+  # Vision Service: Image processing and computer vision
+  # ================================================================
   vision:
     build:
       context: ../../services/vision
       dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
     container_name: lost-found-vision
-    restart: unless-stopped
+    env_file: .env
     environment:
-      # Redis Configuration
-      REDIS_URL: redis://redis:6379/0
-      REDIS_CACHE_TTL: ${REDIS_CACHE_TTL:-86400}
-
-      # Application Configuration
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      HOST: 0.0.0.0
-      PORT: 8002
-      WORKERS: ${VISION_WORKERS:-2}
-
-      # Image Processing Configuration
-      MAX_IMAGE_SIZE_MB: ${MAX_IMAGE_SIZE_MB:-10}
-      MAX_IMAGE_DIMENSION: ${MAX_IMAGE_DIMENSION:-4096}
-
-      # Hash Configuration
-      HASH_THRESHOLD_SIMILAR: ${HASH_THRESHOLD_SIMILAR:-10}
-      HASH_THRESHOLD_MATCH: ${HASH_THRESHOLD_MATCH:-14}
-
-      # Feature Flags
-      ENABLE_REDIS_CACHE: ${ENABLE_REDIS_CACHE:-true}
-      ENABLE_METRICS: ${ENABLE_METRICS:-true}
-
-      # MinIO Object Storage Configuration
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_NAME: lost-found-media
-      MINIO_SECURE: false
-      MINIO_REGION: us-east-1
-
+      - USE_GPU=${VISION_USE_GPU:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_OBJECT_DETECTION=${ENABLE_OBJECT_DETECTION:-false}
+      - ENABLE_OCR=${ENABLE_OCR:-false}
     ports:
-      - "${VISION_PORT:-8002}:8002"
-    depends_on:
-      redis:
-        condition: service_healthy
+      - "8002:8002"
     volumes:
-      - vision_cache:/app/cache
+      - ../../services/vision:/app
+      - vision_models:/root/.cache
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-      - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-
-  # Admin Panel - Next.js Frontend
-  admin:
-    build:
-      context: ../../apps/admin
-      dockerfile: Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-    container_name: lost-found-admin
+      retries: 5
+      start_period: 300s
     restart: unless-stopped
-    environment:
-      # API Configuration
-      NEXT_PUBLIC_API_URL: http://api:8000
-      
-      # Application Configuration
-      NODE_ENV: ${ENVIRONMENT:-production}
-      PORT: 3000
-      HOSTNAME: "0.0.0.0"
-      
-      # Next.js Configuration
-      NEXT_TELEMETRY_DISABLED: 1
-      
-    ports:
-      - "${ADMIN_PORT:-3000}:3000"
-    depends_on:
-      api:
-        condition: service_healthy
     networks:
       - lost-found-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
 
-# Named Volumes for Data Persistence
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  pgadmin_data:
-    driver: local
-  minio_data:
-    driver: local
-  api_uploads:
-    driver: local
-  nlp_cache:
-    driver: local
-  vision_cache:
-    driver: local
+  # ================================================================
+  # Redis: Cache and message broker
+  # ================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: lost-found-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-LF_Redis_2025_Pass!} --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${REDIS_PASSWORD:-LF_Redis_2025_Pass!}",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
 
-# Network Configuration
+  # ================================================================
+  # Monitoring Stack
+  # ================================================================
+
+  # Prometheus: Metrics collection and storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lost-found-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9090/-/healthy",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # Loki: Log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: lost-found-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3100/ready",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # Promtail: Log shipping to Loki
+  promtail:
+    image: grafana/promtail:latest
+    container_name: lost-found-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+  # Grafana: Metrics and logs visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lost-found-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+
+# ================================================================
+# Networks
+# ================================================================
 networks:
   lost-found-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+    name: lost-found-network
+
+# ================================================================
+# Volumes
+# ================================================================
+volumes:
+  db_data:
+    name: lost-found-db-data
+  media_data:
+    name: lost-found-media
+  redis_data:
+    name: lost-found-redis
+  nlp_models:
+    name: lost-found-nlp-models
+  vision_models:
+    name: lost-found-vision-models
+  prometheus_data:
+    name: lost-found-prometheus
+  grafana_data:
+    name: lost-found-grafana
+  loki_data:
+    name: lost-found-loki

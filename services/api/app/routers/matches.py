@@ -1,17 +1,18 @@
 """Matches routes."""
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 from typing import List
-from uuid import uuid4
 import time
 
 from ..database import get_db
-from ..models import User, Match, Report, MatchStatus, Notification, Conversation
+from ..models import User, Match, Report, MatchStatus
 from ..schemas import MatchCandidate, MatchComponent, ReportSummary
 from ..dependencies import get_current_user
 from ..matching import get_matching_pipeline
 from ..config import config
+from ..helpers import notify_match_confirmation, get_or_create_conversation
 
 router = APIRouter()
 
@@ -80,7 +81,7 @@ async def get_matches_for_report(
             id=str(match["candidate_id"]),
             overall=match["score"],
             components=components,
-            counterpart=ReportSummary.from_orm(match["candidate"]),
+            counterpart=match["candidate"],
             explanation=match.get("explanation")
         ))
     
@@ -88,16 +89,13 @@ async def get_matches_for_report(
 
 
 @router.post("/{match_id}/confirm")
-async def confirm_match(
+def confirm_match(
     match_id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Confirm a match (promote it)."""
-    result = await db.execute(
-        select(Match).where(Match.id == match_id)
-    )
-    match = result.scalar_one_or_none()
+    match = db.query(Match).filter(Match.id == match_id).first()
     
     if not match:
         raise HTTPException(
@@ -106,75 +104,36 @@ async def confirm_match(
         )
     
     # Verify user owns one of the reports
-    if match.source_report.owner_id != current_user.id and match.candidate_report.owner_id != current_user.id:
+    if match.source_report.owner_id != current_user.id and match.target_report.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to confirm this match"
         )
     
     match.status = MatchStatus.PROMOTED
-    await db.commit()
+    db.commit()
     
-    # Create notification for the other user in the match
-    other_user_id = (
-        match.source_report.owner_id 
-        if match.candidate_report.owner_id == current_user.id 
-        else match.candidate_report.owner_id
+    # Create notification for other user
+    notify_match_confirmation(db, match, current_user.id)
+    
+    # Create conversation if it doesn't exist
+    get_or_create_conversation(
+        db,
+        match.source_report.id,
+        match.target_report.id
     )
-    
-    notification = Notification(
-        id=str(uuid4()),
-        user_id=str(other_user_id),
-        type="match_confirmed",
-        title="Match Confirmed",
-        content=f"A user confirmed a match for your report",
-        reference_id=match.id
-    )
-    db.add(notification)
-    
-    # Create conversation between the two users if it doesn't exist
-    participant_ids = sorted([str(match.source_report.owner_id), str(match.candidate_report.owner_id)])
-    result = await db.execute(
-        select(Conversation).where(
-            or_(
-                and_(
-                    Conversation.participant_one_id == participant_ids[0],
-                    Conversation.participant_two_id == participant_ids[1]
-                ),
-                and_(
-                    Conversation.participant_one_id == participant_ids[1],
-                    Conversation.participant_two_id == participant_ids[0]
-                )
-            )
-        )
-    )
-    conversation = result.scalar_one_or_none()
-    
-    if not conversation:
-        conversation = Conversation(
-            id=str(uuid4()),
-            participant_one_id=participant_ids[0],
-            participant_two_id=participant_ids[1],
-            match_id=match.id
-        )
-        db.add(conversation)
-    
-    await db.commit()
     
     return {"message": "Match confirmed successfully", "match_id": match.id}
 
 
 @router.post("/{match_id}/dismiss")
-async def dismiss_match(
+def dismiss_match(
     match_id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Dismiss a match."""
-    result = await db.execute(
-        select(Match).where(Match.id == match_id)
-    )
-    match = result.scalar_one_or_none()
+    match = db.query(Match).filter(Match.id == match_id).first()
     
     if not match:
         raise HTTPException(
@@ -183,13 +142,13 @@ async def dismiss_match(
         )
     
     # Verify user owns one of the reports
-    if match.source_report.owner_id != current_user.id and match.candidate_report.owner_id != current_user.id:
+    if match.source_report.owner_id != current_user.id and match.target_report.owner_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to dismiss this match"
         )
     
     match.status = MatchStatus.DISMISSED
-    await db.commit()
+    db.commit()
     
     return {"message": "Match dismissed successfully"}

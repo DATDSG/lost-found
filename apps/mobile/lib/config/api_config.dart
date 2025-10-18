@@ -1,110 +1,78 @@
-/// API Configuration for Lost & Found Platform
+/// Environment-based API Configuration for Flutter Mobile App
 ///
-/// All endpoints use the /api/v1 prefix for consistency
+/// This file provides API configuration that can be changed based on
+/// the build environment (development, staging, production)
+
 class ApiConfig {
-  // Change this to your backend URL
-  // For Android Emulator: http://10.0.2.2:8000
-  // For iOS Simulator: http://localhost:8000
-  // For Physical Device: http://YOUR_COMPUTER_IP:8000
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  // Private constructor
+  ApiConfig._();
 
-  // Authentication Endpoints
-  static const String authRegister = '/api/v1/auth/register';
-  static const String authLogin = '/api/v1/auth/login';
-  static const String authRefresh = '/api/v1/auth/refresh';
-  static const String authMe = '/api/v1/auth/me';
-  static const String authUpdateProfile = '/api/v1/auth/me';
-  static const String authChangePassword = '/api/v1/auth/change-password';
-  static const String authLogout = '/api/v1/auth/logout';
+  // Environment detection
+  static const String _env =
+      String.fromEnvironment('ENV', defaultValue: 'development');
 
-  // Reports Endpoints
-  static const String reports = '/api/v1/reports';
-  static const String myReports = '/api/v1/reports/me';
-  static const String reportsCreate = '/api/v1/reports';
-  static const String nearbyReports = '/api/v1/reports/nearby';
-  static const String reportDetail = '/api/v1/reports';
-  static const String reportUpdate = '/api/v1/reports';
-  static const String reportDelete = '/api/v1/reports';
-  static const String reportStatus = '/api/v1/reports';
-  static const String reportResolve = '/api/v1/reports';
-  static const String reportStats = '/api/v1/reports/stats';
-  static const String reportAnalytics = '/api/v1/reports/analytics';
+  /// Get base URL based on environment
+  static String get baseUrl {
+    switch (_env) {
+      case 'production':
+        return 'https://api.lostfound.com/api';
+      case 'staging':
+        return 'https://staging-api.lostfound.com/api';
+      case 'development':
+      default:
+        // For local development
+        // Android Emulator: http://10.0.2.2:8000/api
+        // iOS Simulator: http://localhost:8000/api
+        // Physical Device: http://YOUR_IP:8000/api
+        return const String.fromEnvironment('API_URL',
+            defaultValue: 'http://10.0.2.2:8000/api');
+    }
+  }
 
-  // Matches Endpoints
-  static const String matches = '/api/v1/matches';
+  /// API endpoints
+  static const String login = '/auth/login';
+  static const String register = '/auth/register';
+  static const String logout = '/auth/logout';
+  static const String profile = '/auth/me';
+  static const String refreshToken = '/auth/refresh';
 
-  // Search Endpoints (using existing reports endpoint with search parameters)
-  static const String searchReports = '/api/v1/reports';
-  static const String searchSuggestions = '/api/v1/search/suggestions';
-  static const String semanticSearch = '/api/v1/search/semantic';
-  static const String recentSearches = '/api/v1/search/recent';
-  static const String popularSearches = '/api/v1/search/popular';
-  static const String matchesReport = '/api/v1/matches/report';
-  static const String matchesConfirm = '/api/v1/matches';
-  static const String matchesAnalytics = '/api/v1/matches';
+  static const String reports = '/reports';
+  static const String items = '/items';
+  static const String matches = '/matches';
+  static const String notifications = '/notifications';
+  static const String messages = '/messages';
+  static const String media = '/media';
 
-  // Media Endpoints
-  static const String media = '/api/v1/media';
-  static const String mediaUpload = '/api/v1/media/upload';
-
-  // Messages Endpoints
-  static const String conversations = '/api/v1/messages/conversations';
-  static const String messages = '/api/v1/messages';
-  static const String messagesCreate = '/api/v1/messages';
-  static const String conversationCreate = '/api/v1/messages/conversations';
-  static const String conversationDetail = '/api/v1/messages/conversations';
-  static const String conversationMessages = '/api/v1/messages/conversations';
-  static const String messageRead = '/api/v1/messages';
-  static const String conversationRead = '/api/v1/messages/conversations';
-  static const String conversationArchive = '/api/v1/messages/conversations';
-  static const String conversationDelete = '/api/v1/messages/conversations';
-  static const String messageDelete = '/api/v1/messages';
-  static const String conversationMute = '/api/v1/messages/conversations';
-  static const String conversationBlock = '/api/v1/messages/conversations';
-
-  // Notifications Endpoints
-  static const String notifications = '/api/v1/notifications';
-  static const String notificationsUnread = '/api/v1/notifications/unread';
-  static const String notificationsMarkRead = '/api/v1/notifications';
-
-  // User Profile Endpoints
-  static const String usersMe = '/api/v1/users/me';
-  static const String usersMeAvatar = '/api/v1/users/me/avatar';
-  static const String usersMeStats = '/api/v1/users/me/stats';
-  static const String usersMePreferences = '/api/v1/users/me/preferences';
-  static const String usersMeActivity = '/api/v1/users/me/activity';
-  static const String usersMeReports = '/api/v1/users/me/reports';
-  static const String usersMeMatches = '/api/v1/users/me/matches';
-  static const String usersMeNotifications = '/api/v1/users/me/notifications';
-  static const String usersMeSettings = '/api/v1/users/me/settings';
-
-  // Taxonomy Endpoints
-  static const String categories = '/api/v1/taxonomy/categories';
-  static const String colors = '/api/v1/taxonomy/colors';
-
-  // Location Service Endpoints
-  static const String locationGeocode = '/api/v1/location/geocode';
-  static const String locationReverseGeocode =
-      '/api/v1/location/reverse-geocode';
-  static const String locationSearch = '/api/v1/location/search';
-  static const String locationNearby = '/api/v1/location/nearby';
-  static const String locationAutocomplete = '/api/v1/location/autocomplete';
-  static const String locationDetails = '/api/v1/location/details';
-  static const String locationDistance = '/api/v1/location/distance';
-  static const String locationBounds = '/api/v1/location/bounds';
-  static const String locationValidate = '/api/v1/location/validate';
-  static const String locationHistory = '/api/v1/location/history';
-
-  // WebSocket Endpoints
-  static String get wsBaseUrl => baseUrl.replaceFirst('http', 'ws');
-  static const String wsChat = '/ws/chat';
-  static const String wsNotifications = '/ws/notifications';
-
-  // Timeout durations
-  static const Duration connectionTimeout = Duration(seconds: 30);
+  /// Timeout duration
+  static const Duration timeout = Duration(seconds: 30);
+  static const Duration connectTimeout = Duration(seconds: 10);
   static const Duration receiveTimeout = Duration(seconds: 30);
 
-  // Retry configuration
-  static const int maxRetries = 3;
-  static const Duration retryDelay = Duration(seconds: 2);
+  /// API versioning
+  static const String apiVersion = 'v1';
+
+  /// Debug mode
+  static bool get isDebug => _env == 'development';
+
+  /// Environment name
+  static String get environment => _env;
 }
+
+/// Usage Instructions:
+/// 
+/// To build with different environments:
+/// 
+/// Development (default):
+///   flutter run
+///   OR
+///   flutter run --dart-define=ENV=development --dart-define=API_URL=http://10.0.2.2:8000/api
+/// 
+/// Staging:
+///   flutter build apk --dart-define=ENV=staging
+/// 
+/// Production:
+///   flutter build apk --dart-define=ENV=production
+/// 
+/// Custom API URL:
+///   flutter run --dart-define=API_URL=http://192.168.1.100:8000/api
+

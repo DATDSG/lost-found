@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import Base
-from app.models import User, Report, Media, Match, Conversation, Message, Notification, AuditLog, Category, Color
+from app.models import User, Report, Media, Match, Conversation, Message, Notification, AuditLog
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -33,8 +33,7 @@ target_metadata = Base.metadata
 
 def get_url():
     """Get database URL from environment variable or config."""
-    from app.config import config
-    return config.get_db_url_sync()
+    return os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
 
 
 def run_migrations_offline() -> None:

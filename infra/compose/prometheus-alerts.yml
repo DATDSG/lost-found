@@ -1,0 +1,211 @@
+groups:
+  - name: api_service_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "High error rate detected"
+          description: "{{ $labels.service }} has error rate {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # Slow response time
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
+          ) > 2.0
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Slow API response time"
+          description: "{{ $labels.endpoint }} p95 latency is {{ $value }}s (threshold: 2s)"
+
+      # Database connection pool exhaustion
+      - alert: DatabasePoolExhaustion
+        expr: |
+          (
+            db_connections_active
+            /
+            db_connections_max
+          ) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "{{ $value | humanizePercentage }} of database connections in use"
+
+      # NLP service unavailable
+      - alert: NLPServiceDown
+        expr: up{job="nlp"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: nlp
+        annotations:
+          summary: "NLP service is down"
+          description: "NLP service has been unavailable for {{ $value }}m"
+
+      # Vision service unavailable
+      - alert: VisionServiceDown
+        expr: up{job="vision"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: vision
+        annotations:
+          summary: "Vision service is down"
+          description: "Vision service has been unavailable for {{ $value }}m"
+
+      # Redis unavailable
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been unavailable for {{ $value }}m"
+
+      # Low cache hit rate
+      - alert: LowCacheHitRate
+        expr: |
+          (
+            sum(rate(cache_hits_total[5m]))
+            /
+            sum(rate(cache_requests_total[5m]))
+          ) < 0.50
+        for: 15m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      # High matching latency
+      - alert: HighMatchingLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(matching_duration_seconds_bucket[5m])) by (le)
+          ) > 5.0
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Slow matching pipeline"
+          description: "Matching p95 latency is {{ $value }}s (threshold: 5s)"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / node_memory_MemTotal_bytes > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/"}
+            /
+            node_filesystem_size_bytes{mountpoint="/"}
+          ) < 0.10
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (
+            avg by (instance) (
+              irate(node_cpu_seconds_total{mode="idle"}[5m])
+            ) * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      # Too many pending background tasks
+      - alert: HighBackgroundTaskQueue
+        expr: arq_jobs_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High background task queue"
+          description: "{{ $value }} background tasks pending"
+
+      # Failed background tasks
+      - alert: HighBackgroundTaskFailureRate
+        expr: |
+          (
+            rate(arq_jobs_failed_total[5m])
+            /
+            rate(arq_jobs_total[5m])
+          ) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High background task failure rate"
+          description: "{{ $value | humanizePercentage }} of background tasks failing"
+
+      # Database slow queries
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(db_query_duration_seconds_bucket[5m])) by (le)
+          ) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Slow database queries"
+          description: "Database query p95 latency is {{ $value }}s"
+
+      # Too many rate limit rejections
+      - alert: HighRateLimitRejections
+        expr: |
+          sum(rate(rate_limit_rejections_total[5m])) by (endpoint) > 10
+        for: 5m
+        labels:
+          severity: info
+          service: api
+        annotations:
+          summary: "High rate limit rejections"
+          description: "{{ $labels.endpoint }} is rejecting {{ $value }} req/s due to rate limits"

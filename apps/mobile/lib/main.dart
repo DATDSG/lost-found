@@ -1,112 +1,113 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'core/theme/app_theme.dart';
-import 'core/routing/app_routes.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'config/routes.dart';
 import 'providers/auth_provider.dart';
-import 'providers/reports_provider.dart';
-import 'providers/messages_provider.dart';
-import 'providers/search_provider.dart';
-import 'providers/chat_provider.dart';
-import 'providers/matches_provider.dart';
-import 'providers/notifications_provider.dart';
-import 'providers/media_provider.dart';
-import 'providers/user_profile_provider.dart';
-import 'providers/messaging_provider.dart';
-import 'providers/location_provider.dart';
-import 'services/api_service.dart';
-import 'services/api_service_manager.dart';
-import 'services/offline_manager.dart';
-import 'services/storage_service.dart';
-import 'widgets/auth_wrapper.dart';
+import 'providers/locale_provider.dart';
+import 'services/preferences_service.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize offline services
-  await _initializeServices();
+  // Initialize preferences service
+  final prefsService = PreferencesService();
+  await prefsService.init();
 
-  runApp(const LostFinderApp());
+  runApp(
+    ProviderScope(
+      overrides: [
+        preferencesServiceProvider.overrideWithValue(prefsService),
+      ],
+      child: const LostFoundApp(),
+    ),
+  );
 }
 
-/// Initialize all required services
-Future<void> _initializeServices() async {
-  try {
-    // Initialize storage service first
-    await StorageService().initialize();
+class LostFoundApp extends ConsumerWidget {
+  const LostFoundApp({super.key});
 
-    // Initialize offline manager
-    await OfflineManager().initialize();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final localeState = ref.watch(localeProvider);
 
-    // Initialize API service manager
-    await ApiServiceManager().initialize();
-
-    debugPrint('✅ All services initialized successfully');
-  } catch (e) {
-    debugPrint('❌ Failed to initialize services: $e');
+    return MaterialApp(
+      title: 'Lost & Found',
+      debugShowCheckedModeBanner: false,
+      locale: localeState.locale,
+      supportedLocales: const [
+        Locale('en'),
+        Locale('es'),
+        Locale('fr'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+        ),
+        cardTheme: const CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          filled: true,
+        ),
+      ),
+      onGenerateRoute: RouteGenerator.generateRoute,
+      initialRoute: AppRoutes.home,
+      home: const AuthChecker(),
+    );
   }
 }
 
-class LostFinderApp extends StatelessWidget {
-  const LostFinderApp({super.key});
+class AuthChecker extends ConsumerStatefulWidget {
+  const AuthChecker({super.key});
+
+  @override
+  ConsumerState<AuthChecker> createState() => _AuthCheckerState();
+}
+
+class _AuthCheckerState extends ConsumerState<AuthChecker> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      ref.read(authProvider.notifier).checkAuth();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => ReportsProvider()),
-        ChangeNotifierProvider(create: (_) => MessagesProvider(ApiService())),
-        ChangeNotifierProvider(create: (_) => SearchProvider()),
-        ChangeNotifierProvider(create: (_) => ChatProvider()),
-        ChangeNotifierProvider(create: (_) => MatchesProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationsProvider()),
-        ChangeNotifierProvider(create: (_) => MediaProvider()),
-        ChangeNotifierProvider(create: (_) => UserProfileProvider()),
-        ChangeNotifierProvider(create: (_) => MessagingProvider()),
-        ChangeNotifierProvider(create: (_) => LocationProvider()),
-      ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Lost Finder - Enhanced',
-        theme: AppTheme.light,
-        initialRoute: AppRoutes.home,
-        routes: {
-          AppRoutes.home: (context) => const AuthWrapper(),
-          ...AppRoutes.staticRoutes,
-        },
-        onGenerateRoute: AppRouteGenerator.generateRoute,
-        onUnknownRoute: (settings) {
-          return MaterialPageRoute(
-            builder: (_) => Scaffold(
-              appBar: AppBar(title: const Text('Page Not Found')),
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Page not found: ${settings.name}',
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).pushReplacementNamed(AppRoutes.home),
-                      child: const Text('Go Home'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+    final authState = ref.watch(authProvider);
+
+    if (authState.isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (authState.isLoggedIn) {
+      return const HomeScreen();
+    } else {
+      return const LoginScreen();
+    }
   }
 }

@@ -1,48 +1,55 @@
-/// User Model - matches backend UserResponse schema
+/// User model
 class User {
   final String id;
   final String email;
-  final String displayName;
+  final String name;
   final String? phoneNumber;
   final String? avatarUrl;
-  final String role;
-  final bool isActive;
-  final DateTime createdAt;
 
   User({
     required this.id,
     required this.email,
-    required this.displayName,
+    required this.name,
     this.phoneNumber,
     this.avatarUrl,
-    required this.role,
-    required this.isActive,
-    required this.createdAt,
   });
 
+  /// Create User from JSON
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as String,
-      email: json['email'] as String,
-      displayName: json['display_name'] as String,
-      phoneNumber: json['phone_number'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      role: json['role'] as String,
-      isActive: json['is_active'] as bool,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      id: json['id'] ?? json['_id'] ?? '',
+      email: json['email'] ?? '',
+      name: json['name'] ?? '',
+      phoneNumber: json['phone_number'] ?? json['phoneNumber'],
+      avatarUrl: json['avatar_url'] ?? json['avatarUrl'],
     );
   }
 
+  /// Convert User to JSON
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'email': email,
-      'display_name': displayName,
-      'phone_number': phoneNumber,
-      'avatar_url': avatarUrl,
-      'role': role,
-      'is_active': isActive,
-      'created_at': createdAt.toIso8601String(),
+      'name': name,
+      if (phoneNumber != null) 'phone_number': phoneNumber,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
     };
+  }
+
+  /// Create a copy with updated fields
+  User copyWith({
+    String? id,
+    String? email,
+    String? name,
+    String? phoneNumber,
+    String? avatarUrl,
+  }) {
+    return User(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      name: name ?? this.name,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+    );
   }
 }

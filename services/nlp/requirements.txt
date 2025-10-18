@@ -1,19 +1,48 @@
-# Simplified NLP Service Requirements - Mock Implementation
+# ================================================================
+# NLP Service Requirements - CPU Optimized (Lightweight)
+# ================================================================
+# Docker image size: ~2-3GB (vs 8-10GB with GPU)
+# For GPU support, see requirements-gpu.txt
+# ================================================================
+
 # Core Framework
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-pydantic==2.10.3
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
 
-# Redis for caching
-redis[hiredis]==5.2.1
+# ML/NLP - CPU Only (Lightweight)
+# Note: PyTorch CPU-only is ~200MB vs 2GB+ for CUDA version
+sentence-transformers==2.3.1
+numpy==1.26.3
 
-# Basic dependencies
-httpx==0.28.1
-tenacity==9.0.0
+# PyTorch CPU-only version (installed via Dockerfile for size optimization)
+# torch==2.1.0+cpu (installed in Dockerfile with --index-url)
 
-# Minimal monitoring
-prometheus-client==0.21.1
+# Transformers (needed by sentence-transformers)
+transformers==4.37.2
 
-# MinIO Object Storage
-minio==7.2.5
-boto3==1.35.36
+# Redis for distributed caching
+redis[hiredis]==5.0.1
+
+# Prometheus metrics
+prometheus-client==0.19.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Async job queue
+arq==0.25.0
+
+# Additional utilities
+httpx==0.26.0
+python-multipart==0.0.6
+
+# ================================================================
+# Optional: GPU Requirements (Comment out for production)
+# ================================================================
+# Uncomment below for GPU support (requires CUDA and increases size by ~2GB+)
+# Install with: pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu118
+# 
+# torch==2.1.0  # GPU version with CUDA 11.8
+# torchvision==0.16.0
+# ================================================================
