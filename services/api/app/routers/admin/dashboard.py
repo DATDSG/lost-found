@@ -33,33 +33,51 @@ async def dashboard(
     user: User = Depends(get_current_admin)
 ):
     """Display admin dashboard."""
-    # Gather statistics
+    # Gather statistics using async queries
+    pending_reports_result = await db.execute(select(func.count(Report.id)).where(Report.status == "pending"))
+    pending_reports = pending_reports_result.scalar() or 0
+    
+    total_reports_result = await db.execute(select(func.count(Report.id)))
+    total_reports = total_reports_result.scalar() or 0
+    
+    active_users_result = await db.execute(select(func.count(User.id)).where(User.is_active == True))
+    active_users = active_users_result.scalar() or 0
+    
+    total_users_result = await db.execute(select(func.count(User.id)))
+    total_users = total_users_result.scalar() or 0
+    
+    total_matches_result = await db.execute(select(func.count(Match.id)))
+    total_matches = total_matches_result.scalar() or 0
+    
+    confirmed_matches_result = await db.execute(select(func.count(Match.id)).where(Match.status == "confirmed"))
+    confirmed_matches = confirmed_matches_result.scalar() or 0
+    
     stats = {
-        "pending_reports": db.query(Report).filter(Report.status == "pending").count(),
-        "total_reports": db.query(Report).count(),
-        "active_users": db.query(User).filter(User.is_active == True).count(),
-        "total_users": db.query(User).count(),
+        "pending_reports": pending_reports,
+        "total_reports": total_reports,
+        "active_users": active_users,
+        "total_users": total_users,
         "open_flags": 0,  # Placeholder - implement flags model
-        "total_matches": db.query(Match).count(),
-        "confirmed_matches": db.query(Match).filter(Match.status == "confirmed").count(),
+        "total_matches": total_matches,
+        "confirmed_matches": confirmed_matches,
     }
     
     # Recent pending reports
-    recent_reports = (
-        db.query(Report)
-        .filter(Report.status == "pending")
+    recent_reports_result = await db.execute(
+        select(Report)
+        .where(Report.status == "pending")
         .order_by(Report.created_at.desc())
         .limit(10)
-        .all()
     )
+    recent_reports = recent_reports_result.scalars().all()
     
     # Recent activity (audit log)
-    recent_activity = (
-        db.query(AuditLog)
+    recent_activity_result = await db.execute(
+        select(AuditLog)
         .order_by(AuditLog.created_at.desc())
         .limit(10)
-        .all()
     )
+    recent_activity = recent_activity_result.scalars().all()
     
     csrf_token = await get_csrf_token(request)
     return templates.TemplateResponse(
