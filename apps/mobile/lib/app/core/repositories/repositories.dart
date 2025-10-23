@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/api_models.dart';
 import '../services/api_service.dart';
+import '../services/reports_api_service.dart';
 import '../utils/error_utils.dart';
 
 /// Repository for handling reports data
@@ -350,4 +351,15 @@ final mediaRepositoryProvider = Provider<MediaRepository>((ref) {
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   return AuthRepository(apiService);
+});
+
+/// Provider for reports API service
+final reportServiceProvider = Provider<ReportsApiService>((ref) {
+  final service = ReportsApiService();
+  final apiService = ref.read(apiServiceProvider);
+
+  // Initialize with auth token from main API service
+  service.initialize(authToken: apiService.authToken);
+
+  return service;
 });

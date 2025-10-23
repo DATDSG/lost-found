@@ -1107,7 +1107,16 @@ class _LostItemReportFormState extends ConsumerState<LostItemReportForm>
   );
 
   Future<void> _submitForm() async {
+    if (kDebugMode) {
+      print('Submit button pressed');
+      print('Form key current state: ${_formKey.currentState}');
+    }
+
     if (_formKey.currentState!.validate()) {
+      if (kDebugMode) {
+        print('Form validation passed');
+      }
+
       setState(() {
         _isSubmitting = true;
       });
@@ -1129,6 +1138,15 @@ class _LostItemReportFormState extends ConsumerState<LostItemReportForm>
           );
         }
 
+        if (kDebugMode) {
+          print('Submitting report with data:');
+          print('Title: ${_titleController.text.trim()}');
+          print('Description: ${_descriptionController.text.trim()}');
+          print('Category: $_selectedCategory');
+          print('Location: ${_locationController.text.trim()}');
+          print('Occurred at: $occurredAt');
+        }
+
         // Submit the report
         await reportService.createReport(
           title: _titleController.text.trim(),
@@ -1147,6 +1165,10 @@ class _LostItemReportFormState extends ConsumerState<LostItemReportForm>
           latitude: _currentLatitude,
           longitude: _currentLongitude,
         );
+
+        if (kDebugMode) {
+          print('Report submitted successfully');
+        }
 
         // Show success dialog
         if (mounted) {
@@ -1198,6 +1220,10 @@ class _LostItemReportFormState extends ConsumerState<LostItemReportForm>
             _isSubmitting = false;
           });
         }
+      }
+    } else {
+      if (kDebugMode) {
+        print('Form validation failed');
       }
     }
   }

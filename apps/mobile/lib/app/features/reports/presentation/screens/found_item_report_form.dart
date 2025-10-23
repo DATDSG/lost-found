@@ -1083,7 +1083,16 @@ class _FoundItemReportFormState extends ConsumerState<FoundItemReportForm>
   );
 
   Future<void> _submitForm() async {
+    if (kDebugMode) {
+      print('Submit button pressed');
+      print('Form key current state: ${_formKey.currentState}');
+    }
+
     if (_formKey.currentState!.validate()) {
+      if (kDebugMode) {
+        print('Form validation passed');
+      }
+
       setState(() {
         _isSubmitting = true;
       });
@@ -1105,6 +1114,15 @@ class _FoundItemReportFormState extends ConsumerState<FoundItemReportForm>
           );
         }
 
+        if (kDebugMode) {
+          print('Submitting report with data:');
+          print('Title: ${_titleController.text.trim()}');
+          print('Description: ${_descriptionController.text.trim()}');
+          print('Category: $_selectedCategory');
+          print('Location: ${_locationController.text.trim()}');
+          print('Occurred at: $occurredAt');
+        }
+
         // Submit the report
         await reportService.createReport(
           title: _titleController.text.trim(),
@@ -1118,6 +1136,10 @@ class _FoundItemReportFormState extends ConsumerState<FoundItemReportForm>
           latitude: _currentLatitude,
           longitude: _currentLongitude,
         );
+
+        if (kDebugMode) {
+          print('Report submitted successfully');
+        }
 
         // Show success dialog
         if (mounted) {
@@ -1169,6 +1191,10 @@ class _FoundItemReportFormState extends ConsumerState<FoundItemReportForm>
             _isSubmitting = false;
           });
         }
+      }
+    } else {
+      if (kDebugMode) {
+        print('Form validation failed');
       }
     }
   }

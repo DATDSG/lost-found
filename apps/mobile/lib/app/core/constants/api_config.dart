@@ -104,7 +104,7 @@ class ApiConfig {
 
   // Media endpoints
   /// Upload media endpoint
-  static const String uploadMediaEndpoint = mediaEndpoint;
+  static const String uploadMediaEndpoint = '$mediaEndpoint/upload';
 
   /// Delete media endpoint
   static const String deleteMediaEndpoint = '$mediaEndpoint/{id}';

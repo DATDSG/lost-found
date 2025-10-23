@@ -92,7 +92,7 @@ class ApiService {
         }
 
         return response;
-      } catch (e) {
+      } on Exception catch (e) {
         attempts++;
         if (attempts >= maxRetries) {
           if (kDebugMode) {
@@ -138,7 +138,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('Login error: $e');
       }
@@ -168,7 +168,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('Register error: $e');
       }
@@ -188,7 +188,7 @@ class ApiService {
 
       final data = _handleResponse(response) as Map<String, dynamic>;
       return User.fromJson(data);
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetCurrentUser error: $e');
       }
@@ -232,7 +232,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('UpdateProfile error: $e');
       }
@@ -251,7 +251,7 @@ class ApiService {
       final response = await _makeRequest('GET', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetProfileStats error: $e');
       }
@@ -295,8 +295,14 @@ class ApiService {
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
 
-      return _handleResponse(response) as List<Map<String, dynamic>>;
-    } catch (e) {
+      final result = _handleResponse(response);
+
+      if (result is List) {
+        return result.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetReports error: $e');
       }
@@ -307,10 +313,16 @@ class ApiService {
   /// Get reports created by the current user
   Future<List<Map<String, dynamic>>> getUserReports() async {
     try {
-      final url = _buildUrl('${ApiConfig.reportsEndpoint}/user/my-reports');
+      final url = _buildUrl('/v1/mobile/reports/my/reports');
       final response = await _makeRequest('GET', url, _getHeaders());
-      return _handleResponse(response) as List<Map<String, dynamic>>;
-    } catch (e) {
+      final result = _handleResponse(response);
+
+      if (result is List) {
+        return result.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetUserReports error: $e');
       }
@@ -334,7 +346,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('CreateReport error: $e');
       }
@@ -349,6 +361,11 @@ class ApiService {
     try {
       final url = _buildUrl(ApiConfig.uploadMediaEndpoint);
 
+      if (kDebugMode) {
+        print('UploadMedia request URL: $url');
+        print('UploadMedia file path: ${file.path}');
+      }
+
       final request = http.MultipartRequest('POST', Uri.parse(url));
       request.headers.addAll(_getHeaders());
       request.files.add(await http.MultipartFile.fromPath('file', file.path));
@@ -356,8 +373,14 @@ class ApiService {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
+      if (kDebugMode) {
+        print(
+          'UploadMedia response: ${response.statusCode} - ${response.body}',
+        );
+      }
+
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('UploadMedia error: $e');
       }
@@ -375,7 +398,7 @@ class ApiService {
       final response = await _makeRequest('DELETE', url, _getHeaders());
 
       _handleResponse(response);
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('DeleteMedia error: $e');
       }
@@ -391,7 +414,7 @@ class ApiService {
       final url = _buildUrl(ApiConfig.privacySettingsEndpoint);
       final response = await _makeRequest('GET', url, _getHeaders());
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetPrivacySettings error: $e');
       }
@@ -415,7 +438,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('UpdatePrivacySettings error: $e');
       }
@@ -444,7 +467,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('DeleteAccount error: $e');
       }
@@ -472,7 +495,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('RequestDataDownload error: $e');
       }
@@ -496,8 +519,14 @@ class ApiService {
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
 
-      return _handleResponse(response) as List<Map<String, dynamic>>;
-    } catch (e) {
+      final result = _handleResponse(response);
+
+      if (result is List) {
+        return result.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetCategories error: $e');
       }
@@ -517,8 +546,14 @@ class ApiService {
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
 
-      return _handleResponse(response) as List<Map<String, dynamic>>;
-    } catch (e) {
+      final result = _handleResponse(response);
+
+      if (result is List) {
+        return result.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetColors error: $e');
       }
@@ -529,11 +564,11 @@ class ApiService {
   /// Get report statistics
   Future<Map<String, dynamic>> getReportsStats() async {
     try {
-      final url = _buildUrl('${ApiConfig.reportsEndpoint}/stats');
+      final url = _buildUrl('/v1/mobile/stats');
       final response = await _makeRequest('GET', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetReportsStats error: $e');
       }
@@ -548,7 +583,7 @@ class ApiService {
       final response = await _makeRequest('GET', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetReport error: $e');
       }
@@ -581,8 +616,14 @@ class ApiService {
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
 
-      return _handleResponse(response) as List<Map<String, dynamic>>;
-    } catch (e) {
+      final result = _handleResponse(response);
+
+      if (result is List) {
+        return result.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('GetMatches error: $e');
       }
@@ -597,7 +638,7 @@ class ApiService {
       final response = await _makeRequest('POST', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('AcceptMatch error: $e');
       }
@@ -612,7 +653,7 @@ class ApiService {
       final response = await _makeRequest('POST', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('RejectMatch error: $e');
       }
@@ -634,7 +675,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('ForgotPassword error: $e');
       }
@@ -659,7 +700,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('ResetPassword error: $e');
       }
@@ -687,7 +728,7 @@ class ApiService {
       );
 
       return _handleResponse(response) as Map<String, dynamic>;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('ChangePassword error: $e');
       }
@@ -700,16 +741,14 @@ class ApiService {
     try {
       final url = _buildUrl('${ApiConfig.authEndpoint}/logout');
       await _makeRequest('POST', url, _getHeaders());
-
-      // Clear auth token
-      authToken = null;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
-        print('Logout error: $e');
+        print('Logout error (continuing with local logout): $e');
       }
-      // Clear auth token even if logout fails
+      // Continue with local logout even if server logout fails
+    } finally {
+      // Always clear auth token
       authToken = null;
-      rethrow;
     }
   }
 }

@@ -249,6 +249,12 @@ class AuthService {
 
   /// Get stored access token
   String? getStoredToken() {
+    if (kDebugMode) {
+      print('Getting stored token...');
+      print(
+        'SharedPreferences instance: ${_prefs != null ? 'available' : 'null'}',
+      );
+    }
     final token = _prefs?.getString(AppConstants.authTokenKey);
     if (kDebugMode) {
       print(
@@ -267,20 +273,35 @@ class AuthService {
   /// Initialize authentication from stored data
   Future<void> initializeAuth() async {
     try {
+      if (kDebugMode) {
+        print('AuthService.initializeAuth() called');
+        print(
+          'SharedPreferences instance: ${_prefs != null ? 'available' : 'null'}',
+        );
+      }
       final token = getStoredToken();
       if (token != null && token.isNotEmpty) {
+        if (kDebugMode) {
+          print('Token found, setting in API service');
+        }
         // Set token in API service
         _apiService.authToken = token;
 
         // Verify token is still valid by getting current user
         try {
           await _authRepository.getCurrentUser();
+          if (kDebugMode) {
+            print('Token validation successful');
+          }
         } on Exception catch (e) {
           // Token is invalid, logout user
           debugPrint('Token validation failed: $e');
           await logout();
         }
       } else {
+        if (kDebugMode) {
+          print('No token found, clearing API service');
+        }
         // No token found, ensure API service is cleared
         _apiService.authToken = null;
       }
@@ -594,13 +615,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 /// Auth notifier provider
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final authRepository = ref.watch(authRepositoryProvider);
-  final apiService = ref.watch(apiServiceProvider);
-  // Initialize SharedPreferences asynchronously
-  SharedPreferences.getInstance().then((prefs) {
-    // This will be handled by the service when needed
-  });
-  return AuthNotifier(AuthService(authRepository, null, apiService));
+  final authService = ref.watch(authServiceProvider);
+  return AuthNotifier(authService);
 });
 
 /// API service provider
