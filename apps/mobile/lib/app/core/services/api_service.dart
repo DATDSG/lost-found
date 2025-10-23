@@ -9,6 +9,9 @@ import '../models/api_models.dart';
 
 /// Main API service for handling all API requests
 class ApiService {
+  /// Factory constructor for singleton pattern
+  factory ApiService() => _instance;
+
   /// Private constructor for singleton pattern
   ApiService._internal() {
     _baseUrl = ApiConfig.baseUrl;
@@ -17,13 +20,12 @@ class ApiService {
     }
   }
 
-  /// Factory constructor for singleton pattern
-  factory ApiService() => _instance;
-
   /// Static instance for singleton pattern
   static final ApiService _instance = ApiService._internal();
 
   late String _baseUrl;
+
+  /// Authentication token for API requests
   String? authToken;
 
   /// Check if user is authenticated
@@ -121,6 +123,8 @@ class ApiService {
   }
 
   // Authentication methods
+
+  /// Login user with email and password
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
       final url = _buildUrl('${ApiConfig.authEndpoint}/login');
@@ -142,6 +146,7 @@ class ApiService {
     }
   }
 
+  /// Register new user with email, password and optional display name
   Future<Map<String, dynamic>> register({
     required String email,
     required String password,
@@ -171,6 +176,7 @@ class ApiService {
     }
   }
 
+  /// Get current authenticated user profile
   Future<User> getCurrentUser() async {
     try {
       final url = _buildUrl('${ApiConfig.authEndpoint}/me');
@@ -191,6 +197,8 @@ class ApiService {
   }
 
   // Profile methods
+
+  /// Update user profile with provided fields
   Future<Map<String, dynamic>> updateProfile({
     String? displayName,
     String? phoneNumber,
@@ -232,6 +240,7 @@ class ApiService {
     }
   }
 
+  /// Get user profile statistics
   Future<Map<String, dynamic>> getProfileStats() async {
     try {
       final url = _buildUrl('/v1/mobile/users/stats');
@@ -251,6 +260,8 @@ class ApiService {
   }
 
   // Reports methods
+
+  /// Get reports with optional filtering and pagination
   Future<List<Map<String, dynamic>>> getReports({
     int page = 1,
     int pageSize = 20,
@@ -293,6 +304,7 @@ class ApiService {
     }
   }
 
+  /// Get reports created by the current user
   Future<List<Map<String, dynamic>>> getUserReports() async {
     try {
       final url = _buildUrl('${ApiConfig.reportsEndpoint}/user/my-reports');
@@ -306,6 +318,7 @@ class ApiService {
     }
   }
 
+  /// Create a new report
   Future<Map<String, dynamic>> createReport(
     Map<String, dynamic> reportData,
   ) async {
@@ -330,6 +343,8 @@ class ApiService {
   }
 
   // Media methods
+
+  /// Upload media file
   Future<Map<String, dynamic>> uploadMedia(File file) async {
     try {
       final url = _buildUrl(ApiConfig.uploadMediaEndpoint);
@@ -350,6 +365,7 @@ class ApiService {
     }
   }
 
+  /// Delete media file by ID
   Future<void> deleteMedia(String mediaId) async {
     try {
       final url = _buildUrl(
@@ -368,6 +384,8 @@ class ApiService {
   }
 
   // Privacy and account methods
+
+  /// Get user privacy settings
   Future<Map<String, dynamic>> getPrivacySettings() async {
     try {
       final url = _buildUrl(ApiConfig.privacySettingsEndpoint);
@@ -381,6 +399,7 @@ class ApiService {
     }
   }
 
+  /// Update user privacy settings
   Future<Map<String, dynamic>> updatePrivacySettings(
     Map<String, dynamic> settings,
   ) async {
@@ -404,6 +423,7 @@ class ApiService {
     }
   }
 
+  /// Delete user account with password confirmation
   Future<Map<String, dynamic>> deleteAccount({
     required String password,
     String? reason,
@@ -432,6 +452,7 @@ class ApiService {
     }
   }
 
+  /// Request user data download
   Future<Map<String, dynamic>> requestDataDownload() async {
     try {
       final url = _buildUrl(ApiConfig.downloadDataEndpoint);
@@ -460,6 +481,8 @@ class ApiService {
   }
 
   // Categories and other data methods
+
+  /// Get available categories
   Future<List<Map<String, dynamic>>> getCategories({
     bool activeOnly = true,
   }) async {
@@ -482,6 +505,7 @@ class ApiService {
     }
   }
 
+  /// Get available colors
   Future<List<Map<String, dynamic>>> getColors({bool activeOnly = true}) async {
     try {
       final queryParams = <String, String>{
@@ -502,6 +526,7 @@ class ApiService {
     }
   }
 
+  /// Get report statistics
   Future<Map<String, dynamic>> getReportsStats() async {
     try {
       final url = _buildUrl('${ApiConfig.reportsEndpoint}/stats');

@@ -798,15 +798,15 @@ class _LostItemReportFormState extends ConsumerState<LostItemReportForm>
                     ),
                   )
                   .toList(),
-        selectedItemBuilder: (context) {
-          return items.map((item) {
-            return Text(
-              item,
-              overflow: TextOverflow.ellipsis,
-              style: DT.t.bodyMedium.copyWith(color: DT.c.textPrimary),
-            );
-          }).toList();
-        },
+        selectedItemBuilder: (context) => items
+            .map(
+              (item) => Text(
+                item,
+                overflow: TextOverflow.ellipsis,
+                style: DT.t.bodyMedium.copyWith(color: DT.c.textPrimary),
+              ),
+            )
+            .toList(),
         onChanged: items.isEmpty ? null : onChanged,
         validator: validator,
         decoration: InputDecoration(

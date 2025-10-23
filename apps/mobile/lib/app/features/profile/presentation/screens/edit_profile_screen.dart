@@ -184,7 +184,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
 
   Widget _buildSliverAppBar(api_models.User user) => SliverAppBar(
     expandedHeight: 120,
-    floating: false,
     pinned: true,
     backgroundColor: DT.c.surface,
     elevation: 0,
@@ -604,94 +603,92 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
 
         AnimatedBuilder(
           animation: _sectionAnimationController,
-          builder: (context, child) {
-            return SizeTransition(
-              sizeFactor: _sectionAnimationController,
-              child: FadeTransition(
-                opacity: _sectionAnimationController,
-                child: _isPasswordSectionExpanded
-                    ? Column(
-                        children: [
-                          SizedBox(height: DT.s.lg),
+          builder: (context, child) => SizeTransition(
+            sizeFactor: _sectionAnimationController,
+            child: FadeTransition(
+              opacity: _sectionAnimationController,
+              child: _isPasswordSectionExpanded
+                  ? Column(
+                      children: [
+                        SizedBox(height: DT.s.lg),
 
-                          _buildEnhancedPasswordField(
-                            controller: _currentPasswordController,
-                            label: 'Current Password',
-                            hint: 'Enter current password',
-                            prefixIcon: Icons.lock_outline,
-                            isVisible: _isPasswordVisible,
-                            onToggleVisibility: () {
-                              setState(() {
-                                _isPasswordVisible = !_isPasswordVisible;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Current password is required';
-                              }
-                              return null;
-                            },
-                          ),
+                        _buildEnhancedPasswordField(
+                          controller: _currentPasswordController,
+                          label: 'Current Password',
+                          hint: 'Enter current password',
+                          prefixIcon: Icons.lock_outline,
+                          isVisible: _isPasswordVisible,
+                          onToggleVisibility: () {
+                            setState(() {
+                              _isPasswordVisible = !_isPasswordVisible;
+                            });
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Current password is required';
+                            }
+                            return null;
+                          },
+                        ),
 
-                          SizedBox(height: DT.s.lg),
+                        SizedBox(height: DT.s.lg),
 
-                          _buildEnhancedPasswordField(
-                            controller: _newPasswordController,
-                            label: 'New Password',
-                            hint: 'Enter new password',
-                            prefixIcon: Icons.lock_outline,
-                            isVisible: _isNewPasswordVisible,
-                            onToggleVisibility: () {
-                              setState(() {
-                                _isNewPasswordVisible = !_isNewPasswordVisible;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'New password is required';
-                              }
-                              if (value.length < 8) {
-                                return 'Password must be at least 8 characters';
-                              }
-                              if (!RegExp(
-                                r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)',
-                              ).hasMatch(value)) {
-                                return 'Password must contain uppercase, lowercase, and number';
-                              }
-                              return null;
-                            },
-                          ),
+                        _buildEnhancedPasswordField(
+                          controller: _newPasswordController,
+                          label: 'New Password',
+                          hint: 'Enter new password',
+                          prefixIcon: Icons.lock_outline,
+                          isVisible: _isNewPasswordVisible,
+                          onToggleVisibility: () {
+                            setState(() {
+                              _isNewPasswordVisible = !_isNewPasswordVisible;
+                            });
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'New password is required';
+                            }
+                            if (value.length < 8) {
+                              return 'Password must be at least 8 characters';
+                            }
+                            if (!RegExp(
+                              r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)',
+                            ).hasMatch(value)) {
+                              return 'Password must contain uppercase, lowercase, and number';
+                            }
+                            return null;
+                          },
+                        ),
 
-                          SizedBox(height: DT.s.lg),
+                        SizedBox(height: DT.s.lg),
 
-                          _buildEnhancedPasswordField(
-                            controller: _confirmPasswordController,
-                            label: 'Confirm Password',
-                            hint: 'Confirm new password',
-                            prefixIcon: Icons.lock_outline,
-                            isVisible: _isConfirmPasswordVisible,
-                            onToggleVisibility: () {
-                              setState(() {
-                                _isConfirmPasswordVisible =
-                                    !_isConfirmPasswordVisible;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please confirm your password';
-                              }
-                              if (value != _newPasswordController.text) {
-                                return 'Passwords do not match';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      )
-                    : SizedBox.shrink(),
-              ),
-            );
-          },
+                        _buildEnhancedPasswordField(
+                          controller: _confirmPasswordController,
+                          label: 'Confirm Password',
+                          hint: 'Confirm new password',
+                          prefixIcon: Icons.lock_outline,
+                          isVisible: _isConfirmPasswordVisible,
+                          onToggleVisibility: () {
+                            setState(() {
+                              _isConfirmPasswordVisible =
+                                  !_isConfirmPasswordVisible;
+                            });
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please confirm your password';
+                            }
+                            if (value != _newPasswordController.text) {
+                              return 'Passwords do not match';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ),
         ),
       ],
     ),
@@ -1008,24 +1005,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
   );
 
   Future<void> _selectDateOfBirth() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDateOfBirth ?? DateTime(2000),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: DT.c.brand,
-              onPrimary: DT.c.textOnBrand,
-              surface: DT.c.surface,
-              onSurface: DT.c.text,
-            ),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: DT.c.brand,
+            onPrimary: DT.c.textOnBrand,
+            surface: DT.c.surface,
+            onSurface: DT.c.text,
           ),
-          child: child!,
-        );
-      },
+        ),
+        child: child!,
+      ),
     );
 
     if (picked != null && picked != _selectedDateOfBirth) {
@@ -1222,7 +1217,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
     }
 
     // Check if there are any changes to save
-    bool hasChanges = false;
+    var hasChanges = false;
     if (_displayNameController.text.trim().isNotEmpty ||
         _phoneNumberController.text.trim().isNotEmpty ||
         _bioController.text.trim().isNotEmpty ||
@@ -1239,7 +1234,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
       // Show a message to user that there are no changes
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No changes to save'),
+          content: const Text('No changes to save'),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(DT.r.md),
@@ -1250,7 +1245,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
     }
 
     // Only validate text fields if they have content
-    bool hasTextFieldsToValidate = false;
+    var hasTextFieldsToValidate = false;
     if (_displayNameController.text.trim().isNotEmpty ||
         _phoneNumberController.text.trim().isNotEmpty ||
         _bioController.text.trim().isNotEmpty ||
@@ -1690,7 +1685,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('User not found'),
+          content: const Text('User not found'),
           backgroundColor: DT.c.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -1708,7 +1703,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
           children: [
             Icon(Icons.person_outline, color: DT.c.brand),
             SizedBox(width: DT.s.sm),
-            Text('Profile Details'),
+            const Text('Profile Details'),
           ],
         ),
         content: SingleChildScrollView(
@@ -1747,30 +1742,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen>
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: DT.s.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: DT.t.bodyMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: DT.c.textMuted,
-              ),
+  Widget _buildDetailRow(String label, String value) => Padding(
+    padding: EdgeInsets.only(bottom: DT.s.sm),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            '$label:',
+            style: DT.t.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+              color: DT.c.textMuted,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: DT.t.bodyMedium.copyWith(color: DT.c.text),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        Expanded(
+          child: Text(value, style: DT.t.bodyMedium.copyWith(color: DT.c.text)),
+        ),
+      ],
+    ),
+  );
 }

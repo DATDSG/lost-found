@@ -19,7 +19,7 @@ class EncryptionUtils {
     final textBytes = utf8.encode(plainText);
     final encrypted = <int>[];
 
-    for (int i = 0; i < textBytes.length; i++) {
+    for (var i = 0; i < textBytes.length; i++) {
       encrypted.add(textBytes[i] ^ keyBytes[i % keyBytes.length]);
     }
 
@@ -37,7 +37,7 @@ class EncryptionUtils {
       final encryptedBytes = base64.decode(encryptedText);
       final decrypted = <int>[];
 
-      for (int i = 0; i < encryptedBytes.length; i++) {
+      for (var i = 0; i < encryptedBytes.length; i++) {
         decrypted.add(encryptedBytes[i] ^ keyBytes[i % keyBytes.length]);
       }
 

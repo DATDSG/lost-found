@@ -519,113 +519,109 @@ class _AccountDeletionDialogState extends State<_AccountDeletionDialog> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        'Delete Account',
-        style: DT.t.titleLarge.copyWith(color: DT.c.error),
-      ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'This action cannot be undone. All your data will be permanently deleted.',
-              style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
-            ),
-            SizedBox(height: DT.s.lg),
-
-            // Password field
-            TextFormField(
-              controller: _passwordController,
-              obscureText: !_isPasswordVisible,
-              decoration: InputDecoration(
-                labelText: 'Current Password',
-                hintText: 'Enter your current password',
-                prefixIcon: Icon(Icons.lock_outline, color: DT.c.brand),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _isPasswordVisible
-                        ? Icons.visibility
-                        : Icons.visibility_off,
-                    color: DT.c.textMuted,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _isPasswordVisible = !_isPasswordVisible;
-                    });
-                  },
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(DT.r.lg),
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Password is required';
-                }
-                return null;
-              },
-            ),
-
-            SizedBox(height: DT.s.md),
-
-            // Reason field (optional)
-            TextFormField(
-              controller: _reasonController,
-              decoration: InputDecoration(
-                labelText: 'Reason (Optional)',
-                hintText: 'Why are you deleting your account?',
-                prefixIcon: Icon(Icons.feedback_outlined, color: DT.c.brand),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(DT.r.lg),
-                ),
-              ),
-              maxLines: 3,
-            ),
-
-            SizedBox(height: DT.s.md),
-
-            // Confirmation checkbox
-            CheckboxListTile(
-              value: _confirmDeletion,
-              onChanged: (value) {
-                setState(() {
-                  _confirmDeletion = value ?? false;
-                });
-              },
-              title: Text(
-                'I understand this action cannot be undone',
-                style: DT.t.bodySmall.copyWith(color: DT.c.textMuted),
-              ),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Cancel',
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(
+      'Delete Account',
+      style: DT.t.titleLarge.copyWith(color: DT.c.error),
+    ),
+    content: Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This action cannot be undone. All your data will be permanently deleted.',
             style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
           ),
-        ),
-        ElevatedButton(
-          onPressed: _confirmDeletion ? _handleDelete : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: DT.c.error,
-            foregroundColor: DT.c.textOnBrand,
-            disabledBackgroundColor: DT.c.textMuted,
+          SizedBox(height: DT.s.lg),
+
+          // Password field
+          TextFormField(
+            controller: _passwordController,
+            obscureText: !_isPasswordVisible,
+            decoration: InputDecoration(
+              labelText: 'Current Password',
+              hintText: 'Enter your current password',
+              prefixIcon: Icon(Icons.lock_outline, color: DT.c.brand),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                  color: DT.c.textMuted,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _isPasswordVisible = !_isPasswordVisible;
+                  });
+                },
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(DT.r.lg),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Password is required';
+              }
+              return null;
+            },
           ),
-          child: const Text('Delete Account'),
+
+          SizedBox(height: DT.s.md),
+
+          // Reason field (optional)
+          TextFormField(
+            controller: _reasonController,
+            decoration: InputDecoration(
+              labelText: 'Reason (Optional)',
+              hintText: 'Why are you deleting your account?',
+              prefixIcon: Icon(Icons.feedback_outlined, color: DT.c.brand),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(DT.r.lg),
+              ),
+            ),
+            maxLines: 3,
+          ),
+
+          SizedBox(height: DT.s.md),
+
+          // Confirmation checkbox
+          CheckboxListTile(
+            value: _confirmDeletion,
+            onChanged: (value) {
+              setState(() {
+                _confirmDeletion = value ?? false;
+              });
+            },
+            title: Text(
+              'I understand this action cannot be undone',
+              style: DT.t.bodySmall.copyWith(color: DT.c.textMuted),
+            ),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(
+          'Cancel',
+          style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
         ),
-      ],
-    );
-  }
+      ),
+      ElevatedButton(
+        onPressed: _confirmDeletion ? _handleDelete : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: DT.c.error,
+          foregroundColor: DT.c.textOnBrand,
+          disabledBackgroundColor: DT.c.textMuted,
+        ),
+        child: const Text('Delete Account'),
+      ),
+    ],
+  );
 
   void _handleDelete() {
     if (_formKey.currentState?.validate() ?? false) {

@@ -79,7 +79,7 @@ class ProfileStatsWidget extends ConsumerWidget {
       color: DT.c.surface,
       borderRadius: BorderRadius.circular(DT.r.lg),
       boxShadow: DT.e.card,
-      border: Border.all(color: DT.c.border, width: 1),
+      border: Border.all(color: DT.c.border),
     ),
     child: Column(
       children: [
@@ -151,7 +151,7 @@ class ProfileStatsWidget extends ConsumerWidget {
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(DT.r.md),
-            border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
           ),
           child: Icon(
             icon,
@@ -305,7 +305,7 @@ class ProfileInfoCard extends StatelessWidget {
       color: DT.c.surface,
       borderRadius: BorderRadius.circular(DT.r.xl),
       boxShadow: DT.e.card,
-      border: Border.all(color: DT.c.border, width: 1),
+      border: Border.all(color: DT.c.border),
     ),
     child: Column(
       children: [
@@ -430,7 +430,7 @@ class ProfileTabBar extends StatelessWidget {
       color: DT.c.surface,
       borderRadius: BorderRadius.circular(DT.r.xl),
       boxShadow: DT.e.card,
-      border: Border.all(color: DT.c.border, width: 1),
+      border: Border.all(color: DT.c.border),
     ),
     child: TabBar(
       controller: controller,

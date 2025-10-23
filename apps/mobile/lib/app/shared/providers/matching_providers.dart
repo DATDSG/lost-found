@@ -44,28 +44,33 @@ final userReportsWithMatchesProvider = FutureProvider<List<ReportWithMatches>>((
 /// Sort reports by latest matches (most recent matches first)
 List<ReportWithMatches> _sortReportsByLatestMatches(
   List<ReportWithMatches> reports,
-) {
-  return reports.map((reportWithMatches) {
-      // Sort matches within each report by creation date (latest first)
-      final sortedMatches = List<Match>.from(reportWithMatches.matches)
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+) =>
+    reports.map((reportWithMatches) {
+        // Sort matches within each report by creation date (latest first)
+        final sortedMatches = List<Match>.from(reportWithMatches.matches)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      return ReportWithMatches(
-        report: reportWithMatches.report,
-        matches: sortedMatches,
-      );
-    }).toList()
-    // Sort reports by their most recent match date
-    ..sort((a, b) {
-      if (a.matches.isEmpty && b.matches.isEmpty) return 0;
-      if (a.matches.isEmpty) return 1;
-      if (b.matches.isEmpty) return -1;
+        return ReportWithMatches(
+          report: reportWithMatches.report,
+          matches: sortedMatches,
+        );
+      }).toList()
+      // Sort reports by their most recent match date
+      ..sort((a, b) {
+        if (a.matches.isEmpty && b.matches.isEmpty) {
+          return 0;
+        }
+        if (a.matches.isEmpty) {
+          return 1;
+        }
+        if (b.matches.isEmpty) {
+          return -1;
+        }
 
-      final aLatestMatch = a.matches.first.createdAt;
-      final bLatestMatch = b.matches.first.createdAt;
-      return bLatestMatch.compareTo(aLatestMatch);
-    });
-}
+        final aLatestMatch = a.matches.first.createdAt;
+        final bLatestMatch = b.matches.first.createdAt;
+        return bLatestMatch.compareTo(aLatestMatch);
+      });
 
 /// Provider for reports with matches (filtered by type)
 final reportsWithMatchesProvider =
