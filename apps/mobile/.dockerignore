@@ -1,0 +1,78 @@
+# ================================================================
+# Lost & Found Mobile App - .dockerignore
+# ================================================================
+# Exclude unnecessary files from Docker build context
+# ================================================================
+
+# Flutter build artifacts
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Test files
+test/
+coverage/
+
+# Documentation
+README.md
+*.md
+
+# Git
+.git/
+.gitignore
+
+# Android specific
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/.gradle/
+android/gradle/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+
+# iOS specific (if applicable)
+ios/
+*.xcworkspace
+*.xcodeproj
+
+# Web specific (if applicable)
+web/
+
+# Windows specific (if applicable)
+windows/
+
+# Linux specific (if applicable)
+linux/
+
+# macOS specific (if applicable)
+macos/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp

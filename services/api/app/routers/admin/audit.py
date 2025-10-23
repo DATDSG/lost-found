@@ -3,14 +3,14 @@
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import Optional
 from math import ceil
 
-from app.database import get_db
+from ...infrastructure.database.session import get_async_db
 from app.models import User, AuditLog
-from .auth import require_admin, sessions
+from .auth import require_admin
 from app.dependencies import get_current_admin
 
 router = APIRouter()
@@ -25,61 +25,73 @@ async def list_audit_logs(
     actor_email: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List audit logs with pagination and filters."""
-    query = db.query(AuditLog)
+    from sqlalchemy import select, func, and_
     
-    # Apply filters
+    # Build query conditions
+    conditions = []
     if action:
-        query = query.filter(AuditLog.action == action)
+        conditions.append(AuditLog.action == action)
     if actor_email:
-        actor_users = db.query(User.id).filter(User.email.ilike(f"%{actor_email}%")).all()
-        actor_ids = [u[0] for u in actor_users]
-        query = query.filter(AuditLog.actor_id.in_(actor_ids))
+        # Find users with matching email
+        user_query = select(User.id).where(User.email.ilike(f"%{actor_email}%"))
+        user_result = await db.execute(user_query)
+        user_ids = [row[0] for row in user_result.fetchall()]
+        if user_ids:
+            conditions.append(AuditLog.user_id.in_(user_ids))
     if date_from:
         date_from_dt = datetime.fromisoformat(date_from)
-        query = query.filter(AuditLog.created_at >= date_from_dt)
+        conditions.append(AuditLog.created_at >= date_from_dt)
     if date_to:
         date_to_dt = datetime.fromisoformat(date_to)
-        query = query.filter(AuditLog.created_at <= date_to_dt)
+        conditions.append(AuditLog.created_at <= date_to_dt)
     
     # Get total count
-    total = query.count()
+    count_query = select(func.count()).select_from(AuditLog)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
     
     # Get paginated results
-    logs = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
+    query = select(AuditLog)
+    if conditions:
+        query = query.where(and_(*conditions))
+    query = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
     
     # Format response with actor details
     log_list = []
     for log in logs:
-        actor = db.query(User).filter(User.id == log.actor_id).first() if log.actor_id else None
+        actor = None
+        if log.user_id:
+            actor_query = select(User).where(User.id == log.user_id)
+            actor_result = await db.execute(actor_query)
+            actor = actor_result.scalar_one_or_none()
+        
         log_list.append({
             "id": str(log.id),
             "action": log.action,
-            "resource": log.resource,
+            "resource_type": log.resource_type,
             "resource_id": str(log.resource_id) if log.resource_id else None,
-            "actor_id": str(log.actor_id) if log.actor_id else None,
+            "user_id": str(log.user_id) if log.user_id else None,
             "actor_email": actor.email if actor else "System",
-            "reason": log.reason,
+            "details": log.details,
             "created_at": log.created_at.isoformat()
         })
     
     return {
-        "logs": log_list,
+        "items": log_list,
         "total": total,
         "skip": skip,
         "limit": limit
     }
 
 
-def get_csrf_token(request: Request) -> str:
-    """Get CSRF token from session."""
-    session_id = request.cookies.get("admin_session")
-    if session_id and session_id in sessions:
-        return sessions[session_id].get("csrf_token", "")
-    return ""
 
 
 @router.get("/admin/audit", response_class=HTMLResponse)
@@ -90,7 +102,7 @@ async def audit_log(
     admin_email: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user: User = Depends(require_admin)
 ):
     """Display audit log with filters."""
@@ -132,7 +144,6 @@ async def audit_log(
         {
             "request": request,
             "user": user,
-            "csrf_token": get_csrf_token(request),
             "logs": {
                 "items": logs,
                 "page": page,

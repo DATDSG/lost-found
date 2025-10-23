@@ -67,6 +67,14 @@ class Config:
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp"]
     STRIP_EXIF: bool = os.getenv("STRIP_EXIF", "true").lower() == "true"
     
+    # MinIO Object Storage
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+    MINIO_BUCKET_NAME: str = os.getenv("MINIO_BUCKET_NAME", "lost-found-media")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
+    MINIO_REGION: str = os.getenv("MINIO_REGION", "us-east-1")
+    
     # ========== Matching Configuration ==========
     # Match scoring weights (must sum to ~1.0)
     MATCH_WEIGHT_TEXT: float = float(os.getenv("MATCH_WEIGHT_TEXT", "0.45"))
@@ -111,10 +119,6 @@ class Config:
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
     METRICS_PORT: int = int(os.getenv("METRICS_PORT", "9090"))
     
-    # ========== Notifications ==========
-    ENABLE_NOTIFICATIONS: bool = os.getenv("ENABLE_NOTIFICATIONS", "true").lower() == "true"
-    NOTIFICATION_BATCH_SIZE: int = int(os.getenv("NOTIFICATION_BATCH_SIZE", "100"))
-    
     # ========== Admin Panel ==========
     ADMIN_SESSION_SECRET: str = os.getenv("ADMIN_SESSION_SECRET", "change-in-production")
     ADMIN_SESSION_LIFETIME_HOURS: int = int(os.getenv("ADMIN_SESSION_LIFETIME_HOURS", "8"))
@@ -130,7 +134,6 @@ class Config:
     
     # ========== Feature Flags ==========
     ENABLE_WEBSOCKETS: bool = os.getenv("ENABLE_WEBSOCKETS", "false").lower() == "true"
-    ENABLE_PUSH_NOTIFICATIONS: bool = os.getenv("ENABLE_PUSH_NOTIFICATIONS", "false").lower() == "true"
     ENABLE_AUDIT_LOG: bool = os.getenv("ENABLE_AUDIT_LOG", "true").lower() == "true"
     
     # ========== Timeouts ==========
@@ -204,7 +207,6 @@ class Config:
             "features": {
                 "metrics": cls.ENABLE_METRICS,
                 "rate_limit": cls.ENABLE_RATE_LIMIT,
-                "notifications": cls.ENABLE_NOTIFICATIONS,
                 "admin_panel": cls.ENABLE_ADMIN_PANEL,
                 "audit_log": cls.ENABLE_AUDIT_LOG,
             },

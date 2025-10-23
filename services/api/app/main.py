@@ -1,4 +1,4 @@
-"""Lost & Found API main application."""
+"""Lost & Found API main application with Domain-Driven Design architecture."""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,12 +12,15 @@ import time
 import json
 import logging
 
-from .routers import auth, reports, media, matches, notifications, messages, taxonomy
-from .routers.admin import router as admin_router
+# Domain-driven imports
+from .domain_router import domain_router, get_domain_tags
 from .config import config
 from .clients import get_nlp_client, get_vision_client
 from .error_handlers import register_exception_handlers
-from .csrf import csrf_middleware
+from .infrastructure.database.session import check_database_health, get_async_db
+from .cache import get_redis_client
+from .storage import get_minio_client
+from .infrastructure.monitoring.metrics import get_metrics_collector
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -79,49 +82,87 @@ async def lifespan(app: FastAPI):
     
     # Test database connection
     try:
-        from .database import engine
-        from sqlalchemy import text
-        
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT version()"))
-            version = result.fetchone()[0]
-            logger.info(f"✅ Database connected: {version.split(',')[0]}")
-            
-            # Check if tables exist
-            result = conn.execute(text("""
-                SELECT COUNT(*) FROM information_schema.tables 
-                WHERE table_schema = 'public'
-            """))
-            table_count = result.fetchone()[0]
-            logger.info(f"📊 Found {table_count} tables in database")
-            
-            if table_count == 0:
-                logger.warning("⚠️  No tables found! Run: python test_db_connection.py")
-                
+        db_health = await check_database_health()
+        if db_health["status"] == "healthy":
+            logger.info(f"✅ Database connected: {db_health['version']}")
+            logger.info(f"📊 Found {db_health['table_count']} tables in database")
+        else:
+            logger.error(f"❌ Database unhealthy: {db_health.get('error', 'Unknown error')}")
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
         logger.error("   Make sure PostgreSQL is running and DATABASE_URL is correct")
         logger.error(f"   DATABASE_URL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else 'not set'}")
     
+    # Test Redis connection
+    try:
+        redis_client = get_redis_client()
+        redis_health = await redis_client.health_check()
+        if redis_health["status"] == "healthy":
+            logger.info(f"✅ Redis connected: {redis_health['version']}")
+            logger.info(f"📊 Memory used: {redis_health['memory_used']}")
+        else:
+            logger.warning(f"⚠️ Redis unhealthy: {redis_health.get('error', 'Unknown error')}")
+    except Exception as e:
+        logger.warning(f"⚠️ Redis connection failed: {e}")
+    
+    # Test MinIO connection
+    try:
+        minio_client = get_minio_client()
+        if minio_client:
+            minio_health = minio_client.health_check()
+            if minio_health["status"] == "healthy":
+                logger.info(f"✅ MinIO connected: {minio_health['endpoint']}")
+                logger.info(f"📊 Buckets: {minio_health['bucket_count']}")
+            else:
+                logger.warning(f"⚠️ MinIO unhealthy: {minio_health.get('error', 'Unknown error')}")
+        else:
+            logger.warning("⚠️ MinIO client not available")
+    except Exception as e:
+        logger.warning(f"⚠️ MinIO connection failed: {e}")
+    
     # Test NLP service connection
     try:
-        async with await get_nlp_client() as nlp:
-            if await nlp.health_check():
-                logger.info("✅ NLP service is healthy")
+        logger.info("Testing NLP service connection...")
+        nlp_client = get_nlp_client()
+        logger.info(f"NLP client created: {type(nlp_client)}")
+        
+        # Test direct health check without context manager
+        logger.info("Testing NLP health check directly...")
+        # Create a simple HTTP client for testing
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{config.NLP_SERVICE_URL}/health")
+            if response.status_code == 200:
+                logger.info("✅ NLP service is healthy (direct test)")
             else:
-                logger.warning("⚠️ NLP service is unavailable")
+                logger.warning("⚠️ NLP service is unavailable (direct test)")
     except Exception as e:
         logger.warning(f"⚠️ NLP service connection failed: {e}")
+        logger.warning(f"Error type: {type(e)}")
+        import traceback
+        logger.warning(f"Traceback: {traceback.format_exc()}")
     
     # Test Vision service connection
     try:
-        async with await get_vision_client() as vision:
-            if await vision.health_check():
-                logger.info("✅ Vision service is healthy")
+        logger.info("Testing Vision service connection...")
+        vision_client = get_vision_client()
+        logger.info(f"Vision client created: {type(vision_client)}")
+        
+        # Test direct health check without context manager
+        logger.info("Testing Vision health check directly...")
+        # Create a simple HTTP client for testing
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{config.VISION_SERVICE_URL}/health")
+            if response.status_code == 200:
+                logger.info("✅ Vision service is healthy (direct test)")
             else:
-                logger.warning("⚠️ Vision service is unavailable")
+                logger.warning("⚠️ Vision service is unavailable (direct test)")
     except Exception as e:
         logger.warning(f"⚠️ Vision service connection failed: {e}")
+        logger.warning(f"Error type: {type(e)}")
+        import traceback
+        logger.warning(f"Traceback: {traceback.format_exc()}")
     
     logger.info("✅ API Service startup complete")
     
@@ -133,8 +174,46 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Lost & Found API",
     version="2.0.0",
-    description="API for Lost & Found matching system with multi-signal scoring",
-    lifespan=lifespan
+    description="API for Lost & Found matching system with Domain-Driven Design architecture",
+    lifespan=lifespan,
+    tags_metadata=[
+        {
+            "name": "reports",
+            "description": "Lost and found item reports management",
+        },
+        {
+            "name": "matches", 
+            "description": "Potential matches between lost and found items",
+        },
+        {
+            "name": "users",
+            "description": "User management and authentication",
+        },
+        {
+            "name": "media",
+            "description": "File uploads and media processing",
+        },
+        {
+            "name": "taxonomy",
+            "description": "Categories and classification system",
+        },
+        {
+            "name": "auth",
+            "description": "Authentication and authorization",
+        },
+        {
+            "name": "health",
+            "description": "System health and monitoring",
+        },
+        {
+            "name": "mobile",
+            "description": "Mobile-optimized endpoints",
+        },
+        {
+            "name": "admin",
+            "description": "Administrative operations",
+        },
+    ]
 )
 
 # Register exception handlers
@@ -179,73 +258,89 @@ async def metrics_middleware(request: Request, call_next):
     
     return response
 
-# CSRF protection middleware
-@app.middleware("http")
-async def csrf_protection_middleware(request: Request, call_next):
-    """CSRF protection middleware."""
-    return await csrf_middleware(request, call_next)
 
 # Mount Prometheus metrics endpoint
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 
-# Include routers
-app.include_router(auth.router, prefix="/v1/auth", tags=["auth"])
-app.include_router(reports.router, prefix="/v1/reports", tags=["reports"])
-app.include_router(media.router, prefix="/v1/media", tags=["media"])
-app.include_router(matches.router, prefix="/v1/matches", tags=["matches"])
-app.include_router(notifications.router, prefix="/v1/notifications", tags=["notifications"])
-app.include_router(messages.router, prefix="/v1/messages", tags=["messages"])
-app.include_router(taxonomy.router, prefix="/v1/taxonomy", tags=["taxonomy"])
-
-# Include admin router (requires admin/moderator authentication)
-app.include_router(admin_router, prefix="/v1/admin", tags=["admin"])
+# Include domain routers (Domain-Driven Design architecture)
+app.include_router(domain_router)
 
 
 @app.get("/health")
 async def health_root():
-    """Health check endpoint with service status."""
-    from .database import engine
-    from sqlalchemy import text
-    
+    """Health check endpoint with comprehensive service status."""
     health_status = {
         "status": "ok",
         "service": "api",
         "version": "2.0.0",
         "environment": config.ENVIRONMENT,
-        "features": {
-            "metrics": config.ENABLE_METRICS,
-            "rate_limit": config.ENABLE_RATE_LIMIT,
-            "redis_cache": config.ENABLE_REDIS_CACHE,
-            "notifications": config.ENABLE_NOTIFICATIONS,
-        }
+            "features": {
+                "metrics": config.ENABLE_METRICS,
+                "rate_limit": config.ENABLE_RATE_LIMIT,
+                "redis_cache": config.ENABLE_REDIS_CACHE,
+                "minio_storage": True,
+            }
     }
     
     # Check database health
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-            health_status["database"] = "healthy"
+        db_health = await check_database_health()
+        health_status["database"] = db_health
+        if db_health["status"] != "healthy":
+            health_status["status"] = "degraded"
     except Exception as e:
-        health_status["database"] = f"unhealthy: {str(e)}"
+        health_status["database"] = {"status": "unhealthy", "error": str(e)}
         health_status["status"] = "degraded"
     
-    # Check service health
+    # Check Redis health
+    try:
+        redis_client = get_redis_client()
+        redis_health = await redis_client.health_check()
+        health_status["redis"] = redis_health
+        if redis_health["status"] != "healthy":
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["redis"] = {"status": "unhealthy", "error": str(e)}
+        health_status["status"] = "degraded"
+    
+    # Check MinIO health
+    try:
+        minio_client = get_minio_client()
+        if minio_client:
+            minio_health = minio_client.health_check()
+            health_status["minio"] = minio_health
+            if minio_health["status"] != "healthy":
+                health_status["status"] = "degraded"
+        else:
+            health_status["minio"] = {"status": "unhealthy", "error": "MinIO client not available"}
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["minio"] = {"status": "unhealthy", "error": str(e)}
+        health_status["status"] = "degraded"
+    
+    # Check external services health
     services = {}
     try:
-        async with await get_nlp_client() as nlp:
-            services["nlp"] = "healthy" if await nlp.health_check() else "unhealthy"
+        # Test NLP service directly
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{config.NLP_SERVICE_URL}/health")
+            services["nlp"] = "healthy" if response.status_code == 200 else "unhealthy"
     except Exception:
         services["nlp"] = "unavailable"
     
     try:
-        async with await get_vision_client() as vision:
-            services["vision"] = "healthy" if await vision.health_check() else "unhealthy"
+        # Test Vision service directly
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{config.VISION_SERVICE_URL}/health")
+            services["vision"] = "healthy" if response.status_code == 200 else "unhealthy"
     except Exception:
         services["vision"] = "unavailable"
     
-    health_status["services"] = services
+    health_status["external_services"] = services
     
     return health_status
 

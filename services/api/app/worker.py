@@ -1,6 +1,6 @@
 """
 Background task worker using ARQ for async job processing.
-Handles embedding generation, hash generation, and notifications.
+Handles embedding generation, hash generation, and background processing.
 """
 import asyncio
 from arq import create_pool
@@ -13,7 +13,9 @@ from typing import Optional
 
 from app.config import config
 from app.clients import get_nlp_client, get_vision_client
-from app.models import Report, User, Match, Notification
+from app.models import User
+from app.domains.reports.models.report import Report
+from app.domains.matches.models.match import Match
 from uuid import uuid4
 
 logging.basicConfig(level=logging.INFO)
@@ -111,7 +113,7 @@ async def generate_embedding_task(ctx, report_id: str):
                 return {"status": "skipped", "message": "No description"}
             
             # Generate embedding
-            async with await get_nlp_client() as nlp:
+            async with get_nlp_client() as nlp:
                 embedding = await nlp.get_embedding(report.description)
                 
                 if embedding:
@@ -146,7 +148,7 @@ async def generate_hash_task(ctx, report_id: str, image_url: str):
                 return {"status": "error", "message": "Report not found"}
             
             # Generate image hash
-            async with await get_vision_client() as vision:
+            async with get_vision_client() as vision:
                 image_hash = await vision.get_image_hash(image_url)
                 
                 if image_hash:
@@ -164,53 +166,6 @@ async def generate_hash_task(ctx, report_id: str, image_url: str):
             return {"status": "error", "message": str(e)}
 
 
-async def send_match_notifications_task(ctx, report_id: str, match_ids: list):
-    """Background task to send match notifications to users."""
-    logger.info(f"Sending notifications for {len(match_ids)} matches")
-    
-    async for db in get_db_session():
-        try:
-            # Get report
-            result = await db.execute(
-                select(Report).where(Report.id == report_id)
-            )
-            report = result.scalar_one_or_none()
-            
-            if not report:
-                logger.error(f"Report {report_id} not found")
-                return {"status": "error", "message": "Report not found"}
-            
-            # Create notifications for each match
-            notifications_created = 0
-            for match_id in match_ids:
-                # Get match details
-                result = await db.execute(
-                    select(Match).where(Match.id == match_id)
-                )
-                match = result.scalar_one_or_none()
-                
-                if match:
-                    # Create notification for target report owner
-                    notification = Notification(
-                        id=str(uuid4()),
-                        user_id=match.target_report.owner_id,
-                        type="new_match",
-                        title="New Match Found!",
-                        content=f"We found a potential match for your {report.type} report: {report.title}",
-                        reference_id=str(match_id),
-                        is_read=False
-                    )
-                    db.add(notification)
-                    notifications_created += 1
-            
-            await db.commit()
-            logger.info(f"✅ Created {notifications_created} notifications for report {report_id}")
-            return {"status": "success", "notifications_created": notifications_created}
-            
-        except Exception as e:
-            logger.error(f"Error in notification task for report {report_id}: {e}")
-            await db.rollback()
-            return {"status": "error", "message": str(e)}
 
 
 async def process_new_report_task(ctx, report_id: str, has_image: bool = False, image_url: str = None):
@@ -219,7 +174,6 @@ async def process_new_report_task(ctx, report_id: str, has_image: bool = False, 
     1. Generate text embedding
     2. Generate image hash (if applicable)
     3. Find matches
-    4. Send notifications
     """
     logger.info(f"Processing new report {report_id}")
     
@@ -234,7 +188,7 @@ async def process_new_report_task(ctx, report_id: str, has_image: bool = False, 
         if hash_result.get("status") != "success":
             logger.warning(f"Hash generation failed: {hash_result}")
     
-    # Step 3 & 4: Find matches and send notifications would go here
+    # Step 3: Find matches would go here
     # This would require importing the matching pipeline
     logger.info(f"✅ Completed processing for report {report_id}")
     
@@ -251,7 +205,7 @@ async def generate_hash_for_media(ctx, media_id: str, file_path: str):
     logger.info(f"Generating hash for media {media_id}")
     
     try:
-        async with await get_vision_client() as vision:
+        async with get_vision_client() as vision:
             image_hash = await vision.get_image_hash(file_path)
             
             if image_hash:
@@ -310,7 +264,6 @@ class WorkerSettings:
     functions = [
         generate_embedding_task,
         generate_hash_task,
-        send_match_notifications_task,
         process_new_report_task,
         generate_hash_for_media,
         generate_thumbnail,

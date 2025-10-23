@@ -1,8 +1,5 @@
 # ================================================================
-# Vision Service Requirements - CPU Optimized (Lightweight)
-# ================================================================
-# Docker image size: ~2-3GB (vs 10-15GB with GPU)
-# For GPU support, see requirements-gpu.txt
+# Vision Service Requirements - Enhanced for Better Matching
 # ================================================================
 
 # Core Framework
@@ -11,59 +8,18 @@ uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 pydantic==2.5.3
 
-# Image Processing (Baseline - Lightweight)
+# Image Processing (Enhanced)
 Pillow==10.1.0
 ImageHash==4.3.1
-opencv-python-headless==4.8.1.78  # Headless version is smaller
+opencv-python-headless==4.8.1.78
 numpy==1.24.3
 
-# Production Infrastructure
-redis==5.0.1
-prometheus-client==0.19.0
-slowapi==0.1.9
-arq==0.25.0
+# Image similarity and analysis
+scikit-image==0.21.0
+scipy==1.11.4
+
+# Redis for caching
+redis[hiredis]==5.0.1
 
 # Utilities
 requests==2.31.0
-
-# ================================================================
-# Advanced Computer Vision - GPU Heavy (COMMENTED OUT)
-# ================================================================
-# WARNING: Uncommenting below will increase Docker image size by 8-10GB+
-# These require CUDA and are very large. Only enable if you have GPU support.
-#
-# For GPU support:
-# 1. Uncomment the dependencies below
-# 2. Use Dockerfile.gpu instead of Dockerfile
-# 3. Ensure NVIDIA Docker runtime is available
-# ================================================================
-
-# PyTorch & TorchVision (CPU version available, but still large ~500MB)
-# torch==2.1.0  # CPU: ~200MB | GPU with CUDA: ~2GB+
-# torchvision==0.16.0  # ~300MB
-
-# YOLO Object Detection (~200MB models + dependencies)
-# ultralytics==8.0.220  # YOLOv8 - requires torch
-
-# OCR (EasyOCR is heavy ~500MB+ with models)
-# easyocr==1.7.1  # Requires torch, large language models
-
-# CLIP for advanced image understanding (~1GB+ with models)
-# git+https://github.com/openai/CLIP.git  # Requires torch
-# transformers==4.37.2  # HuggingFace models support
-
-# NSFW Detection
-# scikit-learn==1.3.2  # ~100MB
-
-# ================================================================
-# Lightweight Alternative: Use Basic Features Only
-# ================================================================
-# For CPU-only lightweight deployment:
-# - Image hashing (perceptual hash for duplicates)
-# - Basic image validation (size, format, corruption check)
-# - Color analysis
-# - Simple object detection via external API calls
-# 
-# To enable basic features without ML models, no additional deps needed
-# ================================================================
-

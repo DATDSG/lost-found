@@ -1,13 +1,14 @@
 """
-Service client integrations for NLP and Vision services.
-Handles HTTP communication, caching, retries, and error handling.
+Enhanced service client integrations for NLP and Vision services.
+Handles HTTP communication, caching, retries, and error handling with improved matching capabilities.
 """
 import httpx
 import hashlib
 import json
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from redis.asyncio import Redis
 import logging
+import asyncio
 
 from .config import config
 
@@ -39,9 +40,11 @@ class ServiceClient:
                     max_connections=config.REDIS_MAX_CONNECTIONS,
                     decode_responses=True
                 )
+                # Test Redis connection
                 await self.redis.ping()
+                logger.debug(f"Redis connected for {self.__class__.__name__}")
             except Exception as e:
-                logger.warning(f"Redis connection failed: {e}. Proceeding without cache.")
+                logger.warning(f"Redis connection failed for {self.__class__.__name__}: {e}. Proceeding without cache.")
                 self.redis = None
         
         return self
@@ -86,7 +89,7 @@ class ServiceClient:
 
 
 class NLPClient(ServiceClient):
-    """Client for NLP service - text embeddings."""
+    """Enhanced client for NLP service - text processing and matching."""
     
     def __init__(self):
         super().__init__(
@@ -94,110 +97,254 @@ class NLPClient(ServiceClient):
             timeout=config.NLP_SERVICE_TIMEOUT
         )
     
-    async def get_embedding(self, text: str, use_cache: bool = True) -> Optional[List[float]]:
+    async def process_text(
+        self, 
+        text: str, 
+        normalize: bool = True,
+        remove_stopwords: bool = True,
+        lemmatize: bool = True,
+        use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """
-        Get text embedding from NLP service.
+        Process text with enhanced preprocessing.
         
         Args:
-            text: Input text to embed
+            text: Input text to process
+            normalize: Whether to normalize the text
+            remove_stopwords: Whether to remove stopwords
+            lemmatize: Whether to lemmatize words
             use_cache: Whether to use Redis cache
         
         Returns:
-            384-dimensional embedding vector or None if failed
+            Processed text data or None if failed
         """
         if not text or not text.strip():
             return None
         
         # Check cache first
         if use_cache and config.ENABLE_NLP_CACHE:
-            cache_key = self._cache_key("nlp:embed", text)
+            cache_key = self._cache_key("nlp:process", {
+                "text": text,
+                "normalize": normalize,
+                "remove_stopwords": remove_stopwords,
+                "lemmatize": lemmatize
+            })
             cached = await self._get_cached(cache_key)
             if cached:
-                logger.debug(f"NLP cache hit for text: {text[:50]}...")
-                return cached.get("embedding")
+                logger.debug(f"NLP cache hit for text processing: {text[:50]}...")
+                return cached
         
         # Call NLP service
         try:
             response = await self.client.post(
-                "/encode",
-                json={"texts": [text]}
+                "/process",
+                json={
+                    "text": text,
+                    "normalize": normalize,
+                    "remove_stopwords": remove_stopwords,
+                    "lemmatize": lemmatize
+                }
             )
             response.raise_for_status()
             
             result = response.json()
-            vectors = result.get("vectors", [])
-            embedding = vectors[0] if vectors else None
             
             # Cache result
-            if use_cache and config.ENABLE_NLP_CACHE and embedding:
-                await self._set_cache(cache_key, {"embedding": embedding})
+            if use_cache and config.ENABLE_NLP_CACHE:
+                await self._set_cache(cache_key, result)
             
-            logger.info(f"NLP embedding generated for text: {text[:50]}...")
-            return embedding
+            logger.info(f"NLP text processed: {text[:50]}...")
+            return result
             
         except httpx.HTTPError as e:
             logger.error(f"NLP service error: {e}")
             return None
     
-    async def get_embeddings_batch(
+    async def calculate_similarity(
         self,
-        texts: List[str],
+        text1: str,
+        text2: str,
+        algorithm: str = "combined",
         use_cache: bool = True
-    ) -> List[Optional[List[float]]]:
+    ) -> Optional[float]:
         """
-        Get embeddings for multiple texts in batch.
+        Calculate similarity between two texts.
         
         Args:
-            texts: List of input texts
+            text1: First text
+            text2: Second text
+            algorithm: Similarity algorithm (fuzzy, cosine, levenshtein, jaro_winkler, combined)
             use_cache: Whether to use Redis cache
         
         Returns:
-            List of embeddings (None for failed items)
+            Similarity score (0.0 to 1.0) or None if failed
+        """
+        if not text1 or not text2:
+            return None
+        
+        # Check cache first
+        if use_cache and config.ENABLE_NLP_CACHE:
+            cache_key = self._cache_key("nlp:similarity", {
+                "text1": text1,
+                "text2": text2,
+                "algorithm": algorithm
+            })
+            cached = await self._get_cached(cache_key)
+            if cached:
+                logger.debug(f"NLP cache hit for similarity: {text1[:30]}... vs {text2[:30]}...")
+                return cached.get("similarity_score")
+        
+        # Call NLP service
+        try:
+            response = await self.client.post(
+                "/similarity",
+                json={
+                    "text1": text1,
+                    "text2": text2,
+                    "algorithm": algorithm
+                }
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            similarity_score = result.get("similarity_score")
+            
+            # Cache result
+            if use_cache and config.ENABLE_NLP_CACHE and similarity_score is not None:
+                await self._set_cache(cache_key, {"similarity_score": similarity_score})
+            
+            logger.info(f"NLP similarity calculated: {similarity_score:.3f}")
+            return similarity_score
+            
+        except httpx.HTTPError as e:
+            logger.error(f"NLP similarity service error: {e}")
+            return None
+    
+    async def find_matches(
+        self,
+        query_text: str,
+        candidate_texts: List[str],
+        algorithm: str = "combined",
+        threshold: float = 0.7,
+        use_cache: bool = True
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Find best matches for a query text against candidate texts.
+        
+        Args:
+            query_text: Query text to match
+            candidate_texts: List of candidate texts
+            algorithm: Matching algorithm
+            threshold: Minimum similarity threshold
+            use_cache: Whether to use Redis cache
+        
+        Returns:
+            List of matches with similarity scores or None if failed
+        """
+        if not query_text or not candidate_texts:
+            return None
+        
+        # Check cache first
+        if use_cache and config.ENABLE_NLP_CACHE:
+            cache_key = self._cache_key("nlp:match", {
+                "query_text": query_text,
+                "candidate_texts": candidate_texts,
+                "algorithm": algorithm,
+                "threshold": threshold
+            })
+            cached = await self._get_cached(cache_key)
+            if cached:
+                logger.debug(f"NLP cache hit for matching: {query_text[:30]}...")
+                return cached.get("matches")
+        
+        # Call NLP service
+        try:
+            response = await self.client.post(
+                "/match",
+                json={
+                    "query_text": query_text,
+                    "candidate_texts": candidate_texts,
+                    "algorithm": algorithm,
+                    "threshold": threshold
+                }
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            matches = result.get("matches", [])
+            
+            # Cache result
+            if use_cache and config.ENABLE_NLP_CACHE:
+                await self._set_cache(cache_key, {"matches": matches})
+            
+            logger.info(f"NLP found {len(matches)} matches for: {query_text[:30]}...")
+            return matches
+            
+        except httpx.HTTPError as e:
+            logger.error(f"NLP matching service error: {e}")
+            return None
+    
+    async def process_batch(
+        self,
+        texts: List[str],
+        normalize: bool = True,
+        remove_stopwords: bool = True,
+        lemmatize: bool = True,
+        use_cache: bool = True
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Process multiple texts in batch.
+        
+        Args:
+            texts: List of texts to process
+            normalize: Whether to normalize the texts
+            remove_stopwords: Whether to remove stopwords
+            lemmatize: Whether to lemmatize words
+            use_cache: Whether to use Redis cache
+        
+        Returns:
+            List of processed text results or None if failed
         """
         if not texts:
-            return []
+            return None
         
-        # Split into batches
-        batch_size = config.NLP_BATCH_SIZE
-        results = []
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+        # Call NLP service
+        try:
+            response = await self.client.post(
+                "/process/batch",
+                json={
+                    "texts": texts,
+                    "normalize": normalize,
+                    "remove_stopwords": remove_stopwords,
+                    "lemmatize": lemmatize
+                }
+            )
+            response.raise_for_status()
             
-            try:
-                response = await self.client.post(
-                    "/embed/batch",
-                    json={"texts": batch}
-                )
-                response.raise_for_status()
-                
-                batch_results = response.json().get("embeddings", [])
-                results.extend(batch_results)
-                
-                # Cache individual results
-                if use_cache and config.ENABLE_NLP_CACHE:
-                    for text, embedding in zip(batch, batch_results):
-                        if embedding:
-                            cache_key = self._cache_key("nlp:embed", text)
-                            await self._set_cache(cache_key, {"embedding": embedding})
-                
-            except httpx.HTTPError as e:
-                logger.error(f"NLP batch service error: {e}")
-                results.extend([None] * len(batch))
-        
-        return results
+            result = response.json()
+            processed_results = result.get("results", [])
+            
+            logger.info(f"NLP batch processed {len(processed_results)} texts")
+            return processed_results
+            
+        except httpx.HTTPError as e:
+            logger.error(f"NLP batch service error: {e}")
+            return None
     
     async def health_check(self) -> bool:
         """Check if NLP service is healthy."""
         try:
             response = await self.client.get("/health")
-            return response.status_code == 200
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("status") == "healthy"
+            return False
         except Exception:
             return False
 
 
 class VisionClient(ServiceClient):
-    """Client for Vision service - image processing and hashing."""
+    """Enhanced client for Vision service - image processing and matching."""
     
     def __init__(self):
         super().__init__(
@@ -205,31 +352,31 @@ class VisionClient(ServiceClient):
             timeout=config.VISION_SERVICE_TIMEOUT
         )
     
-    async def get_image_hash(
+    async def generate_image_hashes(
         self,
         image_file_path: str,
         use_cache: bool = True
-    ) -> Optional[str]:
+    ) -> Optional[Dict[str, str]]:
         """
-        Get perceptual hash of image from file path.
+        Generate multiple perceptual hashes for image.
         
         Args:
             image_file_path: Path to image file
             use_cache: Whether to use Redis cache
         
         Returns:
-            Hexadecimal hash string or None if failed
+            Dictionary with multiple hash types or None if failed
         """
         if not image_file_path:
             return None
         
         # Check cache
         if use_cache and config.ENABLE_VISION_CACHE:
-            cache_key = self._cache_key("vision:hash", image_file_path)
+            cache_key = self._cache_key("vision:hashes", image_file_path)
             cached = await self._get_cached(cache_key)
             if cached:
-                logger.debug(f"Vision cache hit for image: {image_file_path}")
-                return cached.get("hash")
+                logger.debug(f"Vision cache hit for image hashes: {image_file_path}")
+                return cached
         
         # Call Vision service with file upload
         try:
@@ -239,103 +386,206 @@ class VisionClient(ServiceClient):
             response.raise_for_status()
             
             result = response.json()
-            image_hash = result.get("phash")
+            hashes = {
+                "phash": result.get("phash"),
+                "dhash": result.get("dhash"),
+                "ahash": result.get("ahash"),
+                "whash": result.get("whash")
+            }
             
             # Cache result
-            if use_cache and config.ENABLE_VISION_CACHE and image_hash:
-                await self._set_cache(cache_key, {"hash": image_hash})
+            if use_cache and config.ENABLE_VISION_CACHE:
+                await self._set_cache(cache_key, hashes)
             
-            logger.info(f"Vision hash generated for image: {image_file_path}")
-            return image_hash
+            logger.info(f"Vision hashes generated for image: {image_file_path}")
+            return hashes
             
         except httpx.HTTPError as e:
             logger.error(f"Vision service error: {e}")
             return None
     
-    async def detect_objects(
+    async def calculate_image_similarity(
         self,
-        image_url: str,
-        confidence_threshold: float = 0.5
-    ) -> Optional[List[Dict[str, Any]]]:
+        hash1: str,
+        hash2: str,
+        algorithm: str = "combined",
+        use_cache: bool = True
+    ) -> Optional[Tuple[float, int]]:
         """
-        Detect objects in image using YOLO.
+        Calculate similarity between two image hashes.
         
         Args:
-            image_url: URL or path to image
-            confidence_threshold: Minimum confidence score
+            hash1: First image hash
+            hash2: Second image hash
+            algorithm: Similarity algorithm (hamming, cosine, combined)
+            use_cache: Whether to use Redis cache
         
         Returns:
-            List of detected objects with bbox, class, confidence
+            Tuple of (similarity_score, hamming_distance) or None if failed
         """
+        if not hash1 or not hash2:
+            return None
+        
+        # Check cache first
+        if use_cache and config.ENABLE_VISION_CACHE:
+            cache_key = self._cache_key("vision:similarity", {
+                "hash1": hash1,
+                "hash2": hash2,
+                "algorithm": algorithm
+            })
+            cached = await self._get_cached(cache_key)
+            if cached:
+                logger.debug(f"Vision cache hit for similarity")
+                return (cached.get("similarity_score"), cached.get("hamming_distance"))
+        
+        # Call Vision service
         try:
             response = await self.client.post(
-                "/detect",
+                "/similarity",
                 json={
-                    "image_url": image_url,
-                    "confidence_threshold": confidence_threshold
+                    "hash1": hash1,
+                    "hash2": hash2,
+                    "algorithm": algorithm
                 }
             )
             response.raise_for_status()
             
             result = response.json()
-            return result.get("detections", [])
+            similarity_score = result.get("similarity_score")
+            hamming_distance = result.get("hamming_distance")
+            
+            # Cache result
+            if use_cache and config.ENABLE_VISION_CACHE:
+                await self._set_cache(cache_key, {
+                    "similarity_score": similarity_score,
+                    "hamming_distance": hamming_distance
+                })
+            
+            logger.info(f"Vision similarity calculated: {similarity_score:.3f}")
+            return (similarity_score, hamming_distance)
             
         except httpx.HTTPError as e:
-            logger.error(f"Vision object detection error: {e}")
+            logger.error(f"Vision similarity service error: {e}")
             return None
     
-    async def extract_text(self, image_url: str) -> Optional[str]:
+    async def find_image_matches(
+        self,
+        query_hash: str,
+        candidate_hashes: List[Dict[str, str]],
+        algorithm: str = "combined",
+        threshold: float = 0.8,
+        use_cache: bool = True
+    ) -> Optional[List[Dict[str, Any]]]:
         """
-        Extract text from image using OCR.
+        Find best matches for a query image hash against candidate hashes.
         
         Args:
-            image_url: URL or path to image
+            query_hash: Query image hash
+            candidate_hashes: List of candidate hashes with metadata
+            algorithm: Matching algorithm
+            threshold: Minimum similarity threshold
+            use_cache: Whether to use Redis cache
         
         Returns:
-            Extracted text or None if failed
+            List of matches with similarity scores or None if failed
         """
+        if not query_hash or not candidate_hashes:
+            return None
+        
+        # Check cache first
+        if use_cache and config.ENABLE_VISION_CACHE:
+            cache_key = self._cache_key("vision:match", {
+                "query_hash": query_hash,
+                "candidate_hashes": candidate_hashes,
+                "algorithm": algorithm,
+                "threshold": threshold
+            })
+            cached = await self._get_cached(cache_key)
+            if cached:
+                logger.debug(f"Vision cache hit for matching")
+                return cached.get("matches")
+        
+        # Call Vision service
         try:
             response = await self.client.post(
-                "/ocr",
-                json={"image_url": image_url}
+                "/match",
+                json={
+                    "query_hash": query_hash,
+                    "candidate_hashes": candidate_hashes,
+                    "algorithm": algorithm,
+                    "threshold": threshold
+                }
             )
             response.raise_for_status()
             
             result = response.json()
-            return result.get("text", "")
+            matches = result.get("matches", [])
+            
+            # Cache result
+            if use_cache and config.ENABLE_VISION_CACHE:
+                await self._set_cache(cache_key, {"matches": matches})
+            
+            logger.info(f"Vision found {len(matches)} matches")
+            return matches
             
         except httpx.HTTPError as e:
-            logger.error(f"Vision OCR error: {e}")
+            logger.error(f"Vision matching service error: {e}")
             return None
     
-    async def check_content_safety(self, image_url: str) -> Optional[Dict[str, Any]]:
+    async def get_image_info(
+        self,
+        image_file_path: str,
+        use_cache: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """
-        Check image for NSFW content.
+        Get detailed information about image.
         
         Args:
-            image_url: URL or path to image
+            image_file_path: Path to image file
+            use_cache: Whether to use Redis cache
         
         Returns:
-            Safety scores dict or None if failed
+            Image information with quality metrics or None if failed
         """
+        if not image_file_path:
+            return None
+        
+        # Check cache
+        if use_cache and config.ENABLE_VISION_CACHE:
+            cache_key = self._cache_key("vision:info", image_file_path)
+            cached = await self._get_cached(cache_key)
+            if cached:
+                logger.debug(f"Vision cache hit for image info: {image_file_path}")
+                return cached
+        
+        # Call Vision service with file upload
         try:
-            response = await self.client.post(
-                "/nsfw",
-                json={"image_url": image_url}
-            )
+            with open(image_file_path, 'rb') as f:
+                files = {'file': f}
+                response = await self.client.post("/info", files=files)
             response.raise_for_status()
             
-            return response.json()
+            result = response.json()
+            
+            # Cache result
+            if use_cache and config.ENABLE_VISION_CACHE:
+                await self._set_cache(cache_key, result)
+            
+            logger.info(f"Vision image info generated for: {image_file_path}")
+            return result
             
         except httpx.HTTPError as e:
-            logger.error(f"Vision NSFW check error: {e}")
+            logger.error(f"Vision info service error: {e}")
             return None
     
     async def health_check(self) -> bool:
         """Check if Vision service is healthy."""
         try:
             response = await self.client.get("/health")
-            return response.status_code == 200
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("status") == "healthy"
+            return False
         except Exception:
             return False
 

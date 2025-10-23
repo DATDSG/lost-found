@@ -1,11 +1,10 @@
-"""Authentication routes."""
+"""Simple authentication routes."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..database import get_db
 from ..models import User
 from ..schemas import UserRegister, UserLogin, Token, UserResponse
-from ..auth import get_password_hash, verify_password, create_access_token, create_refresh_token, decode_token
+from ..auth import get_password_hash, verify_password, create_access_token, decode_token
 from ..dependencies import get_current_user
 from ..exceptions import ValidationError, ConflictError, AuthenticationError
 from ..validation import UserValidationMixin
@@ -13,8 +12,25 @@ from ..validation import UserValidationMixin
 router = APIRouter()
 
 
+def get_sync_db():
+    """Get synchronous database session for authentication."""
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy import create_engine
+    from ..config import config
+    
+    # Create synchronous engine using psycopg (not psycopg2)
+    sync_database_url = config.DATABASE_URL.replace("+asyncpg", "+psycopg")
+    sync_engine = create_engine(sync_database_url)
+    SessionLocal = sessionmaker(bind=sync_engine)
+    
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
+def register(user_data: UserRegister, db: Session = Depends(get_sync_db)):
     """Register a new user."""
     try:
         # Validate input data
@@ -38,7 +54,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         # Create new user
         user = User(
             email=validated_email,
-            hashed_password=get_password_hash(validated_password),
+            password=get_password_hash(validated_password),
             display_name=validated_display_name,
             role="user"
         )
@@ -46,11 +62,10 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         
-        # Generate tokens (convert UUID to string for JWT)
+        # Generate access token
         access_token = create_access_token(data={"sub": str(user.id)})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
         
-        return Token(access_token=access_token, refresh_token=refresh_token)
+        return Token(access_token=access_token, refresh_token="", token_type="bearer")
         
     except ValidationError:
         # Re-raise validation errors as-is
@@ -60,6 +75,10 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         # Handle unexpected errors
+        print(f"Registration error: {e}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed"
@@ -67,8 +86,8 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    """Login and get access tokens."""
+def login(credentials: UserLogin, db: Session = Depends(get_sync_db)):
+    """Login and get access token."""
     try:
         # Validate email format
         validator = UserValidationMixin()
@@ -77,17 +96,16 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         # Find user
         user = db.query(User).filter(User.email == validated_email).first()
         
-        if not user or not verify_password(credentials.password, user.hashed_password):
+        if not user or not verify_password(credentials.password, user.password):
             raise AuthenticationError("Incorrect email or password")
         
         if not user.is_active:
             raise AuthenticationError("User account is disabled")
         
-        # Generate tokens (convert UUID to string for JWT)
+        # Generate access token
         access_token = create_access_token(data={"sub": str(user.id)})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
         
-        return Token(access_token=access_token, refresh_token=refresh_token)
+        return Token(access_token=access_token, refresh_token="", token_type="bearer")
         
     except ValidationError:
         # Re-raise validation errors as-is
@@ -97,37 +115,14 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         # Handle unexpected errors
+        print(f"Login error: {e}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
         )
-
-
-@router.post("/refresh", response_model=Token)
-def refresh(refresh_token: str, db: Session = Depends(get_db)):
-    """Refresh access token using refresh token."""
-    payload = decode_token(refresh_token)
-    
-    if payload is None or payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
-        )
-    
-    user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-    
-    # Generate new tokens
-    new_access_token = create_access_token(data={"sub": user.id})
-    new_refresh_token = create_refresh_token(data={"sub": user.id})
-    
-    return Token(access_token=new_access_token, refresh_token=new_refresh_token)
 
 
 @router.get("/me", response_model=UserResponse)

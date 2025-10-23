@@ -4,7 +4,7 @@
 -- Optimized for PostgreSQL 16 with pgvector extension
 -- ============================================================================
 -- Connect to the database (runs automatically in docker-entrypoint-initdb.d)
-\ c lost_found -- ============================================================================
+-- ============================================================================
 -- SECTION 1: EXTENSIONS (PostgreSQL 16 Compatible)
 -- ============================================================================
 -- Enable UUID generation (built-in in PostgreSQL 13+)

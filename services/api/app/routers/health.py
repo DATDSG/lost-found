@@ -7,7 +7,7 @@ import asyncio
 import time
 import logging
 
-from ..database import get_db, engine
+from ..infrastructure.database.session import get_async_db, async_engine
 from ..config import config
 from ..clients import get_nlp_client, get_vision_client
 
@@ -126,7 +126,7 @@ async def check_vision_service_health() -> Dict[str, Any]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(db: AsyncSession = Depends(get_db)):
+async def detailed_health_check(db: AsyncSession = Depends(get_async_db)):
     """
     Comprehensive health check for all system components.
     
@@ -190,7 +190,7 @@ async def detailed_health_check(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/health/ready")
-async def readiness_check(db: AsyncSession = Depends(get_db)):
+async def readiness_check(db: AsyncSession = Depends(get_async_db)):
     """
     Kubernetes-style readiness probe.
     Returns 200 if service is ready to accept requests.
@@ -227,7 +227,7 @@ async def liveness_check():
 
 
 @router.get("/health/startup")
-async def startup_check(db: AsyncSession = Depends(get_db)):
+async def startup_check(db: AsyncSession = Depends(get_async_db)):
     """
     Kubernetes-style startup probe.
     Returns 200 when service has fully started.

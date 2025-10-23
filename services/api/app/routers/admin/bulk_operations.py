@@ -1,14 +1,16 @@
 """Admin bulk operations router."""
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import json
 
-from app.database import get_db
-from app.models import User, Report, ReportStatus, Match, MatchStatus
-from app.schemas import BulkOperationRequest, BulkOperationResult, BulkOperationError
-from app.dependencies import get_current_admin
-from app.helpers import create_audit_log
+from ...infrastructure.database.session import get_async_db
+from ...models import User
+from ...domains.reports.models.report import Report, ReportStatus
+from ...domains.matches.models.match import Match, MatchStatus
+from ...schemas import BulkOperationRequest, BulkOperationResult, BulkOperationError
+from ...dependencies import get_current_admin
+from ...helpers import create_audit_log
 
 router = APIRouter()
 
@@ -21,7 +23,7 @@ router = APIRouter()
 def bulk_approve_reports(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Approve multiple reports at once."""
     success_count = 0
@@ -79,7 +81,7 @@ def bulk_approve_reports(
 def bulk_reject_reports(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Reject (hide) multiple reports at once."""
     success_count = 0
@@ -137,7 +139,7 @@ def bulk_reject_reports(
 def bulk_delete_reports(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete multiple reports at once (soft delete by setting status to REMOVED)."""
     success_count = 0
@@ -200,7 +202,7 @@ def bulk_delete_reports(
 def bulk_activate_users(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Activate multiple users at once."""
     success_count = 0
@@ -267,7 +269,7 @@ def bulk_activate_users(
 def bulk_deactivate_users(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Deactivate multiple users at once."""
     success_count = 0
@@ -334,7 +336,7 @@ def bulk_deactivate_users(
 def bulk_delete_users(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete multiple users at once (soft delete by deactivating)."""
     success_count = 0
@@ -403,7 +405,7 @@ def bulk_delete_users(
 def bulk_approve_matches(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Approve multiple matches at once (promote them)."""
     success_count = 0
@@ -462,7 +464,7 @@ def bulk_approve_matches(
 def bulk_reject_matches(
     bulk_request: BulkOperationRequest,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Reject multiple matches at once (suppress them)."""
     success_count = 0
@@ -516,110 +518,3 @@ def bulk_reject_matches(
     )
 
 
-@router.post("/matches/bulk/notify", response_model=BulkOperationResult)
-def bulk_notify_matches(
-    bulk_request: BulkOperationRequest,
-    current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Send notifications to users for multiple matches."""
-    from app.models import Notification
-    from uuid import uuid4
-    from datetime import datetime, timezone
-    
-    success_count = 0
-    errors = []
-    
-    for match_id in bulk_request.ids:
-        try:
-            match = db.query(Match).filter(Match.id == match_id).first()
-            
-            if not match:
-                errors.append(BulkOperationError(
-                    id=match_id,
-                    error="Match not found"
-                ))
-                continue
-            
-            # Get both report owners
-            source_report = match.source_report
-            target_report = match.target_report
-            
-            if not source_report or not target_report:
-                errors.append(BulkOperationError(
-                    id=match_id,
-                    error="Associated reports not found"
-                ))
-                continue
-            
-            # Create notifications for both users
-            notifications_created = 0
-            
-            # Notification for source report owner
-            if source_report.owner_id:
-                notification = Notification(
-                    id=str(uuid4()),
-                    user_id=source_report.owner_id,
-                    type="match_notification",
-                    title="Potential Match Found",
-                    message=f"We found a potential match for your {source_report.type} report: {source_report.title}",
-                    data=json.dumps({
-                        "match_id": match_id,
-                        "report_id": target_report.id,
-                        "admin_notified": True
-                    }),
-                    is_read=False,
-                    created_at=datetime.now(timezone.utc)
-                )
-                db.add(notification)
-                notifications_created += 1
-            
-            # Notification for target report owner
-            if target_report.owner_id and target_report.owner_id != source_report.owner_id:
-                notification = Notification(
-                    id=str(uuid4()),
-                    user_id=target_report.owner_id,
-                    type="match_notification",
-                    title="Potential Match Found",
-                    message=f"We found a potential match for your {target_report.type} report: {target_report.title}",
-                    data=json.dumps({
-                        "match_id": match_id,
-                        "report_id": source_report.id,
-                        "admin_notified": True
-                    }),
-                    is_read=False,
-                    created_at=datetime.now(timezone.utc)
-                )
-                db.add(notification)
-                notifications_created += 1
-            
-            # Create audit log
-            create_audit_log(
-                db=db,
-                user_id=current_user.id,
-                action="match_bulk_notified",
-                resource_type="match",
-                resource_id=match_id,
-                details=json.dumps({
-                    "admin": current_user.email,
-                    "bulk_operation": True,
-                    "notifications_sent": notifications_created
-                })
-            )
-            
-            success_count += 1
-            
-        except Exception as e:
-            errors.append(BulkOperationError(
-                id=match_id,
-                error=str(e)
-            ))
-    
-    # Commit all changes
-    db.commit()
-    
-    return BulkOperationResult(
-        success=success_count,
-        failed=len(errors),
-        errors=errors
-    )

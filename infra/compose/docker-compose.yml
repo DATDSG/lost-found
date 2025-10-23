@@ -1,30 +1,58 @@
-﻿# ================================================================
-# Lost & Found - Docker Compose Configuration
 # ================================================================
-# Optimized for development and production deployment
-# All services use health checks and proper dependency management
+# Lost & Found - Domain-Driven Design Docker Compose
 # ================================================================
-
-version: "3.8"
+# Enhanced compose file optimized for DDD architecture
+# Includes improved configuration, security, and reliability
+# ================================================================
 
 services:
-  # ================================================================
-  # Database: PostgreSQL with pgvector extension
-  # ================================================================
+  # Database with pgvector support
   db:
     image: pgvector/pgvector:pg18
     container_name: lost-found-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-lostfound}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-lostfound}
-      POSTGRES_INITDB_ARGS: "-E UTF8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-lostfound}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-lostfound}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: lost-found-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-LF_Redis_2025_Pass!} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,35 +60,114 @@ services:
     restart: unless-stopped
     networks:
       - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
 
-  # ================================================================
-  # API Service: Main FastAPI application
-  # ================================================================
+  # MinIO for object storage
+  minio:
+    image: minio/minio:latest
+    container_name: lost-found-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  # API Service - Domain-Driven Design Architecture
   api:
     build:
       context: ../../services/api
       dockerfile: Dockerfile
+      args:
+        - BUILD_ENV=${ENVIRONMENT:-development}
     container_name: lost-found-api
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-lostfound}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-20}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
+      - DB_ECHO=${DB_ECHO:-false}
+
+      # Redis configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-LF_Redis_2025_Pass!}@redis:6379/0
+      - REDIS_MAX_CONNECTIONS=${REDIS_MAX_CONNECTIONS:-20}
+
+      # MinIO configuration
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin123}
+      - MINIO_SECURE=false
+
+      # JWT configuration
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-super-secret-jwt-key-change-me-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+
+      # Service URLs
+      - NLP_SERVICE_URL=http://nlp:8001
+      - VISION_SERVICE_URL=http://vision:8002
+
+      # Application settings
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONPATH=/app
+
+      # CORS and security
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}
+
+      # Domain-specific settings
+      - REPORTS_PER_PAGE=${REPORTS_PER_PAGE:-20}
+      - MATCHES_PER_PAGE=${MATCHES_PER_PAGE:-20}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
+      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES:-image/jpeg,image/png,image/webp}
+
+      # Monitoring
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+    ports:
+      - "0.0.0.0:${API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      nlp:
+      minio:
         condition: service_healthy
-      vision:
-        condition: service_healthy
-    env_file: .env
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    ports:
-      - "8000:8000"
     volumes:
-      - ../../services/api:/app
-      - media_data:${MEDIA_ROOT:-/app/media}
+      - api_uploads:/app/uploads
+      - api_logs:/app/logs
+      - api_cache:/app/cache
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -68,273 +175,326 @@ services:
     restart: unless-stopped
     networks:
       - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
 
-  # ================================================================
-  # Background Worker: ARQ task queue worker
-  # ================================================================
+  # Worker Service for background tasks
   worker:
     build:
       context: ../../services/api
       dockerfile: Dockerfile
+      args:
+        - BUILD_ENV=${ENVIRONMENT:-development}
     container_name: lost-found-worker
-    command: arq app.worker.WorkerSettings
+    command: python -m arq app.worker.WorkerSettings
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-lostfound}
+
+      # Redis configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-LF_Redis_2025_Pass!}@redis:6379/1
+
+      # Application settings
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONPATH=/app
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      nlp:
-        condition: service_healthy
-      vision:
-        condition: service_healthy
-    env_file: .env
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ../../services/api:/app
-      - media_data:${MEDIA_ROOT:-/app/media}
+      - api_uploads:/app/uploads
+      - api_logs:/app/logs
+      - api_cache:/app/cache
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c ''import redis; r = redis.Redis.from_url("redis://:${REDIS_PASSWORD:-LF_Redis_2025_Pass!}@redis:6379/1"); exit(0 if r.ping() else 1)''',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     networks:
       - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
 
-  # ================================================================
-  # NLP Service: Natural Language Processing
-  # ================================================================
+  # NLP Service - Enhanced for DDD
   nlp:
     build:
       context: ../../services/nlp
       dockerfile: Dockerfile
     container_name: lost-found-nlp
-    env_file: .env
     environment:
-      - USE_GPU=${NLP_USE_GPU:-false}
+      # Redis configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-LF_Redis_2025_Pass!}@redis:6379/2
+      - REDIS_MAX_CONNECTIONS=${REDIS_MAX_CONNECTIONS:-10}
+
+      # Application settings
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MODEL_NAME=${NLP_MODEL_NAME:-intfloat/e5-small-v2}
+      - PYTHONPATH=/app
+
+      # NLP-specific settings
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.7}
+      - FUZZY_MATCH_THRESHOLD=${FUZZY_MATCH_THRESHOLD:-80}
+      - MAX_MATCHES=${MAX_MATCHES:-10}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
+      - MAX_TEXT_LENGTH=${MAX_TEXT_LENGTH:-10000}
     ports:
-      - "8001:8001"
+      - "${NLP_PORT:-8001}:8001"
     volumes:
-      - ../../services/nlp:/app
-      - nlp_models:/root/.cache/huggingface
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      - nlp_cache:/app/cache
+      - nlp_logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 300s
+      retries: 3
+      start_period: 90s
     restart: unless-stopped
     networks:
       - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
 
-  # ================================================================
-  # Vision Service: Image processing and computer vision
-  # ================================================================
+  # Vision Service - Enhanced for DDD
   vision:
     build:
       context: ../../services/vision
       dockerfile: Dockerfile
     container_name: lost-found-vision
-    env_file: .env
     environment:
-      - USE_GPU=${VISION_USE_GPU:-false}
+      # Redis configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-LF_Redis_2025_Pass!}@redis:6379/3
+      - REDIS_MAX_CONNECTIONS=${REDIS_MAX_CONNECTIONS:-10}
+
+      # Application settings
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - ENABLE_OBJECT_DETECTION=${ENABLE_OBJECT_DETECTION:-false}
-      - ENABLE_OCR=${ENABLE_OCR:-false}
+      - PYTHONPATH=/app
+
+      # Vision-specific settings
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.8}
+      - HASH_THRESHOLD_SIMILAR=${HASH_THRESHOLD_SIMILAR:-10}
+      - HASH_THRESHOLD_MATCH=${HASH_THRESHOLD_MATCH:-5}
+      - MAX_MATCHES=${MAX_MATCHES:-20}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
+      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-10485760}
+      - MAX_IMAGE_DIMENSION=${MAX_IMAGE_DIMENSION:-4096}
+
+      # OpenCV settings
+      - OPENCV_IO_ENABLE_OPENEXR=1
+      - OPENCV_IO_ENABLE_JASPER=1
     ports:
-      - "8002:8002"
+      - "${VISION_PORT:-8002}:8002"
     volumes:
-      - ../../services/vision:/app
-      - vision_models:/root/.cache
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      - vision_cache:/app/cache
+      - vision_logs:/app/logs
+      - vision_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 300s
-    restart: unless-stopped
-    networks:
-      - lost-found-network
-
-  # ================================================================
-  # Redis: Cache and message broker
-  # ================================================================
-  redis:
-    image: redis:7-alpine
-    container_name: lost-found-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:-LF_Redis_2025_Pass!} --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "redis-cli",
-          "-a",
-          "${REDIS_PASSWORD:-LF_Redis_2025_Pass!}",
-          "ping",
-        ]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-    restart: unless-stopped
-    networks:
-      - lost-found-network
-
-  # ================================================================
-  # Monitoring Stack
-  # ================================================================
-
-  # Prometheus: Metrics collection and storage
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: lost-found-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-      - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.console.templates=/etc/prometheus/consoles"
-      - "--web.enable-lifecycle"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:9090/-/healthy",
-        ]
-      interval: 30s
-      timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 90s
     restart: unless-stopped
     networks:
       - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
 
-  # Loki: Log aggregation
-  loki:
-    image: grafana/loki:latest
-    container_name: lost-found-loki
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:3100/ready",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - lost-found-network
-
-  # Promtail: Log shipping to Loki
-  promtail:
-    image: grafana/promtail:latest
-    container_name: lost-found-promtail
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./promtail-config.yml:/etc/promtail/config.yml:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      loki:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - lost-found-network
-
-  # Grafana: Metrics and logs visualization
-  grafana:
-    image: grafana/grafana:latest
-    container_name: lost-found-grafana
-    ports:
-      - "3000:3000"
+  # pgAdmin - Database Administration
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: lost-found-pgadmin
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
-      - GF_INSTALL_PLUGINS=
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-postgres}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-postgres}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+      - PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION=True
+      - PGADMIN_CONFIG_LOGIN_BANNER="Lost & Found Development Database"
+      - PYTHONWARNINGS=ignore::DeprecationWarning
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
     depends_on:
-      prometheus:
+      db:
         condition: service_healthy
-      loki:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:3000/api/health",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./pgadmin/suppress_warnings.py:/pgadmin4/suppress_warnings.py:ro
     restart: unless-stopped
     networks:
       - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
 
-# ================================================================
-# Networks
-# ================================================================
+  # Admin Panel - Next.js Frontend
+  admin:
+    build:
+      context: ../../apps/admin
+      dockerfile: Dockerfile
+    container_name: lost-found-admin
+    environment:
+      # API Configuration
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_VERSION=v1
+
+      # Authentication
+      - NEXT_PUBLIC_AUTH_ENABLED=true
+      - NEXT_PUBLIC_JWT_SECRET=${JWT_SECRET_KEY:-super-secret-jwt-key-change-me-in-production}
+
+      # Feature Flags
+      - NEXT_PUBLIC_FRAUD_DETECTION_ENABLED=true
+      - NEXT_PUBLIC_AUDIT_LOGS_ENABLED=true
+      - NEXT_PUBLIC_MATCHING_ENABLED=true
+      - NEXT_PUBLIC_REPORTS_ENABLED=true
+      - NEXT_PUBLIC_USERS_ENABLED=true
+
+      # Development Settings
+      - NODE_ENV=${NODE_ENV:-development}
+      - NEXT_PUBLIC_DEBUG_MODE=${DEBUG:-true}
+
+      # UI Configuration
+      - NEXT_PUBLIC_APP_NAME=Lost & Found Admin
+      - NEXT_PUBLIC_APP_VERSION=1.0.0
+
+      # Pagination Settings
+      - NEXT_PUBLIC_DEFAULT_PAGE_SIZE=20
+      - NEXT_PUBLIC_MAX_PAGE_SIZE=100
+
+      # File Upload Settings
+      - NEXT_PUBLIC_MAX_FILE_SIZE=10485760
+      - NEXT_PUBLIC_ALLOWED_FILE_TYPES=image/jpeg,image/png,image/webp
+
+      # Monitoring
+      - NEXT_PUBLIC_ANALYTICS_ENABLED=false
+      - NEXT_PUBLIC_ERROR_REPORTING_ENABLED=false
+    ports:
+      - "${ADMIN_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - admin_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: lost-found-nginx
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - lost-found-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+volumes:
+  db_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  api_uploads:
+    driver: local
+  api_logs:
+    driver: local
+  api_cache:
+    driver: local
+  nlp_cache:
+    driver: local
+  nlp_logs:
+    driver: local
+  vision_cache:
+    driver: local
+  vision_logs:
+    driver: local
+  vision_uploads:
+    driver: local
+  pgadmin_data:
+    driver: local
+  admin_logs:
+    driver: local
+
 networks:
   lost-found-network:
     driver: bridge
-    name: lost-found-network
-
-# ================================================================
-# Volumes
-# ================================================================
-volumes:
-  db_data:
-    name: lost-found-db-data
-  media_data:
-    name: lost-found-media
-  redis_data:
-    name: lost-found-redis
-  nlp_models:
-    name: lost-found-nlp-models
-  vision_models:
-    name: lost-found-vision-models
-  prometheus_data:
-    name: lost-found-prometheus
-  grafana_data:
-    name: lost-found-grafana
-  loki_data:
-    name: lost-found-loki
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

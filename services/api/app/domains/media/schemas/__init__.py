@@ -1,0 +1,1 @@
+# Media Domain Schemas Package

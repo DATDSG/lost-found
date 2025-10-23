@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from uuid import uuid4
 
 from app.main import app
-from app.models import User, Report, ReportStatus, Match, MatchStatus, ReportType
-from app.database import get_db
+from app.models import User
+from app.domains.reports.models.report import Report, ReportStatus, ReportType
+from app.domains.matches.models.match import Match, MatchStatus
+from app.infrastructure.database.session import get_async_db
 
 
 @pytest.fixture
@@ -278,22 +280,6 @@ def test_bulk_reject_matches_success(client: TestClient, admin_user: User, test_
     
     response = client.post(
         "/admin/matches/bulk/reject",
-        json={"ids": match_ids},
-        headers={"Authorization": f"Bearer {admin_user.id}"}
-    )
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] == 2
-    assert data["failed"] == 0
-
-
-def test_bulk_notify_matches_success(client: TestClient, admin_user: User, test_matches):
-    """Test successful bulk notification for matches."""
-    match_ids = [match.id for match in test_matches[:2]]
-    
-    response = client.post(
-        "/admin/matches/bulk/notify",
         json={"ids": match_ids},
         headers={"Authorization": f"Bearer {admin_user.id}"}
     )

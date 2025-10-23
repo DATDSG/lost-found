@@ -215,19 +215,6 @@ async def run_matching_pipeline(
             await db.commit()
             logger.info(f"✅ Found and stored {len(matches)} matches for report {report_id}")
             
-            # Create notification for user if high-score matches found
-            high_score_matches = [m for m in matches if m["score"] >= 0.85]
-            if high_score_matches:
-                from .helpers import create_notification
-                await create_notification(
-                    db=db,
-                    user_id=str(report.owner_id),
-                    notification_type="match_found",
-                    title="High-confidence match found!",
-                    content=f"We found {len(high_score_matches)} potential match(es) for your report",
-                    reference_id=report_id
-                )
-            
             return len(matches)
         else:
             logger.info(f"No matches found for report {report_id}")

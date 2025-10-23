@@ -1,16 +1,17 @@
-"""Alembic environment configuration for Lost & Found API."""
-
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
-from alembic import context
-import os
 import sys
+import os
 
-# Add the parent directory to the path so we can import app modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
 
-from app.database import Base
-from app.models import User, Report, Media, Match, Conversation, Message, Notification, AuditLog
+from alembic import context
+
+# Add the parent directory to the path so we can import our models
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import the models and database
+from app.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -31,11 +32,6 @@ target_metadata = Base.metadata
 # ... etc.
 
 
-def get_url():
-    """Get database URL from environment variable or config."""
-    return os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
-
-
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -46,8 +42,9 @@ def run_migrations_offline() -> None:
 
     Calls to context.execute() here emit the given string to the
     script output.
+
     """
-    url = get_url()
+    url = app_config.get_db_url_sync()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -64,9 +61,17 @@ def run_migrations_online() -> None:
 
     In this scenario we need to create an Engine
     and associate a connection with the context.
+
     """
-    configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = get_url()
+    # Use the correct database URL for Docker container
+    db_url = "postgresql+psycopg://postgres:postgres@db:5432/lost_found"
+    print(f"Using database URL: {db_url}")
+    
+    # Create configuration dict with the correct URL
+    configuration = {
+        "sqlalchemy.url": db_url,
+        "sqlalchemy.poolclass": "NullPool"
+    }
     
     connectable = engine_from_config(
         configuration,
@@ -76,10 +81,7 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, 
-            target_metadata=target_metadata,
-            compare_type=True,  # Detect type changes
-            compare_server_default=True,  # Detect default value changes
+            connection=connection, target_metadata=target_metadata
         )
 
         with context.begin_transaction():

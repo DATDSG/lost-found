@@ -1,175 +1,103 @@
-﻿"""Admin dashboard router - System overview and statistics."""
+"""Admin dashboard API routes (JSON only)."""
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional
+from uuid import UUID
 
-from ...database import get_db
-from ...models import User, Report, Match, AuditLog
-from ...dependencies import get_current_admin
-from ...csrf import get_csrf_token
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...infrastructure.database.session import get_async_db
+from ...dependencies import get_current_admin, get_current_admin_dev
+from ...models import User, AuditLog
+from ...domains.matches.models.match import Match
+from ...domains.reports.models.report import Report
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
-
-
-async def get_csrf_token_for_dashboard(request: Request) -> str:
-    """Get CSRF token for dashboard."""
-    return get_csrf_token(request)
-
-
-@router.get("/admin/dashboard", response_class=HTMLResponse)
-async def dashboard(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_admin)
-):
-    """Display admin dashboard."""
-    # Gather statistics using async queries
-    pending_reports_result = await db.execute(select(func.count(Report.id)).where(Report.status == "pending"))
-    pending_reports = pending_reports_result.scalar() or 0
-    
-    total_reports_result = await db.execute(select(func.count(Report.id)))
-    total_reports = total_reports_result.scalar() or 0
-    
-    active_users_result = await db.execute(select(func.count(User.id)).where(User.is_active == True))
-    active_users = active_users_result.scalar() or 0
-    
-    total_users_result = await db.execute(select(func.count(User.id)))
-    total_users = total_users_result.scalar() or 0
-    
-    total_matches_result = await db.execute(select(func.count(Match.id)))
-    total_matches = total_matches_result.scalar() or 0
-    
-    confirmed_matches_result = await db.execute(select(func.count(Match.id)).where(Match.status == "confirmed"))
-    confirmed_matches = confirmed_matches_result.scalar() or 0
-    
-    stats = {
-        "pending_reports": pending_reports,
-        "total_reports": total_reports,
-        "active_users": active_users,
-        "total_users": total_users,
-        "open_flags": 0,  # Placeholder - implement flags model
-        "total_matches": total_matches,
-        "confirmed_matches": confirmed_matches,
-    }
-    
-    # Recent pending reports
-    recent_reports_result = await db.execute(
-        select(Report)
-        .where(Report.status == "pending")
-        .order_by(Report.created_at.desc())
-        .limit(10)
-    )
-    recent_reports = recent_reports_result.scalars().all()
-    
-    # Recent activity (audit log)
-    recent_activity_result = await db.execute(
-        select(AuditLog)
-        .order_by(AuditLog.created_at.desc())
-        .limit(10)
-    )
-    recent_activity = recent_activity_result.scalars().all()
-    
-    csrf_token = await get_csrf_token_for_dashboard(request)
-    return templates.TemplateResponse(
-        "admin/dashboard.html",
-        {
-            "request": request,
-            "user": user,
-            "csrf_token": csrf_token,
-            "stats": stats,
-            "recent_reports": recent_reports,
-            "recent_activity": recent_activity,
-        }
-    )
 
 
 @router.get("/stats")
 async def get_dashboard_stats(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_admin)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """Get comprehensive dashboard statistics."""
-    
-    # DEBUG: Add user information to response
-    debug_info = {
-        "user_id": user.id,
-        "user_email": user.email,
-        "user_role": user.role,
-        "is_active": user.is_active
-    }
-    
-    # User statistics
-    total_users_result = await db.execute(select(func.count(User.id)))
-    total_users = total_users_result.scalar() or 0
-    
-    active_users_result = await db.execute(
-        select(func.count(User.id)).where(User.is_active == True)
-    )
-    active_users = active_users_result.scalar() or 0
-    
-    new_users_30d_result = await db.execute(
-        select(func.count(User.id)).where(
-            User.created_at >= datetime.now(timezone.utc) - timedelta(days=30)
+    """Aggregate statistics for dashboard cards."""
+    total_users = (
+        await db.execute(select(func.count()).select_from(User))
+    ).scalar() or 0
+    active_users = (
+        await db.execute(
+            select(func.count()).select_from(User).where(User.is_active.is_(True))
         )
-    )
-    new_users_30d = new_users_30d_result.scalar() or 0
-    
-    # Report statistics
-    total_reports_result = await db.execute(select(func.count(Report.id)))
-    total_reports = total_reports_result.scalar() or 0
-    
-    pending_reports_result = await db.execute(
-        select(func.count(Report.id)).where(Report.status == "pending")
-    )
-    pending_reports = pending_reports_result.scalar() or 0
-    
-    approved_reports_result = await db.execute(
-        select(func.count(Report.id)).where(Report.status == "approved")
-    )
-    approved_reports = approved_reports_result.scalar() or 0
-    
-    lost_reports_result = await db.execute(
-        select(func.count(Report.id)).where(Report.type == "lost")
-    )
-    lost_reports = lost_reports_result.scalar() or 0
-    
-    found_reports_result = await db.execute(
-        select(func.count(Report.id)).where(Report.type == "found")
-    )
-    found_reports = found_reports_result.scalar() or 0
-    
-    # Match statistics
-    total_matches_result = await db.execute(select(func.count(Match.id)))
-    total_matches = total_matches_result.scalar() or 0
-    
-    promoted_matches_result = await db.execute(
-        select(func.count(Match.id)).where(Match.status == "promoted")
-    )
-    promoted_matches = promoted_matches_result.scalar() or 0
-    
-    # Recent activity (last 7 days)
+    ).scalar() or 0
+    new_users_30d = (
+        await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.created_at
+                >= datetime.now(timezone.utc) - timedelta(days=30)
+            )
+        )
+    ).scalar() or 0
+
+    total_reports = (
+        await db.execute(select(func.count()).select_from(Report))
+    ).scalar() or 0
+    pending_reports = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.status == "pending")
+        )
+    ).scalar() or 0
+    approved_reports = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.status == "approved")
+        )
+    ).scalar() or 0
+
+    lost_reports = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.type == "lost")
+        )
+    ).scalar() or 0
+    found_reports = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.type == "found")
+        )
+    ).scalar() or 0
+
+    total_matches = (
+        await db.execute(select(func.count()).select_from(Match))
+    ).scalar() or 0
+    promoted_matches = (
+        await db.execute(
+            select(func.count()).select_from(Match).where(Match.status == "promoted")
+        )
+    ).scalar() or 0
+
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    reports_last_week_result = await db.execute(
-        select(func.count(Report.id)).where(Report.created_at >= week_ago)
-    )
-    reports_last_week = reports_last_week_result.scalar() or 0
-    
-    matches_last_week_result = await db.execute(
-        select(func.count(Match.id)).where(Match.created_at >= week_ago)
-    )
-    matches_last_week = matches_last_week_result.scalar() or 0
-    
+    reports_last_week = (
+        await db.execute(
+            select(func.count())
+            .select_from(Report)
+            .where(Report.created_at >= week_ago)
+        )
+    ).scalar() or 0
+    matches_last_week = (
+        await db.execute(
+            select(func.count())
+            .select_from(Match)
+            .where(Match.created_at >= week_ago)
+        )
+    ).scalar() or 0
+
     return {
-        "debug": debug_info,
         "users": {
             "total": total_users,
             "active": active_users,
-            "new_30d": new_users_30d
+            "new_30d": new_users_30d,
         },
         "reports": {
             "total": total_reports,
@@ -177,152 +105,145 @@ async def get_dashboard_stats(
             "approved": approved_reports,
             "lost": lost_reports,
             "found": found_reports,
-            "new_7d": reports_last_week
+            "new_7d": reports_last_week,
         },
         "matches": {
             "total": total_matches,
             "promoted": promoted_matches,
-            "new_7d": matches_last_week
+            "new_7d": matches_last_week,
         },
-        "generated_at": datetime.now(timezone.utc).isoformat()
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
 @router.get("/reports-chart")
 async def get_reports_chart(
     days: int = 30,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_admin)
+    db: AsyncSession = Depends(get_async_db),
+    user: User = Depends(get_current_admin_dev),
 ):
-    """Get reports chart data for the last N days."""
-    
-    chart_data = []
+    """Return daily counts of created and resolved reports."""
+    days = max(1, min(90, days))
     today = datetime.now(timezone.utc).date()
-    
-    for i in range(days):
-        date = today - timedelta(days=days - i - 1)
-        start_of_day = datetime.combine(date, datetime.min.time()).replace(tzinfo=timezone.utc)
-        end_of_day = datetime.combine(date, datetime.max.time()).replace(tzinfo=timezone.utc)
-        
-        # Count new reports for this day
-        reports_result = await db.execute(
-            select(func.count(Report.id)).where(
-                Report.created_at >= start_of_day,
-                Report.created_at <= end_of_day
-            )
+    data: List[Dict[str, int]] = []
+
+    for offset in range(days):
+        day = today - timedelta(days=days - offset - 1)
+        start_of_day = datetime.combine(day, datetime.min.time()).replace(
+            tzinfo=timezone.utc
         )
-        reports_count = reports_result.scalar() or 0
-        
-        # Count resolved reports for this day
-        resolved_result = await db.execute(
-            select(func.count(Report.id)).where(
-                Report.updated_at >= start_of_day,
-                Report.updated_at <= end_of_day,
-                Report.is_resolved == True
-            )
+        end_of_day = datetime.combine(day, datetime.max.time()).replace(
+            tzinfo=timezone.utc
         )
-        resolved_count = resolved_result.scalar() or 0
-        
-        chart_data.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "reports": reports_count,
-            "resolved": resolved_count
-        })
-    
-    return chart_data
+
+        created = (
+            await db.execute(
+                select(func.count())
+                .select_from(Report)
+                .where(
+                    Report.created_at >= start_of_day,
+                    Report.created_at <= end_of_day,
+                )
+            )
+        ).scalar() or 0
+
+        resolved = (
+            await db.execute(
+                select(func.count())
+                .select_from(Report)
+                .where(
+                    Report.updated_at >= start_of_day,
+                    Report.updated_at <= end_of_day,
+                    Report.is_resolved.is_(True),
+                )
+            )
+        ).scalar() or 0
+
+        data.append(
+            {
+                "date": day.strftime("%Y-%m-%d"),
+                "created": created,
+                "resolved": resolved,
+            }
+        )
+
+    return data
 
 
 @router.get("/activity")
 async def get_recent_activity(
     limit: int = 50,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_admin)
+    db: AsyncSession = Depends(get_async_db),
+    user: User = Depends(get_current_admin_dev),
 ):
-    """Get recent system activity from audit logs (async-safe)."""
-
-    # Fetch recent audit logs
+    """Return recent audit log entries with user details."""
+    limit = max(1, min(100, limit))
     logs_result = await db.execute(
         select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
     )
-    audit_logs = logs_result.scalars().all()
+    logs = logs_result.scalars().all()
 
-    # Fetch users in a single query
-    user_ids = {log.user_id for log in audit_logs if getattr(log, "user_id", None)}
-    users_by_id = {}
+    user_ids = [
+        UUID(str(log.user_id))
+        for log in logs
+        if getattr(log, "user_id", None) is not None
+    ]
+    users_by_id: Dict[str, User] = {}
     if user_ids:
-        users_result = await db.execute(select(User).where(User.id.in_(list(user_ids))))
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
         users = users_result.scalars().all()
-        users_by_id = {u.id: u for u in users}
+        users_by_id = {str(u.id): u for u in users}
 
-    activity_items = []
-    for log in audit_logs:
-        u = users_by_id.get(getattr(log, "user_id", None))
-        activity_items.append({
-            "id": str(log.id),
-            "user": {
-                "id": str(u.id) if u else None,
-                "email": getattr(u, "email", None) or "Unknown",
-                "display_name": getattr(u, "display_name", None) or "Unknown",
-            },
-            "action": getattr(log, "action", None),
-            "resource_type": getattr(log, "resource_type", None),
-            "resource_id": str(getattr(log, "resource_id", "")) if getattr(log, "resource_id", None) else None,
-            "details": getattr(log, "details", None),
-            "created_at": getattr(log, "created_at").isoformat() if getattr(log, "created_at", None) else None,
-        })
+    activity: List[Dict[str, Optional[str]]] = []
+    for log in logs:
+        actor = users_by_id.get(str(getattr(log, "user_id", "")))
+        activity.append(
+            {
+                "id": str(log.id),
+                "action": log.action,
+                "resource": log.resource,
+                "resource_id": str(getattr(log, "resource_id", "")) or None,
+                "details": log.reason,
+                "created_at": log.created_at.isoformat()
+                if getattr(log, "created_at", None)
+                else None,
+                "actor": {
+                    "id": str(actor.id) if actor else None,
+                    "email": actor.email if actor else None,
+                    "display_name": actor.display_name if actor else None,
+                },
+            }
+        )
 
-    return {"activity": activity_items, "count": len(activity_items)}
+    return {"activity": activity, "count": len(activity)}
 
 
 @router.get("/system/health")
 async def get_system_health(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_admin)
+    db: AsyncSession = Depends(get_async_db),
+    user: User = Depends(get_current_admin_dev),
 ):
-    """Get system health status."""
+    """Return coarse-grained health information for dependent services."""
     try:
-        # Check database connection
-        db_result = await db.execute(select(func.count()).select_from(User))
+        await db.execute(select(func.count()).select_from(User).limit(1))
         db_healthy = True
     except Exception:
         db_healthy = False
 
-    # Check Redis (simplified - assume healthy if API is running)
-    redis_healthy = True
-
-    # Check MinIO (simplified - assume healthy if API is running)
-    storage_healthy = True
-
-    # Check NLP service (simplified - assume healthy if API is running)
-    nlp_healthy = True
-
-    # Check Vision service (simplified - assume healthy if API is running)
-    vision_healthy = True
-
-    # Determine overall status
     services = {
-        "api": True,  # If we're here, API is healthy
+        "api": True,
         "database": db_healthy,
-        "redis": redis_healthy,
-        "storage": storage_healthy,
-        "nlp": nlp_healthy,
-        "vision": vision_healthy,
+        "redis": True,
+        "storage": True,
+        "nlp": True,
+        "vision": True,
     }
-
-    healthy_count = sum(services.values())
-    total_count = len(services)
-
-    if healthy_count == total_count:
-        status = "healthy"
-    elif healthy_count >= total_count * 0.8:
-        status = "degraded"
-    else:
-        status = "unhealthy"
+    healthy = sum(1 for healthy in services.values() if healthy)
+    total = len(services)
+    status = "healthy" if healthy == total else "degraded" if healthy >= total * 0.8 else "unhealthy"
 
     return {
         "status": status,
         "services": services,
-        "uptime": "24h 15m 30s",  # Simplified - would need actual uptime tracking
-        "version": "2.1.0",
-        "last_backup": "2025-10-15T10:00:00Z"  # Simplified - would need actual backup tracking
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }

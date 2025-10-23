@@ -1,0 +1,515 @@
+name: Lost & Found CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  FLUTTER_VERSION: '3.16.0'
+
+jobs:
+  # Code Quality Checks
+  code-quality:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install black isort flake8 mypy bandit safety
+          pip install -r services/api/requirements.txt
+          pip install -r services/api/requirements-dev.txt
+
+      - name: Install Node.js dependencies
+        run: |
+          cd apps/admin
+          npm ci
+
+      - name: Python code formatting (Black)
+        run: |
+          black --check services/
+
+      - name: Python import sorting (isort)
+        run: |
+          isort --check-only services/
+
+      - name: Python linting (flake8)
+        run: |
+          flake8 services/
+
+      - name: Python type checking (mypy)
+        run: |
+          mypy services/
+
+      - name: Python security check (bandit)
+        run: |
+          bandit -r services/
+
+      - name: Python dependency check (safety)
+        run: |
+          safety check
+
+      - name: TypeScript/JavaScript linting
+        run: |
+          cd apps/admin
+          npm run lint
+
+      - name: TypeScript type checking
+        run: |
+          cd apps/admin
+          npm run type-check
+
+  # Backend Tests
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_lostfound
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/api/requirements.txt
+          pip install -r services/api/requirements-dev.txt
+          pip install -r services/nlp/requirements.txt
+          pip install -r services/vision/requirements.txt
+
+      - name: Set up test environment
+        run: |
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_lostfound"
+          export REDIS_URL="redis://localhost:6379/15"
+          export JWT_SECRET_KEY="test-secret-key"
+
+      - name: Run API tests
+        run: |
+          cd services/api
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+      - name: Run NLP service tests
+        run: |
+          cd services/nlp
+          pytest tests/ -v
+
+      - name: Run Vision service tests
+        run: |
+          cd services/vision
+          pytest tests/ -v
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./services/api/coverage.xml
+          flags: backend
+          name: backend-coverage
+
+  # Frontend Tests
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Node.js dependencies
+        uses: actions/cache@v3
+        with:
+          path: apps/admin/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('apps/admin/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: |
+          cd apps/admin
+          npm ci
+
+      - name: Run tests
+        run: |
+          cd apps/admin
+          npm run test
+
+      - name: Run build test
+        run: |
+          cd apps/admin
+          npm run build
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: frontend-test-results
+          path: apps/admin/coverage/
+
+  # Mobile Tests
+  mobile-tests:
+    name: Mobile Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pub-cache
+            apps/mobile/.dart_tool
+          key: ${{ runner.os }}-flutter-${{ hashFiles('apps/mobile/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-
+
+      - name: Install dependencies
+        run: |
+          cd apps/mobile
+          flutter pub get
+
+      - name: Run Flutter tests
+        run: |
+          cd apps/mobile
+          flutter test
+
+      - name: Run Flutter analyze
+        run: |
+          cd apps/mobile
+          flutter analyze
+
+      - name: Build APK (debug)
+        run: |
+          cd apps/mobile
+          flutter build apk --debug
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_lostfound
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/api/requirements.txt
+          pip install -r services/api/requirements-dev.txt
+          cd apps/admin && npm ci
+
+      - name: Start services
+        run: |
+          # Start API service
+          cd services/api
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          API_PID=$!
+          
+          # Start NLP service
+          cd ../nlp
+          python -m uvicorn main:app --host 0.0.0.0 --port 8001 &
+          NLP_PID=$!
+          
+          # Start Vision service
+          cd ../vision
+          python -m uvicorn main:app --host 0.0.0.0 --port 8002 &
+          VISION_PID=$!
+          
+          # Wait for services to start
+          sleep 10
+          
+          # Check service health
+          curl -f http://localhost:8000/health || exit 1
+          curl -f http://localhost:8001/health || exit 1
+          curl -f http://localhost:8002/health || exit 1
+
+      - name: Run integration tests
+        run: |
+          cd services/api
+          pytest tests/integration/ -v
+
+      - name: Test API endpoints
+        run: |
+          # Test user registration
+          curl -X POST http://localhost:8000/v1/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@example.com","password":"TestPassword123!","display_name":"Test User"}'
+          
+          # Test user login
+          curl -X POST http://localhost:8000/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@example.com","password":"TestPassword123!"}'
+
+  # Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_lostfound
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/api/requirements.txt
+          pip install -r services/api/requirements-dev.txt
+          pip install locust
+
+      - name: Run performance tests
+        run: |
+          cd services/api
+          pytest tests/performance/ -v -m performance
+
+      - name: Run load tests
+        run: |
+          cd services/api
+          locust -f tests/load/locustfile.py --headless -u 10 -r 2 -t 30s --host http://localhost:8000
+
+  # Security Tests
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: |
+          pip install bandit safety semgrep
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r services/ -f json -o bandit-report.json
+
+      - name: Run Safety dependency check
+        run: |
+          safety check --json --output safety-report.json
+
+      - name: Run Semgrep security scan
+        run: |
+          semgrep --config=auto services/ --json --output=semgrep-report.json
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+            semgrep-report.json
+
+  # Docker Build & Test
+  docker-build:
+    name: Docker Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API service
+        run: |
+          cd services/api
+          docker build -t lost-found-api:test .
+
+      - name: Build NLP service
+        run: |
+          cd services/nlp
+          docker build -t lost-found-nlp:test .
+
+      - name: Build Vision service
+        run: |
+          cd services/vision
+          docker build -t lost-found-vision:test .
+
+      - name: Build Admin frontend
+        run: |
+          cd apps/admin
+          docker build -t lost-found-admin:test .
+
+      - name: Test Docker containers
+        run: |
+          # Test API container
+          docker run --rm lost-found-api:test python -c "import app.main; print('API container OK')"
+          
+          # Test NLP container
+          docker run --rm lost-found-nlp:test python -c "import main; print('NLP container OK')"
+          
+          # Test Vision container
+          docker run --rm lost-found-vision:test python -c "import main; print('Vision container OK')"
+
+  # Deployment (only on main branch)
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [code-quality, backend-tests, frontend-tests, integration-tests, security-tests, docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production..."
+          # Add your deployment commands here
+          # Example: kubectl apply -f k8s/
+          # Example: docker-compose -f docker-compose.prod.yml up -d
+
+      - name: Health check
+        run: |
+          echo "Performing health checks..."
+          # Add health check commands here
+          # Example: curl -f https://api.yourdomain.com/health
+
+  # Notification
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [code-quality, backend-tests, frontend-tests, integration-tests, security-tests, docker-build]
+    if: always()
+    steps:
+      - name: Notify on success
+        if: ${{ needs.code-quality.result == 'success' && needs.backend-tests.result == 'success' && needs.frontend-tests.result == 'success' }}
+        run: |
+          echo "✅ All tests passed! Pipeline successful."
+
+      - name: Notify on failure
+        if: ${{ needs.code-quality.result == 'failure' || needs.backend-tests.result == 'failure' || needs.frontend-tests.result == 'failure' }}
+        run: |
+          echo "❌ Some tests failed. Please check the logs."
+          exit 1

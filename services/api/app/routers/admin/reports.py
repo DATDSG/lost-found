@@ -1,377 +1,533 @@
-"""Admin report moderation router."""
+"""Admin report moderation API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
-from typing import Optional
+from __future__ import annotations
+
 import json
+from typing import Dict, List, Optional
 
-from app.database import get_db
-from app.models import User, Report, ReportStatus
-from app.dependencies import get_current_admin
-from app.helpers import create_audit_log
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from ...infrastructure.database.session import get_async_db
+from ...dependencies import get_current_admin
+from ...helpers import create_audit_log
+from ...models import User
+from ...domains.reports.models.report import Report, ReportStatus
 
 router = APIRouter()
 
 
+class ModerationActionRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class UpdateReportStatusRequest(BaseModel):
+    status: ReportStatus
+    admin_notes: Optional[str] = None
+
+
+class BulkReportRequest(BaseModel):
+    report_ids: List[str]
+    reason: Optional[str] = None
+
+
+def _serialize_report_summary(report: Report, owner: Optional[User]) -> Dict:
+    return {
+        "id": report.id,
+        "title": report.title,
+        "description": report.description or "",
+        "type": report.type,
+        "status": report.status,
+        "category": report.category,
+        "condition": report.condition,
+        "is_urgent": report.is_urgent,
+        "reward_offered": report.reward_offered,
+        "is_resolved": report.is_resolved,
+        "location_city": report.location_city,
+        "occurred_at": report.occurred_at.isoformat() if report.occurred_at else None,
+        "occurred_time": report.occurred_time,
+        "created_at": report.created_at.isoformat() if report.created_at else None,
+        "owner": {
+            "id": str(owner.id) if owner else None,
+            "email": owner.email if owner else None,
+            "display_name": owner.display_name if owner else None,
+        },
+    }
+
+
+def _serialize_report_detail(report: Report) -> Dict:
+    return {
+        "id": report.id,
+        "title": report.title,
+        "description": report.description or "",
+        "type": report.type,
+        "status": report.status,
+        "category": report.category,
+        "colors": report.colors or [],
+        "condition": report.condition,
+        "safety_status": report.safety_status,
+        "is_safe": report.is_safe,
+        "is_urgent": report.is_urgent,
+        "reward_offered": report.reward_offered,
+        "reward_amount": report.reward_amount,
+        "contact_info": report.contact_info,
+        "additional_info": report.additional_info,
+        "occurred_at": report.occurred_at.isoformat() if report.occurred_at else None,
+        "occurred_time": report.occurred_time,
+        "location_city": report.location_city,
+        "location_address": report.location_address,
+        "latitude": report.latitude,
+        "longitude": report.longitude,
+        "created_at": report.created_at.isoformat() if report.created_at else None,
+        "updated_at": report.updated_at.isoformat() if report.updated_at else None,
+        "is_resolved": report.is_resolved,
+        "moderation_notes": report.moderation_notes,
+        "owner_id": str(report.owner_id),
+    }
+
+
+async def _get_report_or_404(db: AsyncSession, report_id: str) -> Report:
+    result = await db.execute(
+        select(Report)
+        .options(selectinload(Report.owner), selectinload(Report.media))
+        .where(Report.id == report_id)
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+    return report
+
+
 @router.get("")
-async def list_reports_for_moderation(
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(10, ge=1, le=100, description="Number of records to return"),
-    page: Optional[int] = Query(None, ge=1, description="Page number (alternative to skip)"),
-    page_size: Optional[int] = Query(None, ge=1, le=100, description="Page size (alternative to limit)"),
+async def list_reports(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     status_filter: Optional[ReportStatus] = None,
     report_type: Optional[str] = None,
     search: Optional[str] = None,
-    current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """List reports for moderation with filtering."""
-    
-    # Support both skip/limit and page/page_size pagination
-    if page is not None and page_size is not None:
-        skip = (page - 1) * page_size
-        limit = page_size
-    
-    # Build query with filters
-    query = select(Report)
-    
-    # Apply filters
+    """List reports for moderation with filtering and pagination."""
+    conditions = []
     if status_filter:
-        query = query.where(Report.status == status_filter.value)
-    else:
-        # Default to pending reports for moderation
-        query = query.where(Report.status == "pending")
-        
+        conditions.append(Report.status == status_filter.value)
     if report_type:
-        query = query.where(Report.type == report_type)
-        
+        conditions.append(Report.type == report_type)
     if search:
-        search_pattern = f"%{search}%"
-        query = query.where(
+        pattern = f"%{search}%"
+        conditions.append(
             or_(
-                Report.title.ilike(search_pattern),
-                Report.description.ilike(search_pattern)
+                Report.title.ilike(pattern),
+                Report.description.ilike(pattern),
             )
         )
-    
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-    
-    # Apply pagination and ordering
-    query = query.order_by(Report.created_at.desc()).offset(skip).limit(limit)
-    
-    # Execute query
+
+    count_query = select(func.count()).select_from(Report)
+    if conditions:
+        count_query = count_query.where(*conditions)
+    total = (await db.execute(count_query)).scalar() or 0
+
+    query = (
+        select(Report)
+        .options(selectinload(Report.owner))
+        .order_by(Report.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    if conditions:
+        query = query.where(*conditions)
+
     result = await db.execute(query)
     reports = result.scalars().all()
-    
-    # Get all owner IDs for batch loading
-    owner_ids = [report.owner_id for report in reports]
-    owners_result = await db.execute(select(User).where(User.id.in_(owner_ids)))
-    owners = {owner.id: owner for owner in owners_result.scalars().all()}
-    
-    # Format response
-    report_list = []
-    for report in reports:
-        owner = owners.get(report.owner_id)
-        report_list.append({
-            "id": report.id,
-            "title": report.title,
-            "description": report.description[:200] + "..." if report.description and len(report.description) > 200 else report.description or "",
-            "type": report.type,
-            "status": report.status,
-            "category": report.category,
-            "owner": {
-                "id": str(owner.id) if owner else None,
-                "email": owner.email if owner else "Unknown",
-                "display_name": owner.display_name if owner else "Unknown"
-            },
-            "created_at": report.created_at.isoformat() if report.created_at else None,
-            "location_city": report.location_city
-        })
-    
+
+    items = [_serialize_report_summary(report, report.owner) for report in reports]
+
     return {
-        "reports": report_list,
+        "items": items,
         "total": total,
         "skip": skip,
-        "limit": limit
+        "limit": limit,
     }
 
 
 @router.get("/stats")
 async def get_report_stats(
-    current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """Get comprehensive report statistics."""
-    
-    # Status counts using async queries
-    pending_result = await db.execute(
-        select(func.count(Report.id)).where(Report.status == "pending")
-    )
-    pending_count = pending_result.scalar() or 0
-    
-    approved_result = await db.execute(
-        select(func.count(Report.id)).where(Report.status == "approved")
-    )
-    approved_count = approved_result.scalar() or 0
-    
-    hidden_result = await db.execute(
-        select(func.count(Report.id)).where(Report.status == "hidden")
-    )
-    hidden_count = hidden_result.scalar() or 0
-    
-    removed_result = await db.execute(
-        select(func.count(Report.id)).where(Report.status == "removed")
-    )
-    removed_count = removed_result.scalar() or 0
-    
-    total_count = pending_count + approved_count + hidden_count + removed_count
-    
-    # Type counts
-    lost_result = await db.execute(
-        select(func.count(Report.id)).where(Report.type == "lost")
-    )
-    lost_count = lost_result.scalar() or 0
-    
-    found_result = await db.execute(
-        select(func.count(Report.id)).where(Report.type == "found")
-    )
-    found_count = found_result.scalar() or 0
-    
+    """Aggregate report statistics by status and type."""
+    pending = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.status == "pending")
+        )
+    ).scalar() or 0
+    approved = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.status == "approved")
+        )
+    ).scalar() or 0
+    hidden = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.status == "hidden")
+        )
+    ).scalar() or 0
+    removed = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.status == "removed")
+        )
+    ).scalar() or 0
+
+    lost = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.type == "lost")
+        )
+    ).scalar() or 0
+    found = (
+        await db.execute(
+            select(func.count()).select_from(Report).where(Report.type == "found")
+        )
+    ).scalar() or 0
+
+    total = pending + approved + hidden + removed
+
     return {
-        "total": total_count,
-        "pending": pending_count,
-        "approved": approved_count,
-        "hidden": hidden_count,
-        "removed": removed_count,
-        "lost": lost_count,
-        "found": found_count,
+        "total": total,
+        "pending": pending,
+        "approved": approved,
+        "hidden": hidden,
+        "removed": removed,
+        "lost": lost,
+        "found": found,
         "by_status": {
-            "pending": pending_count,
-            "approved": approved_count,
-            "hidden": hidden_count,
-            "removed": removed_count
+            "pending": pending,
+            "approved": approved,
+            "hidden": hidden,
+            "removed": removed,
         },
         "by_type": {
-            "lost": lost_count,
-            "found": found_count
-        }
+            "lost": lost,
+            "found": found,
+        },
     }
 
 
 @router.get("/{report_id}")
-def get_report_details(
+async def get_report_detail(
     report_id: str,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """Get detailed information about a report for moderation."""
-    
-    report = db.query(Report).filter(Report.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
-        )
-    
-    owner = db.query(User).filter(User.id == report.owner_id).first()
-    
-    return {
-        "id": report.id,
-        "title": report.title,
-        "description": report.description,
-        "type": report.type,
-        "status": report.status,
-        "category": report.category,
-        "colors": report.colors,
-        "owner": {
-            "id": owner.id if owner else None,
-            "email": owner.email if owner else "Unknown",
-            "display_name": owner.display_name if owner else "Unknown",
-            "role": owner.role if owner else None
-        },
-        "location": {
-            "city": report.location_city,
-            "address": report.location_address
-        },
-        "occurred_at": report.occurred_at.isoformat() if report.occurred_at else None,
-        "created_at": report.created_at.isoformat() if report.created_at else None,
-        "updated_at": report.updated_at.isoformat() if report.updated_at else None,
-        "has_embedding": report.embedding is not None,
-        "has_image_hash": report.image_hash is not None
-    }
+    """Return a single report with details."""
+    report = await _get_report_or_404(db, report_id)
+    payload = _serialize_report_detail(report)
+    if report.owner:
+        payload["owner"] = {
+            "id": str(report.owner.id),
+            "email": report.owner.email,
+            "display_name": report.owner.display_name,
+        }
+    if report.media:
+        payload["media"] = [
+            {
+                "id": media.id,
+                "url": media.url,
+                "filename": media.filename,
+                "media_type": media.media_type,
+            }
+            for media in report.media
+        ]
+    return payload
 
 
 @router.post("/{report_id}/approve")
-def approve_report(
+async def approve_report(
     report_id: str,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Approve a pending report."""
-    
-    report = db.query(Report).filter(Report.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
-        )
-    
+    report = await _get_report_or_404(db, report_id)
+
     old_status = report.status
-    report.status = ReportStatus.APPROVED
-    db.commit()
-    
-    # Create audit log
-    create_audit_log(
+    report.status = ReportStatus.APPROVED.value
+
+    await db.commit()
+
+    await create_audit_log(
         db=db,
-        user_id=current_user.id,
-        action="report_approved",
+        user_id=str(current_user.id),
+        action="approve_report",
         resource_type="report",
-        resource_id=report_id,
-        details=json.dumps({
-            "moderator": current_user.email,
-            "old_status": str(old_status),
-            "new_status": "approved",
-            "report_title": report.title
-        })
+        resource_id=report.id,
+        details=json.dumps(
+            {
+                "moderator": current_user.email,
+                "old_status": old_status,
+                "new_status": report.status,
+                "report_title": report.title,
+            }
+        ),
     )
-    
-    return {
-        "message": "Report approved successfully",
-        "report_id": report_id,
-        "new_status": "approved"
-    }
+
+    return {"message": "Report approved", "report_id": report.id}
 
 
 @router.post("/{report_id}/reject")
-def reject_report(
+async def reject_report(
     report_id: str,
-    reason: Optional[str] = None,
+    payload: ModerationActionRequest = Body(default_factory=ModerationActionRequest),
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """Reject a pending report (hide it)."""
-    
-    report = db.query(Report).filter(Report.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
-        )
-    
+    """Reject (hide) a report that violates guidelines."""
+    report = await _get_report_or_404(db, report_id)
+
     old_status = report.status
-    report.status = ReportStatus.HIDDEN
-    db.commit()
-    
-    # Create audit log
-    create_audit_log(
+    report.status = ReportStatus.HIDDEN.value
+    report.moderation_notes = payload.reason
+
+    await db.commit()
+
+    await create_audit_log(
         db=db,
-        user_id=current_user.id,
-        action="report_rejected",
+        user_id=str(current_user.id),
+        action="reject_report",
         resource_type="report",
-        resource_id=report_id,
-        details=json.dumps({
-            "moderator": current_user.email,
-            "old_status": str(old_status),
-            "new_status": "hidden",
-            "reason": reason,
-            "report_title": report.title
-        })
+        resource_id=report.id,
+        details=json.dumps(
+            {
+                "moderator": current_user.email,
+                "old_status": old_status,
+                "new_status": report.status,
+                "reason": payload.reason,
+            }
+        ),
     )
-    
-    return {
-        "message": "Report rejected successfully",
-        "report_id": report_id,
-        "new_status": "hidden"
-    }
+
+    return {"message": "Report rejected", "report_id": report.id}
 
 
 @router.post("/{report_id}/remove")
-def remove_report(
+async def remove_report(
     report_id: str,
-    reason: str,
+    payload: ModerationActionRequest = Body(default_factory=ModerationActionRequest),
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """Remove a report (for policy violations)."""
-    
+    """Remove a report (admin-only)."""
     if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can remove reports"
+            detail="Only admins can remove reports",
         )
-    
-    report = db.query(Report).filter(Report.id == report_id).first()
-    
-    if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
-        )
-    
+
+    report = await _get_report_or_404(db, report_id)
     old_status = report.status
-    report.status = ReportStatus.REMOVED
-    db.commit()
-    
-    # Create audit log
-    create_audit_log(
+    report.status = ReportStatus.REMOVED.value
+    report.moderation_notes = payload.reason
+
+    await db.commit()
+
+    await create_audit_log(
         db=db,
-        user_id=current_user.id,
-        action="report_removed",
+        user_id=str(current_user.id),
+        action="remove_report",
         resource_type="report",
-        resource_id=report_id,
-        details=json.dumps({
-            "admin": current_user.email,
-            "old_status": str(old_status),
-            "new_status": "removed",
-            "reason": reason,
-            "report_title": report.title
-        })
+        resource_id=report.id,
+        details=json.dumps(
+            {
+                "admin": current_user.email,
+                "old_status": old_status,
+                "new_status": report.status,
+                "reason": payload.reason,
+            }
+        ),
     )
-    
-    return {
-        "message": "Report removed successfully",
-        "report_id": report_id,
-        "new_status": "removed"
-    }
+
+    return {"message": "Report removed", "report_id": report.id}
 
 
-@router.get("/stats/moderation")
-def get_moderation_stats(
+@router.patch("/{report_id}/status")
+async def update_report_status(
+    report_id: str,
+    payload: UpdateReportStatusRequest,
     current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
-    """Get moderation queue statistics."""
-    
-    from sqlalchemy import func
-    
-    pending_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.PENDING
-    ).scalar()
-    
-    approved_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.APPROVED
-    ).scalar()
-    
-    hidden_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.HIDDEN
-    ).scalar()
-    
-    removed_count = db.query(func.count(Report.id)).filter(
-        Report.status == ReportStatus.REMOVED
-    ).scalar()
-    
+    """Generic status update endpoint to support admin UI."""
+    report = await _get_report_or_404(db, report_id)
+
+    old_status = report.status
+    report.status = payload.status.value
+    if payload.admin_notes is not None:
+        report.moderation_notes = payload.admin_notes
+
+    await db.commit()
+    await create_audit_log(
+        db=db,
+        user_id=str(current_user.id),
+        action="update_report_status",
+        resource_type="report",
+        resource_id=report.id,
+        details=json.dumps(
+            {
+                "moderator": current_user.email,
+                "old_status": old_status,
+                "new_status": report.status,
+                "notes": payload.admin_notes,
+            }
+        ),
+    )
+
+    return {"report": _serialize_report_detail(report)}
+
+
+@router.delete("/{report_id}")
+async def delete_report(
+    report_id: str,
+    payload: ModerationActionRequest = Body(default_factory=ModerationActionRequest),
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Soft delete a report by marking it removed."""
+    report = await _get_report_or_404(db, report_id)
+    old_status = report.status
+    report.status = ReportStatus.REMOVED.value
+    report.moderation_notes = payload.reason
+
+    await db.commit()
+    await create_audit_log(
+        db=db,
+        user_id=str(current_user.id),
+        action="delete_report",
+        resource_type="report",
+        resource_id=report.id,
+        details=json.dumps(
+            {
+                "moderator": current_user.email,
+                "old_status": old_status,
+                "new_status": report.status,
+                "reason": payload.reason,
+            }
+        ),
+    )
+
+    return {"message": "Report removed", "report_id": report.id}
+
+
+@router.post("/bulk-approve")
+async def bulk_approve_reports(
+    payload: BulkReportRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Approve a batch of reports."""
+    return await _bulk_update_status(
+        db=db,
+        current_user=current_user,
+        report_ids=payload.report_ids,
+        new_status=ReportStatus.APPROVED,
+        reason=payload.reason,
+        action="bulk_approve_reports",
+    )
+
+
+@router.post("/bulk-reject")
+async def bulk_reject_reports(
+    payload: BulkReportRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Reject a batch of reports."""
+    return await _bulk_update_status(
+        db=db,
+        current_user=current_user,
+        report_ids=payload.report_ids,
+        new_status=ReportStatus.HIDDEN,
+        reason=payload.reason,
+        action="bulk_reject_reports",
+    )
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_reports(
+    payload: BulkReportRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Soft delete a batch of reports."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can bulk delete reports",
+        )
+
+    return await _bulk_update_status(
+        db=db,
+        current_user=current_user,
+        report_ids=payload.report_ids,
+        new_status=ReportStatus.REMOVED,
+        reason=payload.reason,
+        action="bulk_delete_reports",
+    )
+
+
+async def _bulk_update_status(
+    *,
+    db: AsyncSession,
+    current_user: User,
+    report_ids: List[str],
+    new_status: ReportStatus,
+    reason: Optional[str],
+    action: str,
+) -> Dict:
+    if not report_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="report_ids list cannot be empty",
+        )
+
+    success = 0
+    errors: List[str] = []
+    for report_id in report_ids:
+        try:
+            report = await _get_report_or_404(db, report_id)
+            old_status = report.status
+            report.status = new_status.value
+            if reason:
+                report.moderation_notes = reason
+            await db.commit()
+            success += 1
+
+            await create_audit_log(
+                db=db,
+                user_id=str(current_user.id),
+                action=action,
+                resource_type="report",
+                resource_id=report.id,
+                details=json.dumps(
+                    {
+                        "moderator": current_user.email,
+                        "old_status": old_status,
+                        "new_status": report.status,
+                        "reason": reason,
+                    }
+                ),
+            )
+        except HTTPException:
+            await db.rollback()
+            errors.append(report_id)
+        except Exception as exc:
+            await db.rollback()
+            errors.append(f"{report_id}:{exc}")
+
     return {
-        "pending": pending_count,
-        "approved": approved_count,
-        "hidden": hidden_count,
-        "removed": removed_count,
-        "total": pending_count + approved_count + hidden_count + removed_count
+        "updated": success,
+        "failed": len(errors),
+        "errors": errors or None,
     }
