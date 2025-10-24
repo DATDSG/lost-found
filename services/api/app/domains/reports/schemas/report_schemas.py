@@ -42,7 +42,7 @@ class ReportBase(BaseModel):
     contact_info: Optional[str] = Field(None, max_length=1000)
     is_urgent: bool = False
     reward_offered: bool = False
-    reward_amount: Optional[float] = Field(None, ge=0)
+    reward_amount: Optional[str] = Field(None, min_length=1)
 
 
 class ReportCreate(ReportBase):
@@ -77,7 +77,7 @@ class ReportUpdate(BaseModel):
     contact_info: Optional[str] = Field(None, max_length=1000)
     is_urgent: Optional[bool] = None
     reward_offered: Optional[bool] = None
-    reward_amount: Optional[float] = Field(None, ge=0)
+    reward_amount: Optional[str] = Field(None, min_length=1)
     images: Optional[List[str]] = None
     status: Optional[ReportStatusEnum] = None
 
@@ -90,9 +90,9 @@ class ReportResponse(ReportBase):
     images: Optional[List[str]] = Field(default_factory=list)
     image_hashes: Optional[List[str]] = Field(default_factory=list)
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, exclude={'text_embedding'})
     
     @validator('images', pre=True)
     def convert_images_none_to_empty_list(cls, v):

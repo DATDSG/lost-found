@@ -1,4 +1,3 @@
-/// Reusable profile widgets and components
 library;
 
 import 'package:flutter/material.dart';
@@ -6,278 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/api_models.dart' as api_models;
 import '../../../../core/theme/design_tokens.dart';
-import '../../data/providers/profile_providers.dart';
-import '../../domain/models/profile_models.dart';
-
-/// Profile avatar widget with fallback
-class ProfileAvatar extends StatelessWidget {
-  /// Creates a new [ProfileAvatar] instance
-  const ProfileAvatar({
-    required this.user,
-    super.key,
-    this.size = 80,
-    this.showBorder = true,
-  });
-
-  /// User data
-  final api_models.User user;
-
-  /// Avatar size
-  final double size;
-
-  /// Whether to show border
-  final bool showBorder;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: DT.c.brand,
-      borderRadius: BorderRadius.circular(DT.r.full),
-      border: showBorder ? Border.all(color: DT.c.border, width: 2) : null,
-      boxShadow: showBorder ? DT.e.sm : null,
-    ),
-    child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(DT.r.full),
-            child: Image.network(
-              user.avatarUrl!,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
-                  _buildFallbackIcon(),
-            ),
-          )
-        : _buildFallbackIcon(),
-  );
-
-  Widget _buildFallbackIcon() =>
-      Icon(Icons.person, color: Colors.white, size: size * 0.5);
-}
-
-/// Profile stats widget
-class ProfileStatsWidget extends ConsumerWidget {
-  /// Creates a new [ProfileStatsWidget] instance
-  const ProfileStatsWidget({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(profileStatsProvider);
-
-    return statsAsync.when(
-      data: _buildStatsGrid,
-      loading: _buildLoadingStats,
-      error: (error, stackTrace) => _buildErrorStats(),
-    );
-  }
-
-  Widget _buildStatsGrid(ProfileStats stats) => Container(
-    padding: EdgeInsets.all(DT.s.lg),
-    decoration: BoxDecoration(
-      color: DT.c.surface,
-      borderRadius: BorderRadius.circular(DT.r.lg),
-      boxShadow: DT.e.card,
-      border: Border.all(color: DT.c.border),
-    ),
-    child: Column(
-      children: [
-        // First row with primary stats
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildStatItem(
-              title: '${stats.totalReports}',
-              subtitle: 'Total Reports',
-              color: DT.c.brand,
-              icon: Icons.description_outlined,
-            ),
-            _buildStatItem(
-              title: '${stats.activeReports}',
-              subtitle: 'Active',
-              color: DT.c.accentOrange,
-              icon: Icons.schedule_outlined,
-            ),
-            _buildStatItem(
-              title: '${stats.resolvedReports}',
-              subtitle: 'Resolved',
-              color: DT.c.accentGreen,
-              icon: Icons.check_circle_outline,
-            ),
-          ],
-        ),
-        SizedBox(height: DT.s.lg),
-        // Second row with secondary stats
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildStatItem(
-              title: '${stats.matchesFound}',
-              subtitle: 'Matches Found',
-              color: DT.c.accentPurple,
-              icon: Icons.search_outlined,
-            ),
-            _buildStatItem(
-              title: '${stats.successfulMatches}',
-              subtitle: 'Successful',
-              color: DT.c.accentTeal,
-              icon: Icons.handshake_outlined,
-            ),
-            _buildStatItem(
-              title: '${stats.draftReports}',
-              subtitle: 'Drafts',
-              color: DT.c.textMuted,
-              icon: Icons.edit_outlined,
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildStatItem({
-    required String title,
-    required String subtitle,
-    required Color color,
-    required IconData icon,
-  }) => Semantics(
-    label: '$title $subtitle',
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: EdgeInsets.all(DT.s.md),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(DT.r.md),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 24,
-            semanticLabel: '$subtitle icon',
-          ),
-        ),
-        SizedBox(height: DT.s.sm),
-        Text(
-          title,
-          style: DT.t.headline3.copyWith(
-            color: color,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: DT.s.xs),
-        Text(
-          subtitle,
-          style: DT.t.bodySmall.copyWith(
-            color: DT.c.textMuted,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildLoadingStats() => Container(
-    padding: EdgeInsets.all(DT.s.lg),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(DT.r.md),
-      boxShadow: DT.e.card,
-    ),
-    child: Center(child: CircularProgressIndicator(color: DT.c.brand)),
-  );
-
-  Widget _buildErrorStats() => Container(
-    padding: EdgeInsets.all(DT.s.lg),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(DT.r.md),
-      boxShadow: DT.e.card,
-      border: Border.all(color: DT.c.border),
-    ),
-    child: Column(
-      children: [
-        Icon(Icons.error_outline, color: DT.c.accentRed, size: 32),
-        SizedBox(height: DT.s.sm),
-        Text(
-          'Unable to load statistics',
-          style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
-        ),
-      ],
-    ),
-  );
-}
-
-/// Profile action button widget
-class ProfileActionButton extends StatelessWidget {
-  /// Creates a new [ProfileActionButton] instance
-  const ProfileActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    super.key,
-    this.isDestructive = false,
-    this.isLoading = false,
-  });
-
-  /// Button icon
-  final IconData icon;
-
-  /// Button label
-  final String label;
-
-  /// Button onPressed callback
-  final VoidCallback onPressed;
-
-  /// Whether this is a destructive action
-  final bool isDestructive;
-
-  /// Whether button is in loading state
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isDestructive ? DT.c.accentRed : DT.c.brand;
-
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: color,
-          side: BorderSide(color: color),
-          padding: EdgeInsets.symmetric(vertical: DT.s.md),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DT.r.sm),
-          ),
-        ),
-        child: isLoading
-            ? SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(color: color, strokeWidth: 2),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 18),
-                  SizedBox(width: DT.s.sm),
-                  Text(label, style: DT.t.button.copyWith(color: color)),
-                ],
-              ),
-      ),
-    );
-  }
-}
+import '../../../../shared/models/home_models.dart';
+import '../../../../shared/providers/api_providers.dart';
+import '../../../../shared/widgets/enhanced_statistics_widget.dart';
+import '../../../../shared/widgets/report_card.dart';
 
 /// Profile info card widget
 class ProfileInfoCard extends StatelessWidget {
@@ -289,130 +20,88 @@ class ProfileInfoCard extends StatelessWidget {
     this.onEditPressed,
   });
 
-  /// User data
+  /// The user data
   final api_models.User user;
 
   /// Whether to show edit button
   final bool showEditButton;
 
-  /// Edit button callback
+  /// Callback when edit button is pressed
   final VoidCallback? onEditPressed;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: EdgeInsets.all(DT.s.xl),
+    padding: EdgeInsets.all(DT.s.lg),
     decoration: BoxDecoration(
       color: DT.c.surface,
-      borderRadius: BorderRadius.circular(DT.r.xl),
+      borderRadius: BorderRadius.circular(DT.r.lg),
       boxShadow: DT.e.card,
       border: Border.all(color: DT.c.border),
     ),
     child: Column(
       children: [
-        // Profile Avatar with enhanced styling
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: DT.e.lg,
-            border: Border.all(color: DT.c.brand, width: 3),
-          ),
-          child: ProfileAvatar(user: user, size: 100),
-        ),
-
-        SizedBox(height: DT.s.lg),
-
-        // User Info with better typography
-        Text(
-          user.displayName ?? 'User',
-          style: DT.t.titleLarge.copyWith(
-            color: DT.c.text,
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-          ),
-          textAlign: TextAlign.center,
-        ),
-
-        SizedBox(height: DT.s.sm),
-
+        ProfileAvatar(imageUrl: user.avatarUrl),
+        SizedBox(height: DT.s.md),
         Text(
           user.email,
-          style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted, fontSize: 16),
-          textAlign: TextAlign.center,
-        ),
-
-        if (user.phoneNumber != null) ...[
-          SizedBox(height: DT.s.xs),
-          Text(
-            user.phoneNumber!,
-            style: DT.t.bodyMedium.copyWith(
-              color: DT.c.textMuted,
-              fontSize: 16,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-
-        SizedBox(height: DT.s.lg),
-
-        // Member since with enhanced styling
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: DT.s.lg, vertical: DT.s.md),
-          decoration: BoxDecoration(
-            color: DT.c.brandSubtle,
-            borderRadius: BorderRadius.circular(DT.r.lg),
-            border: Border.all(color: DT.c.brand.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.calendar_today,
-                color: DT.c.brand,
-                size: 16,
-                semanticLabel: 'Member since icon',
-              ),
-              SizedBox(width: DT.s.sm),
-              Text(
-                'Member since ${_formatDate(user.createdAt)}',
-                style: DT.t.bodySmall.copyWith(
-                  color: DT.c.brand,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ],
+          style: DT.t.titleLarge.copyWith(
+            color: DT.c.text,
+            fontWeight: FontWeight.w600,
           ),
         ),
-
-        if (showEditButton && onEditPressed != null) ...[
+        SizedBox(height: DT.s.sm),
+        Text(
+          'User ID: ${user.id}',
+          style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
+        ),
+        SizedBox(height: DT.s.sm),
+        Text(
+          'Role: ${user.role}',
+          style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
+        ),
+        if (showEditButton) ...[
           SizedBox(height: DT.s.lg),
-          ProfileActionButton(
-            icon: Icons.edit_outlined,
-            label: 'Edit Profile',
-            onPressed: onEditPressed!,
+          ElevatedButton(
+            onPressed: onEditPressed,
+            child: const Text('Edit Profile'),
           ),
         ],
       ],
     ),
   );
+}
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.year}';
-  }
+/// Profile avatar widget with fallback
+class ProfileAvatar extends StatelessWidget {
+  /// Creates a new [ProfileAvatar] instance
+  const ProfileAvatar({required this.imageUrl, super.key, this.size = 80});
+
+  /// The URL of the avatar image.
+  final String? imageUrl;
+
+  /// The size of the avatar.
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => CircleAvatar(
+    radius: size / 2,
+    backgroundColor: DT.c.brand,
+    backgroundImage: imageUrl != null ? NetworkImage(imageUrl!) : null,
+    child: imageUrl == null ? _buildFallbackIcon() : null,
+  );
+
+  Widget _buildFallbackIcon() =>
+      Icon(Icons.person, color: Colors.white, size: size * 0.5);
+}
+
+/// Profile stats widget with enhanced real-time statistics
+class ProfileStatsWidget extends ConsumerWidget {
+  /// Creates a new [ProfileStatsWidget] instance
+  const ProfileStatsWidget({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) =>
+      const EnhancedStatisticsWidget(compactMode: true);
 }
 
 /// Profile tab bar widget
@@ -429,31 +118,360 @@ class ProfileTabBar extends StatelessWidget {
     decoration: BoxDecoration(
       color: DT.c.surface,
       borderRadius: BorderRadius.circular(DT.r.xl),
-      boxShadow: DT.e.card,
-      border: Border.all(color: DT.c.border),
+      boxShadow: [
+        BoxShadow(
+          color: DT.c.brand.withValues(alpha: 0.1),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+          spreadRadius: 1,
+        ),
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.05),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
+      border: Border.all(color: DT.c.border.withValues(alpha: 0.5)),
     ),
     child: TabBar(
       controller: controller,
-      indicator: BoxDecoration(
-        color: DT.c.brand,
-        borderRadius: BorderRadius.circular(DT.r.xl),
-        boxShadow: DT.e.sm,
-      ),
+      indicatorColor: DT.c.brand,
+      indicatorWeight: 3,
       indicatorSize: TabBarIndicatorSize.tab,
-      dividerColor: Colors.transparent,
-      labelColor: DT.c.textOnBrand,
+      labelColor: DT.c.text,
       unselectedLabelColor: DT.c.textMuted,
-      labelStyle: DT.t.body.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
-      unselectedLabelStyle: DT.t.body.copyWith(
-        fontSize: 13,
+      labelStyle: DT.t.bodyMedium.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
+      ),
+      unselectedLabelStyle: DT.t.bodyMedium.copyWith(
         fontWeight: FontWeight.w500,
       ),
       tabs: const [
-        Tab(icon: Icon(Icons.schedule_outlined, size: 18), text: 'Active'),
-        Tab(icon: Icon(Icons.edit_outlined, size: 18), text: 'Drafts'),
-        Tab(icon: Icon(Icons.settings_outlined, size: 18), text: 'Settings'),
-        Tab(icon: Icon(Icons.check_circle_outline, size: 18), text: 'Resolved'),
+        Tab(icon: Icon(Icons.schedule_outlined, size: 20), text: 'Active'),
+        Tab(icon: Icon(Icons.edit_outlined, size: 20), text: 'Drafts'),
+        Tab(icon: Icon(Icons.check_circle_outline, size: 20), text: 'Resolved'),
       ],
     ),
   );
+}
+
+/// Profile tab content widget
+class ProfileTabContent extends StatelessWidget {
+  /// Creates a new [ProfileTabContent] instance
+  const ProfileTabContent({
+    required this.tabIndex,
+    required this.user,
+    super.key,
+  });
+
+  /// The current tab index
+  final int tabIndex;
+
+  /// The user data
+  final api_models.User user;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (tabIndex) {
+      case 0:
+        return _buildActiveReports();
+      case 1:
+        return _buildDraftReports();
+      case 2:
+        return _buildResolvedReports();
+      default:
+        return const Center(child: Text('Unknown tab'));
+    }
+  }
+
+  Widget _buildActiveReports() => Consumer(
+    builder: (context, ref, child) {
+      final reportsAsync = ref.watch(userActiveReportsProvider);
+
+      return reportsAsync.when(
+        data: (reports) {
+          if (reports.isEmpty) {
+            return _buildEmptyState(
+              'No Active Reports',
+              "You don't have any active reports yet",
+              Icons.assignment_outlined,
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(DT.s.md),
+            itemCount: reports.length,
+            itemBuilder: (context, index) {
+              final report = reports[index];
+              return ReportCard(
+                report: report,
+                onContact: () => _showContactDialog(context, report),
+                onViewDetails: () => _navigateToReportDetails(context, report),
+              );
+            },
+          );
+        },
+        loading: () => _buildLoadingState('Loading active reports...'),
+        error: (error, stackTrace) =>
+            _buildErrorState('Error loading active reports', error.toString()),
+      );
+    },
+  );
+
+  Widget _buildDraftReports() => Consumer(
+    builder: (context, ref, child) {
+      final reportsAsync = ref.watch(userDraftReportsProvider);
+
+      return reportsAsync.when(
+        data: (reports) {
+          if (reports.isEmpty) {
+            return _buildEmptyState(
+              'No Draft Reports',
+              "You don't have any draft reports",
+              Icons.edit_outlined,
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(DT.s.md),
+            itemCount: reports.length,
+            itemBuilder: (context, index) {
+              final report = reports[index];
+              return ReportCard(
+                report: report,
+                onContact: () => _showContactDialog(context, report),
+                onViewDetails: () => _navigateToReportDetails(context, report),
+              );
+            },
+          );
+        },
+        loading: () => _buildLoadingState('Loading draft reports...'),
+        error: (error, stackTrace) =>
+            _buildErrorState('Error loading draft reports', error.toString()),
+      );
+    },
+  );
+
+  Widget _buildResolvedReports() => Consumer(
+    builder: (context, ref, child) {
+      final reportsAsync = ref.watch(userResolvedReportsProvider);
+
+      return reportsAsync.when(
+        data: (reports) {
+          if (reports.isEmpty) {
+            return _buildEmptyState(
+              'No Resolved Reports',
+              "You don't have any resolved reports yet",
+              Icons.check_circle_outline,
+            );
+          }
+
+          return ListView.builder(
+            padding: EdgeInsets.all(DT.s.md),
+            itemCount: reports.length,
+            itemBuilder: (context, index) {
+              final report = reports[index];
+              return ReportCard(
+                report: report,
+                onContact: () => _showContactDialog(context, report),
+                onViewDetails: () => _navigateToReportDetails(context, report),
+              );
+            },
+          );
+        },
+        loading: () => _buildLoadingState('Loading resolved reports...'),
+        error: (error, stackTrace) => _buildErrorState(
+          'Error loading resolved reports',
+          error.toString(),
+        ),
+      );
+    },
+  );
+
+  Widget _buildEmptyState(String title, String subtitle, IconData icon) =>
+      Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 64, color: DT.c.textMuted),
+            SizedBox(height: DT.s.md),
+            Text(
+              title,
+              style: DT.t.titleMedium.copyWith(color: DT.c.textMuted),
+            ),
+            SizedBox(height: DT.s.sm),
+            Text(
+              subtitle,
+              style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildLoadingState(String message) => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        CircularProgressIndicator(color: DT.c.brand),
+        SizedBox(height: DT.s.md),
+        Text(message, style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted)),
+      ],
+    ),
+  );
+
+  Widget _buildErrorState(String title, String message) => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.error_outline, size: 64, color: DT.c.accentRed),
+        SizedBox(height: DT.s.md),
+        Text(title, style: DT.t.titleMedium.copyWith(color: DT.c.accentRed)),
+        SizedBox(height: DT.s.sm),
+        Text(
+          message,
+          style: DT.t.bodyMedium.copyWith(color: DT.c.textMuted),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
+
+  void _showContactDialog(BuildContext context, ReportItem report) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Contact Information'),
+        content: Text('Contact: ${report.contactInfo}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToReportDetails(BuildContext context, ReportItem report) {
+    // Navigate to report details screen
+    Navigator.of(context).pushNamed('/report-detail/${report.id}');
+  }
+}
+
+/// Profile edit form widget
+class ProfileEditForm extends StatefulWidget {
+  /// Creates a new [ProfileEditForm] instance
+  const ProfileEditForm({required this.user, required this.onSave, super.key});
+
+  /// The user data
+  final api_models.User user;
+
+  /// Callback when form is saved
+  final void Function(api_models.User) onSave;
+
+  @override
+  State<ProfileEditForm> createState() => _ProfileEditFormState();
+}
+
+class _ProfileEditFormState extends State<ProfileEditForm> {
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.user.email);
+    _emailController = TextEditingController(text: widget.user.email);
+    _phoneController = TextEditingController(text: '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.all(DT.s.lg),
+    child: Column(
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: InputDecoration(
+            labelText: 'Name',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(DT.r.md),
+            ),
+          ),
+        ),
+        SizedBox(height: DT.s.md),
+        TextField(
+          controller: _emailController,
+          decoration: InputDecoration(
+            labelText: 'Email',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(DT.r.md),
+            ),
+          ),
+        ),
+        SizedBox(height: DT.s.md),
+        TextField(
+          controller: _phoneController,
+          decoration: InputDecoration(
+            labelText: 'Phone',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(DT.r.md),
+            ),
+          ),
+        ),
+        SizedBox(height: DT.s.lg),
+        ElevatedButton(
+          onPressed: _saveProfile,
+          child: const Text('Save Profile'),
+        ),
+      ],
+    ),
+  );
+
+  void _saveProfile() {
+    final updatedUser = api_models.User(
+      id: widget.user.id,
+      email: _emailController.text,
+      isActive: widget.user.isActive,
+      role: widget.user.role,
+      createdAt: widget.user.createdAt,
+    );
+    widget.onSave(updatedUser);
+  }
+}
+
+/// Profile date formatter utility
+class ProfileDateFormatter {
+  /// Private constructor to prevent instantiation
+  ProfileDateFormatter._();
+
+  /// Format date for display
+  static String formatDate(DateTime date) {
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.year}';
+  }
 }

@@ -38,15 +38,7 @@ const Matching: NextPage = () => {
       setError(null);
       const [matchesResponse, statsResponse] = await Promise.all([
         apiService.getMatches(filters),
-        // Mock stats for now - would come from API
-        Promise.resolve({
-          total: 150,
-          candidate: 25,
-          promoted: 80,
-          suppressed: 30,
-          dismissed: 15,
-          avg_score: 0.755,
-        }),
+        apiService.getMatchStats(),
       ]);
 
       // Add safety checks for the data

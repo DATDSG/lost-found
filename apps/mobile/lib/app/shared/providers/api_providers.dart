@@ -1,16 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/api_models.dart';
 import '../../core/repositories/repositories.dart';
 import '../../core/services/location_service.dart';
-import '../../core/services/reports_api_service.dart';
+import '../../core/services/real_time_statistics_service.dart';
 import '../../core/utils/time_utils.dart';
 import '../models/home_models.dart';
 
-/// Report service provider
-final reportServiceProvider = Provider<ReportsApiService>(
-  (ref) => ReportsApiService(),
-);
+// Report service provider is defined in repositories.dart
 
 /// Location service provider
 final locationServiceProvider = Provider<LocationService>(
@@ -105,49 +104,122 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 final isLoadingProvider = StateProvider<bool>((ref) => false);
 
 /// Real-time statistics provider
-final statisticsProvider = FutureProvider<Map<String, int>>((ref) async {
-  final reportsRepository = ref.watch(reportsRepositoryProvider);
+final realTimeStatisticsProvider = StreamProvider<StatisticsData>((ref) {
+  final service = realTimeStatisticsService;
 
-  try {
-    // First try to use the dedicated statistics endpoint
-    try {
-      final stats = await reportsRepository.getReportStatistics();
+  // Start the service when first accessed
+  service.start();
 
-      // Map the backend response to our expected format with proper type casting
-      return {
-        'found': (stats['found_reports'] as int?) ?? 0,
-        'lost': (stats['lost_reports'] as int?) ?? 0,
-        'total': (stats['total_reports'] as int?) ?? 0,
-      };
-    } on Exception {
-      // If dedicated endpoint fails, fallback to manual calculation
-      final allReports = await reportsRepository.getReports(
-        pageSize: 1000, // Get more reports for accurate statistics
-        status: 'approved',
-      );
+  // Clean up when provider is disposed
+  ref.onDispose(service.stop);
 
-      var foundCount = 0;
-      var lostCount = 0;
-
-      for (final report in allReports) {
-        if (report.type == 'found') {
-          foundCount++;
-        } else if (report.type == 'lost') {
-          lostCount++;
-        }
-      }
-
-      return {
-        'found': foundCount,
-        'lost': lostCount,
-        'total': foundCount + lostCount,
-      };
-    }
-  } on Exception {
-    // Return default statistics if all methods fail
-    return {'found': 0, 'lost': 0, 'total': 0};
-  }
+  return service.statisticsStream;
 });
+
+/// Real-time statistics provider with manual refresh capability
+final statisticsProvider =
+    StateNotifierProvider<StatisticsNotifier, StatisticsState>((ref) {
+      final service = realTimeStatisticsService;
+      return StatisticsNotifier(service);
+    });
+
+/// Statistics state
+class StatisticsState {
+  /// Creates a new statistics state
+  StatisticsState({
+    this.data,
+    this.isLoading = false,
+    this.error,
+    this.lastRefresh,
+    this.isAutoRefreshEnabled = true,
+  });
+
+  /// Current statistics data
+  final StatisticsData? data;
+
+  /// Whether statistics are currently loading
+  final bool isLoading;
+
+  /// Error message if any
+  final String? error;
+
+  /// Last refresh timestamp
+  final DateTime? lastRefresh;
+
+  /// Whether auto-refresh is enabled
+  final bool isAutoRefreshEnabled;
+
+  /// Creates a copy of this state with updated values
+  StatisticsState copyWith({
+    StatisticsData? data,
+    bool? isLoading,
+    String? error,
+    DateTime? lastRefresh,
+    bool? isAutoRefreshEnabled,
+  }) => StatisticsState(
+    data: data ?? this.data,
+    isLoading: isLoading ?? this.isLoading,
+    error: error ?? this.error,
+    lastRefresh: lastRefresh ?? this.lastRefresh,
+    isAutoRefreshEnabled: isAutoRefreshEnabled ?? this.isAutoRefreshEnabled,
+  );
+}
+
+/// Statistics notifier for managing real-time statistics
+class StatisticsNotifier extends StateNotifier<StatisticsState> {
+  /// Creates a new statistics notifier
+  StatisticsNotifier(this._service) : super(StatisticsState()) {
+    _initialize();
+  }
+
+  final RealTimeStatisticsService _service;
+  StreamSubscription<StatisticsData>? _subscription;
+
+  void _initialize() {
+    // Start the service
+    _service.start();
+
+    // Listen to statistics updates
+    _subscription = _service.statisticsStream.listen(
+      (data) {
+        state = state.copyWith(data: data, lastRefresh: DateTime.now());
+      },
+      onError: (Object error) {
+        state = state.copyWith(error: error.toString());
+      },
+    );
+  }
+
+  /// Refresh statistics manually
+  Future<void> refresh() async {
+    state = state.copyWith(isLoading: true);
+    await _service.refresh();
+  }
+
+  /// Toggle auto-refresh
+  void toggleAutoRefresh() {
+    final newState = !state.isAutoRefreshEnabled;
+    state = state.copyWith(isAutoRefreshEnabled: newState);
+
+    if (newState) {
+      _service.start();
+    } else {
+      _service.stop();
+    }
+  }
+
+  /// Set update interval
+  void setUpdateInterval(Duration interval) {
+    _service.setUpdateInterval(interval);
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _service.stop();
+    super.dispose();
+  }
+}
 
 /// User's own reports provider
 final userReportsProvider = FutureProvider<List<ReportItem>>((ref) async {

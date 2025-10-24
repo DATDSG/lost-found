@@ -11,6 +11,15 @@ import {
   ExclamationTriangleIcon,
   ClockIcon,
   FunnelIcon,
+  MapPinIcon,
+  UserIcon,
+  CalendarIcon,
+  TagIcon,
+  CurrencyDollarIcon,
+  ShieldCheckIcon,
+  ShieldExclamationIcon,
+  LinkIcon,
+  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import AdminLayout from "../components/AdminLayout";
 import {
@@ -21,8 +30,17 @@ import {
   Badge,
   LoadingSpinner,
   EmptyState,
+  Modal,
+  ImageGallery,
+  StatusBadge,
 } from "../components/ui";
-import { Report, ReportFilters, PaginatedResponse } from "../types";
+import {
+  Report,
+  ReportFilters,
+  PaginatedResponse,
+  Match,
+  FraudDetectionResult,
+} from "../types";
 import apiService from "../services/api";
 
 const Reports: NextPage = () => {
@@ -39,6 +57,20 @@ const Reports: NextPage = () => {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<string>("");
 
+  // Modal states
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showMatchingModal, setShowMatchingModal] = useState(false);
+  const [showFraudModal, setShowFraudModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+
+  // Additional data states
+  const [reportMatches, setReportMatches] = useState<Match[]>([]);
+  const [fraudData, setFraudData] = useState<FraudDetectionResult | null>(null);
+  const [loadingMatches, setLoadingMatches] = useState(false);
+  const [loadingFraud, setLoadingFraud] = useState(false);
+
   useEffect(() => {
     fetchReports();
   }, [filters, pagination.page]);
@@ -47,9 +79,11 @@ const Reports: NextPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const response: PaginatedResponse<Report> = await apiService.getReports(
-        filters
-      );
+      const response: PaginatedResponse<Report> = await apiService.getReports({
+        ...filters,
+        page: pagination.page,
+        limit: pagination.limit,
+      });
       setReports(response.items);
       setPagination((prev) => ({
         ...prev,
@@ -64,6 +98,64 @@ const Reports: NextPage = () => {
     }
   };
 
+  // Modal handlers
+  const handleViewReport = async (report: Report) => {
+    setSelectedReport(report);
+    setShowReportModal(true);
+  };
+
+  const handleViewMatching = async (report: Report) => {
+    setSelectedReport(report);
+    setLoadingMatches(true);
+    setShowMatchingModal(true);
+
+    try {
+      // Fetch matches for this report
+      const matches = await apiService.getMatches({});
+      setReportMatches(matches.items || []);
+    } catch (err) {
+      console.error("Error fetching matches:", err);
+      setReportMatches([]);
+    } finally {
+      setLoadingMatches(false);
+    }
+  };
+
+  const handleViewFraudDetection = async (report: Report) => {
+    setSelectedReport(report);
+    setLoadingFraud(true);
+    setShowFraudModal(true);
+
+    try {
+      // Fetch fraud detection data for this report
+      const fraudResults = await apiService.getFraudDetectionResults({});
+      setFraudData(fraudResults.items?.[0] || null);
+    } catch (err) {
+      console.error("Error fetching fraud data:", err);
+      setFraudData(null);
+    } finally {
+      setLoadingFraud(false);
+    }
+  };
+
+  const handleDeleteClick = (reportId: string) => {
+    setReportToDelete(reportId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!reportToDelete) return;
+
+    try {
+      await apiService.deleteReport(reportToDelete);
+      setShowDeleteModal(false);
+      setReportToDelete(null);
+      fetchReports();
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
+  };
+
   const handleFilterChange = (key: keyof ReportFilters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value || undefined }));
     setPagination((prev) => ({ ...prev, page: 1 }));
@@ -73,7 +165,6 @@ const Reports: NextPage = () => {
     if (!bulkAction || selectedReports.length === 0) return;
 
     try {
-      // Update each report individually for now
       await Promise.all(
         selectedReports.map((reportId) =>
           apiService.updateReportStatus(reportId, bulkAction)
@@ -96,49 +187,63 @@ const Reports: NextPage = () => {
     }
   };
 
-  const handleDeleteReport = async (reportId: string) => {
-    if (!confirm("Are you sure you want to delete this report?")) return;
-
-    try {
-      await apiService.deleteReport(reportId);
-      fetchReports();
-    } catch (err) {
-      console.error("Delete error:", err);
-    }
+  // Helper functions
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "success";
-      case "pending":
-        return "warning";
-      case "rejected":
-        return "danger";
-      case "resolved":
-        return "info";
-      case "hidden":
-        return "default";
-      default:
-        return "default";
-    }
-  };
+  const getStatusActions = (report: Report) => {
+    const actions = [];
 
-  const getFraudStatusColor = (status?: string) => {
-    switch (status) {
-      case "flagged":
-        return "danger";
-      case "clean":
-        return "success";
-      case "reviewed":
-        return "info";
-      case "false_positive":
-        return "warning";
-      case "rejected":
-        return "danger";
-      default:
-        return "default";
+    if (report.status === "pending") {
+      actions.push(
+        <Button
+          key="approve"
+          size="sm"
+          variant="success"
+          onClick={() => handleReportStatusUpdate(report.id, "approved")}
+          className="mr-1"
+        >
+          <CheckCircleIcon className="h-4 w-4 mr-1" />
+          Approve
+        </Button>
+      );
+      actions.push(
+        <Button
+          key="reject"
+          size="sm"
+          variant="danger"
+          onClick={() => handleReportStatusUpdate(report.id, "rejected")}
+          className="mr-1"
+        >
+          <XCircleIcon className="h-4 w-4 mr-1" />
+          Reject
+        </Button>
+      );
     }
+
+    if (report.status === "approved") {
+      actions.push(
+        <Button
+          key="resolve"
+          size="sm"
+          variant="info"
+          onClick={() => handleReportStatusUpdate(report.id, "resolved")}
+          className="mr-1"
+        >
+          <CheckCircleIcon className="h-4 w-4 mr-1" />
+          Mark Resolved
+        </Button>
+      );
+    }
+
+    return actions;
   };
 
   const statusOptions = [
@@ -290,19 +395,13 @@ const Reports: NextPage = () => {
                   />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Report
+                  Report Details
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Owner
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fraud Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created
@@ -315,13 +414,13 @@ const Reports: NextPage = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-6 py-12 text-center">
                     <LoadingSpinner size="lg" />
                   </td>
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-6 py-12 text-center">
                     <EmptyState
                       title="No reports found"
                       description="Try adjusting your filters or check back later"
@@ -352,36 +451,50 @@ const Reports: NextPage = () => {
                       />
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center">
+                      <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0">
-                          <DocumentTextIcon className="h-8 w-8 text-gray-400" />
+                          <div className="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <DocumentTextIcon className="h-6 w-6 text-gray-400" />
+                          </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
                             {report.title}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            {report.category} • {report.location_city}
+                          <div className="text-sm text-gray-500 flex items-center mt-1">
+                            <TagIcon className="h-4 w-4 mr-1" />
+                            {report.category}
                           </div>
-                          {report.reward_offered && (
-                            <div className="text-xs text-green-600">
-                              Reward: ${report.reward_amount}
-                            </div>
-                          )}
+                          <div className="text-sm text-gray-500 flex items-center mt-1">
+                            <MapPinIcon className="h-4 w-4 mr-1" />
+                            {report.location_city}
+                          </div>
+                          <div className="flex items-center space-x-2 mt-2">
+                            <StatusBadge status={report.type} />
+                            {report.reward_offered && (
+                              <div className="flex items-center text-xs text-green-600">
+                                <CurrencyDollarIcon className="h-3 w-3 mr-1" />$
+                                {report.reward_amount}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <Badge variant={getStatusColor(report.status) as any}>
-                        {report.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge
-                        variant={report.type === "lost" ? "warning" : "success"}
-                      >
-                        {report.type}
-                      </Badge>
+                      <div className="space-y-2">
+                        <StatusBadge status={report.status} />
+                        {report.fraud_status && (
+                          <div className="flex items-center space-x-1">
+                            {report.fraud_status === "flagged" ? (
+                              <ShieldExclamationIcon className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <ShieldCheckIcon className="h-4 w-4 text-green-500" />
+                            )}
+                            <StatusBadge status={report.fraud_status} />
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
@@ -392,85 +505,45 @@ const Reports: NextPage = () => {
                         {report.owner?.email || report.owner_email}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      {report.fraud_status ? (
-                        <div className="space-y-1">
-                          <Badge
-                            variant={
-                              getFraudStatusColor(report.fraud_status) as any
-                            }
-                          >
-                            {report.fraud_status}
-                          </Badge>
-                          {report.fraud_score && (
-                            <div className="text-xs text-gray-500">
-                              Score:{" "}
-                              {typeof report.fraud_score === "number" &&
-                              !isNaN(report.fraud_score)
-                                ? report.fraud_score.toFixed(1)
-                                : "0.0"}
-                              %
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">
-                          Not checked
-                        </span>
-                      )}
-                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {new Date(report.created_at).toLocaleDateString()}
+                      {formatDate(report.created_at)}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1">
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => {
-                            /* View details */
-                          }}
+                          onClick={() => handleViewReport(report)}
+                          title="View Details"
                         >
                           <EyeIcon className="h-4 w-4" />
                         </Button>
 
-                        {report.status === "pending" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="success"
-                              onClick={() =>
-                                handleReportStatusUpdate(report.id, "approved")
-                              }
-                            >
-                              <CheckCircleIcon className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() =>
-                                handleReportStatusUpdate(report.id, "rejected")
-                              }
-                            >
-                              <XCircleIcon className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-
                         <Button
                           size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            /* Edit report */
-                          }}
+                          variant="info"
+                          onClick={() => handleViewMatching(report)}
+                          title="View Matching Process"
                         >
-                          <PencilIcon className="h-4 w-4" />
+                          <LinkIcon className="h-4 w-4" />
                         </Button>
 
                         <Button
                           size="sm"
+                          variant="warning"
+                          onClick={() => handleViewFraudDetection(report)}
+                          title="View Fraud Detection"
+                        >
+                          <ShieldExclamationIcon className="h-4 w-4" />
+                        </Button>
+
+                        {getStatusActions(report)}
+
+                        <Button
+                          size="sm"
                           variant="danger"
-                          onClick={() => handleDeleteReport(report.id)}
+                          onClick={() => handleDeleteClick(report.id)}
+                          title="Delete Report"
                         >
                           <TrashIcon className="h-4 w-4" />
                         </Button>
@@ -521,6 +594,386 @@ const Reports: NextPage = () => {
           </div>
         )}
       </Card>
+
+      {/* Report Details Modal */}
+      <Modal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Report Details"
+        size="2xl"
+      >
+        {selectedReport && (
+          <div className="space-y-6">
+            {/* Report Header */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {selectedReport.title}
+                  </h3>
+                  <div className="flex items-center space-x-4 mt-2">
+                    <StatusBadge status={selectedReport.status} />
+                    <StatusBadge status={selectedReport.type} />
+                    {selectedReport.fraud_status && (
+                      <StatusBadge status={selectedReport.fraud_status} />
+                    )}
+                  </div>
+                </div>
+                <div className="text-right text-sm text-gray-500">
+                  <div className="flex items-center">
+                    <CalendarIcon className="h-4 w-4 mr-1" />
+                    {formatDate(selectedReport.created_at)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Report Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Description
+                  </h4>
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
+                    {selectedReport.description}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Category & Location
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center text-sm text-gray-700">
+                      <TagIcon className="h-4 w-4 mr-2 text-gray-400" />
+                      {selectedReport.category}
+                    </div>
+                    <div className="flex items-center text-sm text-gray-700">
+                      <MapPinIcon className="h-4 w-4 mr-2 text-gray-400" />
+                      {selectedReport.location_city}
+                      {selectedReport.location_address && (
+                        <span className="ml-2 text-gray-500">
+                          - {selectedReport.location_address}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedReport.reward_offered && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      Reward Information
+                    </h4>
+                    <div className="flex items-center text-sm text-green-600 bg-green-50 p-3 rounded-lg">
+                      <CurrencyDollarIcon className="h-4 w-4 mr-2" />$
+                      {selectedReport.reward_amount} reward offered
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Owner Information
+                  </h4>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <div className="text-sm text-gray-900">
+                      {selectedReport.owner?.display_name ||
+                        `${selectedReport.owner?.first_name} ${selectedReport.owner?.last_name}`}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {selectedReport.owner?.email ||
+                        selectedReport.owner_email}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Images
+                  </h4>
+                  <ImageGallery images={selectedReport.images || []} />
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+              {getStatusActions(selectedReport)}
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setShowReportModal(false);
+                  handleDeleteClick(selectedReport.id);
+                }}
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                Delete Report
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Matching Process Modal */}
+      <Modal
+        isOpen={showMatchingModal}
+        onClose={() => setShowMatchingModal(false)}
+        title="Matching Process Analysis"
+        size="2xl"
+      >
+        {selectedReport && (
+          <div className="space-y-6">
+            <div className="bg-blue-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                Matching Analysis for: {selectedReport.title}
+              </h3>
+              <p className="text-sm text-blue-700">
+                This report has been analyzed against all other reports to find
+                potential matches.
+              </p>
+            </div>
+
+            {loadingMatches ? (
+              <div className="text-center py-8">
+                <LoadingSpinner size="lg" />
+                <p className="mt-2 text-gray-500">Loading matching data...</p>
+              </div>
+            ) : reportMatches.length === 0 ? (
+              <div className="text-center py-8">
+                <LinkIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-lg font-medium text-gray-900">
+                  No Matches Found
+                </h3>
+                <p className="mt-1 text-gray-500">
+                  This report doesn't have any potential matches at this time.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-gray-900">
+                  Found {reportMatches.length} Potential Match(es)
+                </h4>
+                {reportMatches.map((match) => (
+                  <div
+                    key={match.id}
+                    className="border border-gray-200 rounded-lg p-4"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h5 className="text-sm font-medium text-gray-900">
+                          Match Score: {match.overall_score?.toFixed(1)}%
+                        </h5>
+                        <div className="mt-2 grid grid-cols-2 gap-4 text-xs text-gray-600">
+                          {match.text_score && (
+                            <div>
+                              Text Similarity: {match.text_score.toFixed(1)}%
+                            </div>
+                          )}
+                          {match.image_score && (
+                            <div>
+                              Image Similarity: {match.image_score.toFixed(1)}%
+                            </div>
+                          )}
+                          {match.geo_score && (
+                            <div>
+                              Location Similarity: {match.geo_score.toFixed(1)}%
+                            </div>
+                          )}
+                          {match.time_score && (
+                            <div>
+                              Time Similarity: {match.time_score.toFixed(1)}%
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <StatusBadge status={match.status} />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="text-sm text-gray-700">
+                        <strong>Matched Report:</strong>{" "}
+                        {match.candidate_report?.title}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Category: {match.candidate_report?.category} • Location:{" "}
+                        {match.candidate_report?.location_city}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Fraud Detection Modal */}
+      <Modal
+        isOpen={showFraudModal}
+        onClose={() => setShowFraudModal(false)}
+        title="Fraud Detection Analysis"
+        size="2xl"
+      >
+        {selectedReport && (
+          <div className="space-y-6">
+            <div className="bg-red-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-red-900 mb-2">
+                Fraud Detection Analysis for: {selectedReport.title}
+              </h3>
+              <p className="text-sm text-red-700">
+                This report has been analyzed for potential fraud indicators.
+              </p>
+            </div>
+
+            {loadingFraud ? (
+              <div className="text-center py-8">
+                <LoadingSpinner size="lg" />
+                <p className="mt-2 text-gray-500">
+                  Loading fraud detection data...
+                </p>
+              </div>
+            ) : fraudData ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {fraudData.fraud_score?.toFixed(1)}%
+                    </div>
+                    <div className="text-sm text-gray-600">Fraud Score</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4 text-center">
+                    <div className="text-lg font-semibold text-gray-900 capitalize">
+                      {fraudData.risk_level}
+                    </div>
+                    <div className="text-sm text-gray-600">Risk Level</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4 text-center">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {fraudData.confidence?.toFixed(1)}%
+                    </div>
+                    <div className="text-sm text-gray-600">Confidence</div>
+                  </div>
+                </div>
+
+                {fraudData.flags && fraudData.flags.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      Fraud Flags
+                    </h4>
+                    <div className="space-y-2">
+                      {fraudData.flags.map((flag, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center text-sm text-red-600 bg-red-50 p-2 rounded"
+                        >
+                          <ExclamationTriangleIcon className="h-4 w-4 mr-2" />
+                          {flag}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">
+                    Analysis Details
+                  </h4>
+                  <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <strong>Reviewed:</strong>{" "}
+                        {fraudData.is_reviewed ? "Yes" : "No"}
+                      </div>
+                      <div>
+                        <strong>Confirmed Fraud:</strong>{" "}
+                        {fraudData.is_confirmed_fraud ? "Yes" : "No"}
+                      </div>
+                      <div>
+                        <strong>Detected At:</strong>{" "}
+                        {fraudData.detected_at
+                          ? formatDate(fraudData.detected_at)
+                          : "N/A"}
+                      </div>
+                      <div>
+                        <strong>Reviewed At:</strong>{" "}
+                        {fraudData.reviewed_at
+                          ? formatDate(fraudData.reviewed_at)
+                          : "Not reviewed"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {fraudData.admin_notes && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      Admin Notes
+                    </h4>
+                    <div className="bg-blue-50 p-3 rounded-lg text-sm text-gray-700">
+                      {fraudData.admin_notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <ShieldCheckIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-lg font-medium text-gray-900">
+                  No Fraud Analysis Available
+                </h3>
+                <p className="mt-1 text-gray-500">
+                  This report hasn't been analyzed for fraud yet.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete Report"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center space-x-3">
+            <div className="flex-shrink-0">
+              <div className="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center">
+                <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">
+                Are you sure?
+              </h3>
+              <p className="text-sm text-gray-500">
+                This action cannot be undone. The report will be permanently
+                deleted.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end space-x-3 pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => setShowDeleteModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirmDelete}>
+              <TrashIcon className="h-4 w-4 mr-2" />
+              Delete Report
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </AdminLayout>
   );
 };

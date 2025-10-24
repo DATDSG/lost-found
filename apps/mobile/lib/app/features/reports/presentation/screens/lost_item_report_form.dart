@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/repositories/repositories.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../shared/models/matching_models.dart';
-import '../../../../shared/providers/api_providers.dart';
 import '../../../../shared/widgets/image_picker_widget.dart';
 import '../../../../shared/widgets/location_widget.dart';
 import '../../../../shared/widgets/main_layout.dart';

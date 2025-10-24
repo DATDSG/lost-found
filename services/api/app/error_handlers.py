@@ -70,11 +70,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """Handle request validation errors."""
     errors = []
     for error in exc.errors():
+        # Handle bytes objects in input
+        input_value = error.get("input")
+        if isinstance(input_value, bytes):
+            input_value = input_value.decode('utf-8', errors='replace')
+        
         errors.append({
             "field": ".".join(str(loc) for loc in error["loc"]),
             "message": error["msg"],
             "type": error["type"],
-            "input": error.get("input"),
+            "input": input_value,
         })
     
     logger.warning(
@@ -107,11 +112,16 @@ async def pydantic_validation_exception_handler(request: Request, exc: PydanticV
     """Handle Pydantic validation errors."""
     errors = []
     for error in exc.errors():
+        # Handle bytes objects in input
+        input_value = error.get("input")
+        if isinstance(input_value, bytes):
+            input_value = input_value.decode('utf-8', errors='replace')
+        
         errors.append({
             "field": ".".join(str(loc) for loc in error["loc"]),
             "message": error["msg"],
             "type": error["type"],
-            "input": error.get("input"),
+            "input": input_value,
         })
     
     logger.warning(

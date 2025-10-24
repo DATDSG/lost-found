@@ -60,8 +60,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref
         ..invalidate(reportsProvider)
         ..invalidate(categoriesProvider)
-        ..invalidate(colorsProvider)
-        ..invalidate(statisticsProvider);
+        ..invalidate(colorsProvider);
+
+      // Refresh statistics using the notifier
+      unawaited(ref.read(statisticsProvider.notifier).refresh());
 
       // Wait a bit for the refresh to complete
       await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -276,38 +278,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return 'Evening';
   }
 
-  Widget _buildQuickActionsSection() => Padding(
-    padding: EdgeInsets.all(DT.s.md),
+  Widget _buildQuickActionsSection() => Container(
+    margin: EdgeInsets.symmetric(horizontal: DT.s.md),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Quick Actions',
-          style: DT.t.titleLarge.copyWith(
-            color: DT.c.text,
-            fontWeight: FontWeight.w600,
-          ),
+        // Section Header with Better Typography
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: DT.c.brand,
+                borderRadius: BorderRadius.circular(DT.r.sm),
+              ),
+            ),
+            SizedBox(width: DT.s.sm),
+            Text(
+              'Quick Actions',
+              style: DT.t.titleLarge.copyWith(
+                color: DT.c.text,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              'Tap to get started',
+              style: DT.t.bodySmall.copyWith(
+                color: DT.c.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
-        SizedBox(height: DT.s.md),
+
+        SizedBox(height: DT.s.lg),
+
+        // Enhanced Action Cards with Better Visual Design
         Row(
           children: [
             Expanded(
-              child: _buildActionCard(
+              child: _buildEnhancedActionCard(
                 title: 'Report Lost Item',
                 subtitle: 'Lost something?',
-                icon: Icons.search_off,
+                description: 'Help others find your item',
+                icon: Icons.search_off_rounded,
                 color: DT.c.accentRed,
-                onTap: () => context.go('/report'),
+                gradientColors: [
+                  DT.c.accentRed.withValues(alpha: 0.1),
+                  DT.c.accentRed.withValues(alpha: 0.05),
+                ],
+                onTap: () => context.go('/report-lost'),
               ),
             ),
             SizedBox(width: DT.s.md),
             Expanded(
-              child: _buildActionCard(
+              child: _buildEnhancedActionCard(
                 title: 'Report Found Item',
                 subtitle: 'Found something?',
-                icon: Icons.check_circle,
+                description: 'Help reunite with owner',
+                icon: Icons.check_circle_rounded,
                 color: DT.c.accentGreen,
-                onTap: () => context.go('/report'),
+                gradientColors: [
+                  DT.c.accentGreen.withValues(alpha: 0.1),
+                  DT.c.accentGreen.withValues(alpha: 0.05),
+                ],
+                onTap: () => context.go('/report-found'),
+              ),
+            ),
+          ],
+        ),
+
+        SizedBox(height: DT.s.md),
+
+        // Additional Action Row
+        Row(
+          children: [
+            Expanded(
+              child: _buildSecondaryActionCard(
+                title: 'My Reports',
+                icon: Icons.list_alt_rounded,
+                color: DT.c.brand,
+                onTap: () => context.go('/my-reports'),
+              ),
+            ),
+            SizedBox(width: DT.s.md),
+            Expanded(
+              child: _buildSecondaryActionCard(
+                title: 'Matches',
+                icon: Icons.handshake_rounded,
+                color: DT.c.accentPurple,
+                onTap: () => context.go('/matches'),
               ),
             ),
           ],
@@ -316,24 +379,97 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ),
   );
 
-  Widget _buildActionCard({
+  Widget _buildEnhancedActionCard({
     required String title,
     required String subtitle,
+    required String description,
     required IconData icon,
     required Color color,
+    required List<Color> gradientColors,
     required VoidCallback onTap,
   }) => GestureDetector(
     onTap: onTap,
     child: Container(
       padding: EdgeInsets.all(DT.s.lg),
       decoration: BoxDecoration(
-        color: DT.c.card,
-        borderRadius: BorderRadius.circular(DT.r.lg),
-        boxShadow: DT.e.md,
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientColors,
+        ),
+        borderRadius: BorderRadius.circular(DT.r.xl),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(DT.s.sm),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(DT.r.md),
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: color.withValues(alpha: 0.6),
+                size: 16,
+              ),
+            ],
+          ),
+          SizedBox(height: DT.s.md),
+          Text(
+            title,
+            style: DT.t.titleMedium.copyWith(
+              color: DT.c.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: DT.s.xs),
+          Text(
+            subtitle,
+            style: DT.t.bodyMedium.copyWith(
+              color: DT.c.textMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: DT.s.xs),
+          Text(
+            description,
+            style: DT.t.bodySmall.copyWith(color: DT.c.textMuted),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _buildSecondaryActionCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: EdgeInsets.all(DT.s.md),
+      decoration: BoxDecoration(
+        color: DT.c.card,
+        borderRadius: BorderRadius.circular(DT.r.lg),
+        boxShadow: const [BoxShadow()],
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
         children: [
           Container(
             padding: EdgeInsets.all(DT.s.sm),
@@ -341,172 +477,282 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(DT.r.sm),
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: 20),
           ),
-          SizedBox(height: DT.s.md),
-          Text(
-            title,
-            style: DT.t.titleMedium.copyWith(
-              color: DT.c.text,
-              fontWeight: FontWeight.w600,
+          SizedBox(width: DT.s.sm),
+          Expanded(
+            child: Text(
+              title,
+              style: DT.t.bodyMedium.copyWith(
+                color: DT.c.text,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          SizedBox(height: DT.s.xs),
-          Text(subtitle, style: DT.t.bodySmall.copyWith(color: DT.c.textMuted)),
+          Icon(
+            Icons.arrow_forward_ios_rounded,
+            color: DT.c.textMuted,
+            size: 14,
+          ),
         ],
       ),
     ),
   );
 
   Widget _buildModernStatisticsSection() {
-    final statisticsAsync = ref.watch(statisticsProvider);
+    final statisticsState = ref.watch(statisticsProvider);
+    final statisticsNotifier = ref.read(statisticsProvider.notifier);
 
-    return statisticsAsync.when(
-      data: (stats) {
-        final foundCount = stats['found'] ?? 0;
-        final lostCount = stats['lost'] ?? 0;
-        final totalCount = stats['total'] ?? 0;
-
-        return Padding(
-          padding: EdgeInsets.symmetric(horizontal: DT.s.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: DT.s.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with controls
+          Row(
             children: [
-              Row(
-                children: [
-                  Text(
-                    'Statistics',
-                    style: DT.t.titleLarge.copyWith(
-                      color: DT.c.text,
-                      fontWeight: FontWeight.w600,
-                    ),
+              Expanded(
+                child: Text(
+                  'Live Statistics',
+                  style: DT.t.titleLarge.copyWith(
+                    color: DT.c.text,
+                    fontWeight: FontWeight.w600,
                   ),
-                  if (_isAutoRefreshing) ...[
-                    SizedBox(width: DT.s.sm),
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          DT.c.brand.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
-              SizedBox(height: DT.s.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildModernStatCard(
-                      title: '$foundCount',
-                      subtitle: 'Found',
-                      color: DT.c.accentGreen,
-                      icon: Icons.check_circle_outline,
-                      trend: '+12%',
+              // Auto-refresh toggle
+              GestureDetector(
+                onTap: statisticsNotifier.toggleAutoRefresh,
+                child: Container(
+                  padding: EdgeInsets.all(DT.s.xs),
+                  decoration: BoxDecoration(
+                    color: statisticsState.isAutoRefreshEnabled
+                        ? DT.c.brand.withValues(alpha: 0.1)
+                        : DT.c.card,
+                    borderRadius: BorderRadius.circular(DT.r.sm),
+                    border: Border.all(
+                      color: statisticsState.isAutoRefreshEnabled
+                          ? DT.c.brand
+                          : DT.c.border,
                     ),
                   ),
-                  SizedBox(width: DT.s.sm),
-                  Expanded(
-                    child: _buildModernStatCard(
-                      title: '$lostCount',
-                      subtitle: 'Lost',
-                      color: DT.c.accentRed,
-                      icon: Icons.search_off,
-                      trend: '+8%',
-                    ),
+                  child: Icon(
+                    statisticsState.isAutoRefreshEnabled
+                        ? Icons.refresh
+                        : Icons.refresh_outlined,
+                    size: 16,
+                    color: statisticsState.isAutoRefreshEnabled
+                        ? DT.c.brand
+                        : DT.c.textMuted,
                   ),
-                  SizedBox(width: DT.s.sm),
-                  Expanded(
-                    child: _buildModernStatCard(
-                      title: '$totalCount',
-                      subtitle: 'Total',
-                      color: DT.c.brand,
-                      icon: Icons.description_outlined,
-                      trend: '+15%',
-                    ),
+                ),
+              ),
+              SizedBox(width: DT.s.xs),
+              // Manual refresh button
+              GestureDetector(
+                onTap: statisticsNotifier.refresh,
+                child: Container(
+                  padding: EdgeInsets.all(DT.s.xs),
+                  decoration: BoxDecoration(
+                    color: DT.c.card,
+                    borderRadius: BorderRadius.circular(DT.r.sm),
+                    border: Border.all(color: DT.c.border),
                   ),
-                ],
+                  child: statisticsState.isLoading
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              DT.c.brand.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          Icons.refresh_outlined,
+                          size: 16,
+                          color: DT.c.textMuted,
+                        ),
+                ),
               ),
             ],
           ),
-        );
-      },
-      loading: () => Padding(
-        padding: EdgeInsets.symmetric(horizontal: DT.s.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          // Last updated info
+          if (statisticsState.lastRefresh != null) ...[
+            SizedBox(height: DT.s.xs),
             Text(
-              'Statistics',
-              style: DT.t.titleLarge.copyWith(
-                color: DT.c.text,
-                fontWeight: FontWeight.w600,
+              'Last updated: ${_formatLastUpdated(statisticsState.lastRefresh!)}',
+              style: DT.t.bodySmall.copyWith(
+                color: DT.c.textMuted,
+                fontSize: 11,
               ),
-            ),
-            SizedBox(height: DT.s.md),
-            Row(
-              children: [
-                Expanded(child: _buildStatCardSkeleton()),
-                SizedBox(width: DT.s.sm),
-                Expanded(child: _buildStatCardSkeleton()),
-                SizedBox(width: DT.s.sm),
-                Expanded(child: _buildStatCardSkeleton()),
-              ],
             ),
           ],
-        ),
-      ),
-      error: (error, stackTrace) => Padding(
-        padding: EdgeInsets.symmetric(horizontal: DT.s.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Statistics',
-              style: DT.t.titleLarge.copyWith(
-                color: DT.c.text,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: DT.s.md),
+          SizedBox(height: DT.s.md),
+          // Statistics cards
+          if (statisticsState.data != null) ...[
             Row(
               children: [
                 Expanded(
                   child: _buildModernStatCard(
-                    title: '0',
+                    title: '${statisticsState.data!.found}',
                     subtitle: 'Found',
                     color: DT.c.accentGreen,
                     icon: Icons.check_circle_outline,
-                    trend: '0%',
+                    trend: _formatTrend(
+                      statisticsState.data!.getTrendPercentage('found'),
+                    ),
+                    trendIndicator: statisticsState.data!.getTrendIndicator(
+                      'found',
+                    ),
                   ),
                 ),
                 SizedBox(width: DT.s.sm),
                 Expanded(
                   child: _buildModernStatCard(
-                    title: '0',
+                    title: '${statisticsState.data!.lost}',
                     subtitle: 'Lost',
                     color: DT.c.accentRed,
                     icon: Icons.search_off,
-                    trend: '0%',
+                    trend: _formatTrend(
+                      statisticsState.data!.getTrendPercentage('lost'),
+                    ),
+                    trendIndicator: statisticsState.data!.getTrendIndicator(
+                      'lost',
+                    ),
                   ),
                 ),
                 SizedBox(width: DT.s.sm),
                 Expanded(
                   child: _buildModernStatCard(
-                    title: '0',
+                    title: '${statisticsState.data!.total}',
                     subtitle: 'Total',
                     color: DT.c.brand,
                     icon: Icons.description_outlined,
-                    trend: '0%',
+                    trend: _formatTrend(
+                      statisticsState.data!.getTrendPercentage('total'),
+                    ),
+                    trendIndicator: statisticsState.data!.getTrendIndicator(
+                      'total',
+                    ),
                   ),
                 ),
               ],
             ),
+            SizedBox(height: DT.s.sm),
+            // Additional stats row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildModernStatCard(
+                    title: '${statisticsState.data!.active}',
+                    subtitle: 'Active',
+                    color: DT.c.brand,
+                    icon: Icons.trending_up,
+                    trend: _formatTrend(
+                      statisticsState.data!.getTrendPercentage('active'),
+                    ),
+                    trendIndicator: statisticsState.data!.getTrendIndicator(
+                      'active',
+                    ),
+                  ),
+                ),
+                SizedBox(width: DT.s.sm),
+                Expanded(
+                  child: _buildModernStatCard(
+                    title: '${statisticsState.data!.resolved}',
+                    subtitle: 'Resolved',
+                    color: DT.c.accentGreen,
+                    icon: Icons.task_alt,
+                    trend: _formatTrend(
+                      statisticsState.data!.getTrendPercentage('resolved'),
+                    ),
+                    trendIndicator: statisticsState.data!.getTrendIndicator(
+                      'resolved',
+                    ),
+                  ),
+                ),
+                SizedBox(width: DT.s.sm),
+                Expanded(
+                  child: _buildModernStatCard(
+                    title:
+                        '${(statisticsState.data!.successRate * 100).toStringAsFixed(1)}%',
+                    subtitle: 'Success Rate',
+                    color: DT.c.accentRed,
+                    icon: Icons.star,
+                    trendIndicator: 'stable',
+                  ),
+                ),
+              ],
+            ),
+          ] else if (statisticsState.isLoading) ...[
+            // Loading state
+            Row(
+              children: [
+                Expanded(child: _buildStatCardSkeleton()),
+                SizedBox(width: DT.s.sm),
+                Expanded(child: _buildStatCardSkeleton()),
+                SizedBox(width: DT.s.sm),
+                Expanded(child: _buildStatCardSkeleton()),
+              ],
+            ),
+            SizedBox(height: DT.s.sm),
+            Row(
+              children: [
+                Expanded(child: _buildStatCardSkeleton()),
+                SizedBox(width: DT.s.sm),
+                Expanded(child: _buildStatCardSkeleton()),
+                SizedBox(width: DT.s.sm),
+                Expanded(child: _buildStatCardSkeleton()),
+              ],
+            ),
+          ] else if (statisticsState.error != null) ...[
+            // Error state
+            Container(
+              padding: EdgeInsets.all(DT.s.md),
+              decoration: BoxDecoration(
+                color: DT.c.accentRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(DT.r.md),
+                border: Border.all(
+                  color: DT.c.accentRed.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.error_outline, color: DT.c.accentRed, size: 24),
+                  SizedBox(height: DT.s.sm),
+                  Text(
+                    'Failed to load statistics',
+                    style: DT.t.bodyMedium.copyWith(
+                      color: DT.c.accentRed,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: DT.s.xs),
+                  Text(
+                    statisticsState.error!,
+                    style: DT.t.bodySmall.copyWith(color: DT.c.textMuted),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: DT.s.sm),
+                  ElevatedButton(
+                    onPressed: statisticsNotifier.refresh,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DT.c.accentRed,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: DT.s.md,
+                        vertical: DT.s.sm,
+                      ),
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -516,7 +762,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required String subtitle,
     required Color color,
     required IconData icon,
-    required String trend,
+    String? trend,
+    String? trendIndicator,
   }) => Container(
     padding: EdgeInsets.all(DT.s.sm),
     decoration: BoxDecoration(
@@ -538,23 +785,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               child: Icon(icon, color: color, size: 20),
             ),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: DT.s.xs,
-                vertical: DT.s.xs / 2,
-              ),
-              decoration: BoxDecoration(
-                color: DT.c.successBg,
-                borderRadius: BorderRadius.circular(DT.r.xs),
-              ),
-              child: Text(
-                trend,
-                style: DT.t.labelSmall.copyWith(
-                  color: DT.c.successFg,
-                  fontWeight: FontWeight.w600,
+            if (trend != null) ...[
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: DT.s.xs,
+                  vertical: DT.s.xs / 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _getTrendColor(trendIndicator).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(DT.r.xs),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _getTrendIcon(trendIndicator),
+                      size: 12,
+                      color: _getTrendColor(trendIndicator),
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      trend,
+                      style: DT.t.labelSmall.copyWith(
+                        color: _getTrendColor(trendIndicator),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ],
         ),
         SizedBox(height: DT.s.md),
@@ -956,5 +1216,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+  }
+
+  /// Format trend percentage for display
+  String? _formatTrend(double? trend) {
+    if (trend == null) {
+      return null;
+    }
+    if (trend == 0) {
+      return '0%';
+    }
+    return '${trend > 0 ? '+' : ''}${trend.toStringAsFixed(1)}%';
+  }
+
+  /// Get trend color based on indicator
+  Color _getTrendColor(String? indicator) {
+    switch (indicator) {
+      case 'up':
+        return DT.c.accentGreen;
+      case 'down':
+        return DT.c.accentRed;
+      case 'stable':
+      default:
+        return DT.c.textMuted;
+    }
+  }
+
+  /// Get trend icon based on indicator
+  IconData _getTrendIcon(String? indicator) {
+    switch (indicator) {
+      case 'up':
+        return Icons.trending_up;
+      case 'down':
+        return Icons.trending_down;
+      case 'stable':
+      default:
+        return Icons.trending_flat;
+    }
+  }
+
+  /// Format last updated time
+  String _formatLastUpdated(DateTime lastUpdated) {
+    final now = DateTime.now();
+    final difference = now.difference(lastUpdated);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${difference.inDays}d ago';
+    }
   }
 }

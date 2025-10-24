@@ -33,6 +33,8 @@ export interface UserFilters {
     status?: string;
     created_from?: string;
     created_to?: string;
+    page?: number;
+    limit?: number;
 }
 
 // Report types
@@ -67,6 +69,8 @@ export interface ReportFilters {
     category?: string;
     date_from?: string;
     date_to?: string;
+    page?: number;
+    limit?: number;
 }
 
 // Match types
@@ -149,12 +153,16 @@ export interface AuditFilters {
 // Dashboard types
 export interface DashboardStats {
     total_users: number;
+    active_users: number;
+    new_users_30d: number;
     total_reports: number;
     pending_reports: number;
-    new_matches: number;
+    approved_reports: number;
+    lost_reports: number;
+    found_reports: number;
     total_matches: number;
+    promoted_matches: number;
     pending_matches: number;
-    flagged_reports: number;
     fraud_detections: number;
     pending_fraud_reviews: number;
     recent_activity: Array<{
@@ -164,6 +172,7 @@ export interface DashboardStats {
         action: string;
         details: string;
     }>;
+    generated_at?: string;
 }
 
 // API Response types

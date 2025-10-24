@@ -70,6 +70,9 @@ class ApiConfig {
   /// Download user data endpoint
   static const String downloadDataEndpoint = '$usersEndpoint/me/export-data';
 
+  /// Profile statistics endpoint
+  static const String profileStatsEndpoint = '$usersEndpoint/me/stats';
+
   // Report endpoints
   /// Create report endpoint
   static const String createReportEndpoint = reportsEndpoint;

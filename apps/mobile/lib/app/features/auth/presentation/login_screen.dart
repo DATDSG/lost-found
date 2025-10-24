@@ -99,45 +99,92 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildHeaderSection(bool isSmallScreen) => Column(
-    children: [
-      // Logo with improved accessibility
-      Semantics(
-        label: 'Lost and Found App Logo',
-        child: Container(
-          height: isSmallScreen ? 80 : 100,
-          margin: EdgeInsets.only(bottom: DT.s.lg),
-          child: Image.asset(
-            'assets/images/App Logo.png',
-            fit: BoxFit.contain,
-            semanticLabel: 'Lost and Found App Logo',
+  Widget _buildHeaderSection(bool isSmallScreen) => Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          DT.c.brand,
+          DT.c.brand.withValues(alpha: 0.8),
+          DT.c.accentGreen.withValues(alpha: 0.6),
+        ],
+        stops: const [0.0, 0.6, 1.0],
+      ),
+      borderRadius: BorderRadius.circular(DT.r.xl),
+      boxShadow: [
+        BoxShadow(
+          color: DT.c.brand.withValues(alpha: 0.3),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Padding(
+      padding: EdgeInsets.all(DT.s.xl),
+      child: Column(
+        children: [
+          // Enhanced Logo with Better Design
+          Semantics(
+            label: 'Lost and Found App Logo',
+            child: Container(
+              height: isSmallScreen ? 80 : 100,
+              width: isSmallScreen ? 80 : 100,
+              decoration: BoxDecoration(
+                color: DT.c.textOnBrand.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(DT.r.xl),
+                border: Border.all(
+                  color: DT.c.textOnBrand.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(DT.r.xl),
+                child: Image.asset(
+                  'assets/images/App Logo.png',
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Lost and Found App Logo',
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
 
-      // Title with improved typography hierarchy
-      Text(
-        'Welcome Back',
-        style: DT.t.titleLarge.copyWith(
-          color: DT.c.text,
-          fontWeight: FontWeight.w700,
-          fontSize: isSmallScreen ? 24 : 28,
-        ),
-        textAlign: TextAlign.center,
-      ),
+          SizedBox(height: DT.s.lg),
 
-      SizedBox(height: DT.s.sm),
+          // Enhanced Title with Better Typography
+          Text(
+            'Welcome Back!',
+            style: DT.t.headlineSmall.copyWith(
+              color: DT.c.textOnBrand,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              fontSize: isSmallScreen ? 24 : 28,
+            ),
+            textAlign: TextAlign.center,
+          ),
 
-      // Subtitle with better readability
-      Text(
-        'Sign in to continue helping reunite people with their belongings',
-        style: DT.t.bodyMedium.copyWith(
-          color: DT.c.textMuted,
-          height: 1.5, // Improved line height for readability
-        ),
-        textAlign: TextAlign.center,
+          SizedBox(height: DT.s.sm),
+
+          // Enhanced Subtitle with Better Visual Hierarchy
+          Text(
+            'Sign in to continue helping reunite people with their belongings',
+            style: DT.t.bodyLarge.copyWith(
+              color: DT.c.textOnBrand.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w400,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
-    ],
+    ),
   );
 
   Widget _buildFormFields(bool isSmallScreen) => Column(

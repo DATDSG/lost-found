@@ -270,7 +270,7 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  /// Initialize authentication from stored data
+  /// Initialize authentication from stored data with enhanced error handling
   Future<void> initializeAuth() async {
     try {
       if (kDebugMode) {
@@ -279,24 +279,40 @@ class AuthService {
           'SharedPreferences instance: ${_prefs != null ? 'available' : 'null'}',
         );
       }
+
       final token = getStoredToken();
       if (token != null && token.isNotEmpty) {
         if (kDebugMode) {
           print('Token found, setting in API service');
         }
+
         // Set token in API service
         _apiService.authToken = token;
 
-        // Verify token is still valid by getting current user
-        try {
-          await _authRepository.getCurrentUser();
+        // Check if we have cached user data to avoid unnecessary API call
+        final cachedUser = getStoredUser();
+        if (cachedUser != null) {
           if (kDebugMode) {
-            print('Token validation successful');
+            print('Using cached user data: ${cachedUser.email}');
           }
-        } on Exception catch (e) {
-          // Token is invalid, logout user
-          debugPrint('Token validation failed: $e');
-          await logout();
+          // Token validation will happen on first API call if needed
+        } else {
+          // Only validate token if we don't have cached user data
+          try {
+            final user = await _authRepository.getCurrentUser();
+            if (kDebugMode) {
+              print('Token validation successful for user: ${user.email}');
+            }
+            // Cache the user data
+            await _prefs?.setString(
+              AppConstants.userDataKey,
+              json.encode(user.toJson()),
+            );
+          } on Exception catch (e) {
+            // Token is invalid, logout user
+            debugPrint('Token validation failed: $e');
+            await logout();
+          }
         }
       } else {
         if (kDebugMode) {

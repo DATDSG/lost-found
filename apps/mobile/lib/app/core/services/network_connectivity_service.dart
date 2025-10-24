@@ -41,11 +41,37 @@ class NetworkConnectivityService {
     );
   }
 
-  /// Check current connectivity status
+  /// Check current connectivity status with multiple methods
   Future<void> _checkConnectivity() async {
     try {
-      final result = await InternetAddress.lookup('google.com');
-      final isConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      // Try multiple connectivity checks for better reliability
+      var isConnected = false;
+
+      // Method 1: Try to lookup a reliable DNS
+      try {
+        final result = await InternetAddress.lookup(
+          'google.com',
+        ).timeout(const Duration(seconds: 5));
+        isConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      } on Exception catch (e) {
+        if (kDebugMode) {
+          print('DNS lookup failed: $e');
+        }
+      }
+
+      // Method 2: If DNS fails, try a different approach
+      if (!isConnected) {
+        try {
+          final result = await InternetAddress.lookup(
+            '8.8.8.8',
+          ).timeout(const Duration(seconds: 5));
+          isConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+        } on Exception catch (e) {
+          if (kDebugMode) {
+            print('IP lookup failed: $e');
+          }
+        }
+      }
 
       if (_isConnected != isConnected) {
         _isConnected = isConnected;
@@ -57,15 +83,45 @@ class NetworkConnectivityService {
           );
         }
       }
-    } on Exception catch (_) {
+    } on Exception catch (e) {
       if (_isConnected) {
         _isConnected = false;
         _connectivityController.add(_isConnected);
 
         if (kDebugMode) {
-          print('Network connectivity changed: Offline');
+          print('Network connectivity check failed: $e');
         }
       }
+    }
+  }
+
+  /// Check connectivity status manually with detailed result
+  Future<Map<String, dynamic>> checkConnectivityDetailed() async {
+    try {
+      final stopwatch = Stopwatch()..start();
+
+      // Try to lookup a reliable DNS
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 10));
+
+      stopwatch.stop();
+
+      final isConnected = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+
+      return {
+        'isConnected': isConnected,
+        'responseTime': stopwatch.elapsedMilliseconds,
+        'method': 'dns_lookup',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+    } on Exception catch (e) {
+      return {
+        'isConnected': false,
+        'error': e.toString(),
+        'method': 'dns_lookup',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
     }
   }
 
@@ -73,6 +129,18 @@ class NetworkConnectivityService {
   Future<bool> checkConnectivity() async {
     await _checkConnectivity();
     return _isConnected;
+  }
+
+  /// Test connectivity to a specific host
+  Future<bool> testConnectivityToHost(String host) async {
+    try {
+      final result = await InternetAddress.lookup(
+        host,
+      ).timeout(const Duration(seconds: 5));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on Exception {
+      return false;
+    }
   }
 
   /// Dispose resources

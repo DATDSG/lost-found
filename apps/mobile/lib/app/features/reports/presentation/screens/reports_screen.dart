@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../shared/models/home_models.dart';
 import '../../../../shared/providers/api_providers.dart';
+import '../../../../shared/widgets/enhanced_statistics_widget.dart';
 import '../../../../shared/widgets/main_layout.dart';
 
 /// Enhanced report section with design science principles
@@ -105,13 +106,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [DT.c.brand, DT.c.brandDeep, DT.c.brandLight],
+        colors: [
+          DT.c.brand,
+          DT.c.brand.withValues(alpha: 0.8),
+          DT.c.accentGreen.withValues(alpha: 0.6),
+        ],
         stops: const [0.0, 0.6, 1.0],
       ),
-      borderRadius: BorderRadius.only(
-        bottomLeft: Radius.circular(DT.r.xl),
-        bottomRight: Radius.circular(DT.r.xl),
-      ),
+      borderRadius: BorderRadius.vertical(bottom: Radius.circular(DT.r.xl)),
+      boxShadow: [
+        BoxShadow(
+          color: DT.c.brand.withValues(alpha: 0.3),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
     ),
     child: SafeArea(
       child: Padding(
@@ -119,41 +128,71 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Enhanced Header with Better Typography
             Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Report Items',
-                        style: DT.t.headline1.copyWith(
-                          color: DT.c.textOnBrand,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: DT.c.textOnBrand,
+                              borderRadius: BorderRadius.circular(DT.r.sm),
+                            ),
+                          ),
+                          SizedBox(width: DT.s.sm),
+                          Text(
+                            'Reports Dashboard',
+                            style: DT.t.headlineSmall.copyWith(
+                              color: DT.c.textOnBrand,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
                       ),
                       SizedBox(height: DT.s.sm),
                       Text(
                         "Help others find what they're looking for",
                         style: DT.t.bodyLarge.copyWith(
-                          color: DT.c.textOnBrand.withValues(alpha: 0.8),
-                          fontWeight: FontWeight.w500,
+                          color: DT.c.textOnBrand.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      SizedBox(height: DT.s.xs),
+                      Text(
+                        'Create reports and track your submissions',
+                        style: DT.t.bodyMedium.copyWith(
+                          color: DT.c.textOnBrand.withValues(alpha: 0.7),
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
                     ],
                   ),
                 ),
+                // Enhanced Icon Container
                 Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: DT.c.textOnBrand.withValues(alpha: 0.2),
+                    color: DT.c.textOnBrand.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(DT.r.xl),
                     border: Border.all(
                       color: DT.c.textOnBrand.withValues(alpha: 0.3),
                       width: 2,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Icon(
                     Icons.description_outlined,
@@ -162,6 +201,74 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                   ),
                 ),
               ],
+            ),
+
+            SizedBox(height: DT.s.xl),
+
+            // Enhanced Search and Filter Section
+            Container(
+              decoration: BoxDecoration(
+                color: DT.c.surface.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(DT.r.lg),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search reports...',
+                        hintStyle: DT.t.bodyMedium.copyWith(
+                          color: DT.c.textMuted,
+                        ),
+                        prefixIcon: Container(
+                          margin: EdgeInsets.all(DT.s.sm),
+                          decoration: BoxDecoration(
+                            color: DT.c.brand.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(DT.r.sm),
+                          ),
+                          child: Icon(
+                            Icons.search_rounded,
+                            color: DT.c.brand,
+                            size: 20,
+                          ),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: DT.s.md,
+                          vertical: DT.s.lg,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        // Implement search logic
+                      },
+                    ),
+                  ),
+                  Container(
+                    margin: EdgeInsets.all(DT.s.sm),
+                    decoration: BoxDecoration(
+                      color: DT.c.accentGreen.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(DT.r.sm),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.filter_list_rounded,
+                        color: DT.c.accentGreen,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        // Implement filter logic
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -285,278 +392,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
 
   Widget _buildStatisticsOverview() => Padding(
     padding: EdgeInsets.symmetric(horizontal: DT.s.lg),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Statistics Overview',
-          style: DT.t.titleLarge.copyWith(
-            color: DT.c.text,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        SizedBox(height: DT.s.lg),
-        Consumer(
-          builder: (context, ref, child) {
-            final statisticsAsync = ref.watch(statisticsProvider);
-
-            return statisticsAsync.when(
-              data: (stats) => Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Lost Items',
-                          count: stats['lost']?.toString() ?? '0',
-                          subtitle: 'Active reports',
-                          color: DT.c.accentRed,
-                          icon: Icons.search_off_outlined,
-                          trend: 'From API',
-                        ),
-                      ),
-                      SizedBox(width: DT.s.md),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Found Items',
-                          count: stats['found']?.toString() ?? '0',
-                          subtitle: 'Active reports',
-                          color: DT.c.accentGreen,
-                          icon: Icons.check_circle_outlined,
-                          trend: 'From API',
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: DT.s.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total Reports',
-                          count: stats['total']?.toString() ?? '0',
-                          subtitle: 'All time',
-                          color: DT.c.brand,
-                          icon: Icons.description_outlined,
-                          trend: 'From API',
-                        ),
-                      ),
-                      SizedBox(width: DT.s.md),
-                      Expanded(
-                        child: Consumer(
-                          builder: (context, ref, child) {
-                            final userReportsAsync = ref.watch(
-                              userReportsProvider,
-                            );
-                            return userReportsAsync.when(
-                              data: (reports) => _buildStatCard(
-                                title: 'My Reports',
-                                count: reports.length.toString(),
-                                subtitle: 'Your reports',
-                                color: DT.c.accentPurple,
-                                icon: Icons.person_outlined,
-                                trend: 'Personal',
-                              ),
-                              loading: () => _buildStatCard(
-                                title: 'My Reports',
-                                count: '...',
-                                subtitle: 'Your reports',
-                                color: DT.c.accentPurple,
-                                icon: Icons.person_outlined,
-                                trend: 'Loading',
-                              ),
-                              error: (error, stackTrace) => _buildStatCard(
-                                title: 'My Reports',
-                                count: '0',
-                                subtitle: 'Your reports',
-                                color: DT.c.accentPurple,
-                                icon: Icons.person_outlined,
-                                trend: 'Error',
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              loading: () => Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Lost Items',
-                          count: '...',
-                          subtitle: 'Loading',
-                          color: DT.c.accentRed,
-                          icon: Icons.search_off_outlined,
-                          trend: 'Loading',
-                        ),
-                      ),
-                      SizedBox(width: DT.s.md),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Found Items',
-                          count: '...',
-                          subtitle: 'Loading',
-                          color: DT.c.accentGreen,
-                          icon: Icons.check_circle_outlined,
-                          trend: 'Loading',
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: DT.s.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total Reports',
-                          count: '...',
-                          subtitle: 'Loading',
-                          color: DT.c.brand,
-                          icon: Icons.description_outlined,
-                          trend: 'Loading',
-                        ),
-                      ),
-                      SizedBox(width: DT.s.md),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'My Reports',
-                          count: '...',
-                          subtitle: 'Loading',
-                          color: DT.c.accentPurple,
-                          icon: Icons.person_outlined,
-                          trend: 'Loading',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              error: (error, stackTrace) => Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Lost Items',
-                          count: '0',
-                          subtitle: 'Error loading',
-                          color: DT.c.accentRed,
-                          icon: Icons.search_off_outlined,
-                          trend: 'Error',
-                        ),
-                      ),
-                      SizedBox(width: DT.s.md),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Found Items',
-                          count: '0',
-                          subtitle: 'Error loading',
-                          color: DT.c.accentGreen,
-                          icon: Icons.check_circle_outlined,
-                          trend: 'Error',
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: DT.s.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total Reports',
-                          count: '0',
-                          subtitle: 'Error loading',
-                          color: DT.c.brand,
-                          icon: Icons.description_outlined,
-                          trend: 'Error',
-                        ),
-                      ),
-                      SizedBox(width: DT.s.md),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'My Reports',
-                          count: '0',
-                          subtitle: 'Error loading',
-                          color: DT.c.accentPurple,
-                          icon: Icons.person_outlined,
-                          trend: 'Error',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildStatCard({
-    required String title,
-    required String count,
-    required String subtitle,
-    required Color color,
-    required IconData icon,
-    required String trend,
-  }) => Container(
-    padding: EdgeInsets.all(DT.s.lg),
-    decoration: BoxDecoration(
-      color: DT.c.card,
-      borderRadius: BorderRadius.circular(DT.r.lg),
-      boxShadow: DT.e.sm,
-      border: Border.all(color: color.withValues(alpha: 0.1)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(DT.r.md),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const Spacer(),
-            Text(
-              count,
-              style: DT.t.headlineSmall.copyWith(
-                color: DT.c.text,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: DT.s.sm),
-        Text(
-          title,
-          style: DT.t.titleMedium.copyWith(
-            color: DT.c.text,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: DT.s.xs),
-        Text(subtitle, style: DT.t.bodySmall.copyWith(color: DT.c.textMuted)),
-        SizedBox(height: DT.s.xs),
-        Text(
-          trend,
-          style: DT.t.labelSmall.copyWith(
-            color: color,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    ),
+    child: const EnhancedStatisticsWidget(),
   );
 
   Widget _buildRecentActivity() => Padding(

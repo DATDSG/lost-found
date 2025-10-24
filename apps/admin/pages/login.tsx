@@ -15,30 +15,63 @@ export default function Login() {
     setError("");
 
     try {
-      // For now, we'll use a simple mock authentication
-      // In a real app, this would call your API
-      if (
-        formData.email === "admin@lostfound.com" &&
-        formData.password === "admin123"
-      ) {
-        // Store auth token in localStorage (in a real app, use secure storage)
-        localStorage.setItem("admin_token", "mock_token_123");
-        localStorage.setItem(
-          "admin_user",
-          JSON.stringify({
-            id: 1,
+      // Call the real API for authentication
+      const response = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+        }/v1/auth/login`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
             email: formData.email,
-            name: "Admin User",
-            role: "admin",
-          })
+            password: formData.password,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Store auth token in localStorage (in a real app, use secure storage)
+        localStorage.setItem("auth_token", data.access_token);
+
+        // Get user info from the /me endpoint
+        const userResponse = await fetch(
+          `${
+            process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+          }/v1/auth/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${data.access_token}`,
+              "Content-Type": "application/json",
+            },
+          }
         );
+
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          localStorage.setItem(
+            "admin_user",
+            JSON.stringify({
+              id: userData.id,
+              email: userData.email,
+              name: userData.display_name || userData.email.split("@")[0],
+              role: userData.role,
+            })
+          );
+        }
 
         // Redirect to dashboard
         window.location.href = "/dashboard";
       } else {
-        setError("Invalid email or password");
+        const errorData = await response.json();
+        setError(errorData.message || "Invalid email or password");
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError("Login failed. Please try again.");
     } finally {
       setIsLoading(false);
@@ -193,9 +226,9 @@ export default function Login() {
 
             <div className="text-center">
               <div className="text-sm text-gray-600">
-                <p className="font-medium">Demo Credentials:</p>
-                <p>Email: admin@lostfound.com</p>
-                <p>Password: admin123</p>
+                <p className="font-medium">Admin Login:</p>
+                <p>Email: admin@example.com</p>
+                <p>Password: Admin123</p>
               </div>
             </div>
           </form>

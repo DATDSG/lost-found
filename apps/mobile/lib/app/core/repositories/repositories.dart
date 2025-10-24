@@ -356,10 +356,13 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 /// Provider for reports API service
 final reportServiceProvider = Provider<ReportsApiService>((ref) {
   final service = ReportsApiService();
-  final apiService = ref.read(apiServiceProvider);
+  final apiService = ApiService(); // Create instance directly
 
   // Initialize with auth token from main API service
-  service.initialize(authToken: apiService.authToken);
+  service.initialize(
+    baseUrl: apiService.baseUrl,
+    authToken: apiService.authToken,
+  );
 
   return service;
 });

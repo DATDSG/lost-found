@@ -37,7 +37,11 @@ class EnvironmentConfig {
   }
 
   /// Get development URL dynamically
-  static String _getDevelopmentUrl() => 'http://10.0.2.2:8000';
+  static String _getDevelopmentUrl() =>
+      // Try different common development URLs
+      // 10.0.2.2 is Android emulator's host machine
+      // localhost works for iOS simulator and physical devices on same network
+      'http://10.0.2.2:8000';
 
   /// Get API timeout for current environment
   static Duration get apiTimeout {

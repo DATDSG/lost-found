@@ -40,15 +40,7 @@ const Users: NextPage = () => {
       setError(null);
       const [usersResponse, statsResponse] = await Promise.all([
         apiService.getUsers(filters),
-        // Mock stats for now - would come from API
-        Promise.resolve({
-          total_users: 1250,
-          active_users: 1100,
-          verified_users: 950,
-          new_users_30d: 45,
-          users_with_reports: 800,
-          users_with_matches: 300,
-        }),
+        apiService.getUserStats(),
       ]);
 
       setUsers(usersResponse.items);
@@ -138,7 +130,7 @@ const Users: NextPage = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Users</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {stats.total_users}
+                  {stats.total}
                 </p>
               </div>
             </div>
@@ -154,7 +146,7 @@ const Users: NextPage = () => {
                   Active Users
                 </p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {stats.active_users}
+                  {stats.active}
                 </p>
               </div>
             </div>
@@ -170,7 +162,7 @@ const Users: NextPage = () => {
                   Verified Users
                 </p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {stats.verified_users}
+                  {stats.roles?.admin || 0}
                 </p>
               </div>
             </div>
@@ -182,11 +174,9 @@ const Users: NextPage = () => {
                 <ClockIcon className="h-6 w-6 text-white" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">
-                  New Users (30d)
-                </p>
+                <p className="text-sm font-medium text-gray-500">Moderators</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {stats.new_users_30d}
+                  {stats.roles?.moderator || 0}
                 </p>
               </div>
             </div>

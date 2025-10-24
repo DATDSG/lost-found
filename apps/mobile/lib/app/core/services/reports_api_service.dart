@@ -19,12 +19,15 @@ class ReportsApiService {
 
   late String _baseUrl;
 
-  /// Initialize the API service with base URL
+  /// Initialize the API service with base URL and auth token
   void initialize({String? baseUrl, String? authToken}) {
     _baseUrl = baseUrl ?? ApiConfig.baseUrl;
     this.authToken = authToken;
     if (kDebugMode) {
       print('ReportsApiService initialized with base URL: $_baseUrl');
+      print(
+        'ReportsApiService auth token: ${authToken != null ? '${authToken.substring(0, 10)}...' : 'null'}',
+      );
     }
   }
 
@@ -136,7 +139,7 @@ class ReportsApiService {
     double? longitude,
   }) async {
     try {
-      final url = _buildUrl(ApiConfig.reportsEndpoint);
+      final url = _buildUrl('/v1/mobile/reports/quick');
 
       if (kDebugMode) {
         print('Creating report at: $url');
@@ -226,7 +229,7 @@ class ReportsApiService {
       }
 
       final uri = Uri.parse(
-        _buildUrl('${ApiConfig.reportsEndpoint}/my'),
+        _buildUrl('/v1/mobile/reports/my/reports'),
       ).replace(queryParameters: queryParams);
 
       if (kDebugMode) {
@@ -239,9 +242,8 @@ class ReportsApiService {
 
       final data = _handleResponse(response);
 
-      if (data is Map<String, dynamic> && data['reports'] != null) {
-        final reportsData = data['reports'] as List<dynamic>;
-        return reportsData
+      if (data is List) {
+        return data
             .map(
               (reportData) =>
                   _parseUserReport(reportData as Map<String, dynamic>),
@@ -405,7 +407,7 @@ class ReportsApiService {
       }
 
       final uri = Uri.parse(
-        _buildUrl('${ApiConfig.reportsEndpoint}/search'),
+        _buildUrl('/v1/mobile/reports/search'),
       ).replace(queryParameters: queryParams);
 
       if (kDebugMode) {
@@ -418,9 +420,8 @@ class ReportsApiService {
 
       final data = _handleResponse(response);
 
-      if (data is Map<String, dynamic> && data['reports'] != null) {
-        final reportsData = data['reports'] as List<dynamic>;
-        return reportsData
+      if (data is List) {
+        return data
             .map(
               (reportData) =>
                   _parseUserReport(reportData as Map<String, dynamic>),

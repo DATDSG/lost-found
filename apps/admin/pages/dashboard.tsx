@@ -17,6 +17,7 @@ import apiService from "../services/api";
 
 const Dashboard: NextPage = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,8 +29,15 @@ const Dashboard: NextPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiService.getDashboardStats();
-      setStats(data);
+      const [statsData, activityData] = await Promise.all([
+        apiService.getDashboardStats(),
+        apiService.getRecentActivity(),
+      ]);
+
+      setStats({
+        ...statsData,
+        recent_activity: activityData,
+      });
     } catch (err) {
       setError("Failed to load dashboard data");
       console.error("Dashboard error:", err);

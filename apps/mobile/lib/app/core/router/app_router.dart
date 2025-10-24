@@ -16,6 +16,7 @@ import '../../features/reports/presentation/screens/lost_item_report_form.dart';
 import '../../features/reports/presentation/screens/report_detail_screen.dart';
 import '../../features/reports/presentation/screens/reports_screen.dart';
 import '../../features/splash/presentation/screens/splash_screen.dart';
+import '../../features/test/presentation/screens/connectivity_test_screen.dart';
 import '../constants/routes.dart';
 
 /// Application router configuration
@@ -100,6 +101,11 @@ final appRouterProvider = Provider<GoRouter>(
         path: privacySettingsRoute,
         name: 'privacy-settings',
         builder: (context, state) => const PrivacySettingsScreen(),
+      ),
+      GoRoute(
+        path: '/test-connectivity',
+        name: 'test-connectivity',
+        builder: (context, state) => const ConnectivityTestScreen(),
       ),
       // Add more routes as you develop features
     ],

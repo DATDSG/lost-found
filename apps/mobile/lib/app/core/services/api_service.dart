@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../constants/api_config.dart';
 import '../models/api_models.dart';
+import 'debug_service.dart';
 
 /// Main API service for handling all API requests
 class ApiService {
@@ -27,6 +29,12 @@ class ApiService {
 
   /// Authentication token for API requests
   String? authToken;
+
+  /// Debug service for logging
+  final DebugService _debugService = DebugService();
+
+  /// Get the base URL
+  String get baseUrl => _baseUrl;
 
   /// Check if user is authenticated
   bool get isAuthenticated => authToken != null && authToken!.isNotEmpty;
@@ -61,6 +69,16 @@ class ApiService {
           print('API Request: $method $url (attempt ${attempts + 1})');
         }
 
+        // Log API request
+        _debugService.logApiRequest(
+          method,
+          url,
+          headers: headers,
+          body: body != null
+              ? json.decode(body) as Map<String, dynamic>?
+              : null,
+        );
+
         http.Response response;
         switch (method.toUpperCase()) {
           case 'GET':
@@ -78,6 +96,11 @@ class ApiService {
                 .put(Uri.parse(url), headers: headers, body: body)
                 .timeout(ApiConfig.timeout);
             break;
+          case 'PATCH':
+            response = await http
+                .patch(Uri.parse(url), headers: headers, body: body)
+                .timeout(ApiConfig.timeout);
+            break;
           case 'DELETE':
             response = await http
                 .delete(Uri.parse(url), headers: headers)
@@ -88,18 +111,49 @@ class ApiService {
         }
 
         if (kDebugMode) {
-          print('API Response: ${response.statusCode} - ${response.body}');
+          print(
+            'API Response: ${response.statusCode} - ${response.body.length > 200 ? '${response.body.substring(0, 200)}...' : response.body}',
+          );
         }
 
-        return response;
+        // Log API response
+        _debugService.logApiResponse(response.statusCode, response.body);
+
+        // If successful, return response
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return response;
+        }
+
+        // If it's a client error (4xx), don't retry
+        if (response.statusCode >= 400 && response.statusCode < 500) {
+          return response;
+        }
+
+        // For server errors (5xx), retry
+        throw Exception('Server error: ${response.statusCode}');
       } on Exception catch (e) {
         attempts++;
         if (attempts >= maxRetries) {
           if (kDebugMode) {
             print('API Error: $e');
           }
+          _debugService.error(
+            'API request failed after $maxRetries attempts',
+            category: 'api',
+            data: {'method': method, 'url': url, 'error': e.toString()},
+          );
           rethrow;
         }
+        _debugService.warning(
+          'API request failed, retrying',
+          category: 'api',
+          data: {
+            'method': method,
+            'url': url,
+            'attempt': attempts,
+            'error': e.toString(),
+          },
+        );
         await Future<void>.delayed(Duration(seconds: attempts));
       }
     }
@@ -107,18 +161,79 @@ class ApiService {
     throw Exception('Max retries exceeded');
   }
 
-  /// Handle API response
+  /// Handle API response with comprehensive error handling
   dynamic _handleResponse(http.Response response) {
+    // Log API response
+    _debugService.logApiResponse(response.statusCode, response.body);
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) {
         return <String, dynamic>{};
       }
-      return json.decode(response.body);
+      try {
+        return json.decode(response.body);
+      } on FormatException catch (e) {
+        _debugService.error(
+          'JSON decode error',
+          category: 'api',
+          data: {'body': response.body, 'error': e.toString()},
+        );
+        throw Exception('Invalid response format from server');
+      }
     } else {
-      final errorBody = response.body.isNotEmpty
-          ? json.decode(response.body) as Map<String, dynamic>
-          : <String, dynamic>{'message': 'Unknown error'};
-      throw Exception('API Error: ${response.statusCode} - $errorBody');
+      var errorMessage = 'API Error: ${response.statusCode}';
+      Map<String, dynamic>? errorData;
+
+      try {
+        final errorBody = response.body.isNotEmpty
+            ? json.decode(response.body) as Map<String, dynamic>
+            : <String, dynamic>{'message': 'Unknown error'};
+
+        errorData = errorBody;
+
+        if (errorData.containsKey('error')) {
+          final error = errorData['error'];
+          if (error is Map<String, dynamic>) {
+            errorMessage = '${error['message'] ?? errorMessage}';
+          } else if (error is String) {
+            errorMessage = error;
+          }
+        } else if (errorData.containsKey('detail')) {
+          errorMessage = errorData['detail'].toString();
+        } else if (errorData.containsKey('message')) {
+          errorMessage = errorData['message'].toString();
+        }
+      } on FormatException catch (e) {
+        _debugService.warning(
+          'Could not parse error response',
+          category: 'api',
+          data: {'body': response.body, 'error': e.toString()},
+        );
+        errorMessage = 'API Error: ${response.statusCode} - ${response.body}';
+      }
+
+      // Handle specific error cases
+      if (response.statusCode == 401) {
+        _debugService.warning(
+          'Authentication failed - token may be expired',
+          category: 'auth',
+          data: {'statusCode': response.statusCode, 'message': errorMessage},
+        );
+        // Clear auth token on 401 errors
+        authToken = null;
+      }
+
+      _debugService.error(
+        'API request failed',
+        category: 'api',
+        data: {
+          'statusCode': response.statusCode,
+          'message': errorMessage,
+          'body': response.body,
+        },
+      );
+
+      throw Exception(errorMessage);
     }
   }
 
@@ -127,6 +242,8 @@ class ApiService {
   /// Login user with email and password
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
+      _debugService.logAuthEvent('Login attempt', data: {'email': email});
+
       final url = _buildUrl('${ApiConfig.authEndpoint}/login');
       final body = json.encode({'email': email, 'password': password});
 
@@ -137,8 +254,17 @@ class ApiService {
         body: body,
       );
 
-      return _handleResponse(response) as Map<String, dynamic>;
+      final result = _handleResponse(response) as Map<String, dynamic>;
+
+      _debugService.logAuthEvent('Login successful', data: {'email': email});
+
+      return result;
     } on Exception catch (e) {
+      _debugService.error(
+        'Login failed',
+        category: 'auth',
+        data: {'email': email, 'error': e.toString()},
+      );
       if (kDebugMode) {
         print('Login error: $e');
       }
@@ -243,7 +369,7 @@ class ApiService {
   /// Get user profile statistics
   Future<Map<String, dynamic>> getProfileStats() async {
     try {
-      final url = _buildUrl('/v1/mobile/users/stats');
+      final url = _buildUrl(ApiConfig.profileStatsEndpoint);
       if (kDebugMode) {
         print('GetProfileStats request URL: $url');
       }
@@ -319,6 +445,8 @@ class ApiService {
 
       if (result is List) {
         return result.cast<Map<String, dynamic>>();
+      } else if (result is Map<String, dynamic> && result['data'] != null) {
+        return (result['data'] as List).cast<Map<String, dynamic>>();
       } else {
         return [];
       }
@@ -335,7 +463,7 @@ class ApiService {
     Map<String, dynamic> reportData,
   ) async {
     try {
-      final url = _buildUrl(ApiConfig.createReportEndpoint);
+      final url = _buildUrl('/v1/mobile/reports/quick');
       final body = json.encode(reportData);
 
       final response = await _makeRequest(
@@ -345,7 +473,12 @@ class ApiService {
         body: body,
       );
 
-      return _handleResponse(response) as Map<String, dynamic>;
+      final result = _handleResponse(response);
+      if (result is Map<String, dynamic>) {
+        return result;
+      } else {
+        throw Exception('Invalid response format');
+      }
     } on Exception catch (e) {
       if (kDebugMode) {
         print('CreateReport error: $e');
@@ -368,7 +501,35 @@ class ApiService {
 
       final request = http.MultipartRequest('POST', Uri.parse(url));
       request.headers.addAll(_getHeaders());
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      // Get file extension to determine content type
+      final fileExtension = file.path.split('.').last.toLowerCase();
+      String contentType;
+      switch (fileExtension) {
+        case 'jpg':
+        case 'jpeg':
+          contentType = 'image/jpeg';
+          break;
+        case 'png':
+          contentType = 'image/png';
+          break;
+        case 'gif':
+          contentType = 'image/gif';
+          break;
+        case 'webp':
+          contentType = 'image/webp';
+          break;
+        default:
+          contentType = 'image/jpeg'; // Default to JPEG
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          file.path,
+          contentType: MediaType(contentType, ''),
+        ),
+      );
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -736,19 +897,31 @@ class ApiService {
     }
   }
 
-  /// Logout user
+  /// Logout user (handles missing logout endpoint gracefully)
   Future<void> logout() async {
     try {
       final url = _buildUrl('${ApiConfig.authEndpoint}/logout');
       await _makeRequest('POST', url, _getHeaders());
+      _debugService.info('Server logout successful', category: 'auth');
     } on Exception catch (e) {
-      if (kDebugMode) {
-        print('Logout error (continuing with local logout): $e');
+      // Handle 404 or other logout errors gracefully
+      if (e.toString().contains('404') || e.toString().contains('Not Found')) {
+        _debugService.info(
+          'Logout endpoint not available - continuing with local logout',
+          category: 'auth',
+        );
+      } else {
+        _debugService.warning(
+          'Server logout failed - continuing with local logout',
+          category: 'auth',
+          data: {'error': e.toString()},
+        );
       }
       // Continue with local logout even if server logout fails
     } finally {
       // Always clear auth token
       authToken = null;
+      _debugService.info('Local logout completed', category: 'auth');
     }
   }
 }

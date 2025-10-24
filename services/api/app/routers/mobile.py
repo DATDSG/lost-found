@@ -142,32 +142,110 @@ async def mobile_sync(
 
 @router.post("/reports/quick", response_model=ReportResponse)
 async def create_quick_report(
-    report_data: ReportCreate,
+    request: Request,
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     Quick report creation optimized for mobile.
-    Simplified validation and faster processing.
+    Handles both JSON and multipart form data.
     """
     try:
+        logger.info(f"Creating quick report for user {user.id}")
+        
+        # Check content type
+        content_type = request.headers.get("content-type", "")
+        
+        if "multipart/form-data" in content_type:
+            # Handle multipart form data
+            form_data = await request.form()
+            
+            # Extract form fields
+            report_data = {
+                "type": form_data.get("type"),
+                "title": form_data.get("title"),
+                "description": form_data.get("description"),
+                "category": form_data.get("category"),
+                "location_city": form_data.get("location_city"),
+                "occurred_at": form_data.get("occurred_at"),
+                "colors": form_data.get("colors", "[]"),
+                "is_urgent": form_data.get("is_urgent", "false").lower() == "true",
+                "reward_offered": form_data.get("reward_offered", "false").lower() == "true",
+                "reward_amount": form_data.get("reward_amount"),
+                "latitude": form_data.get("latitude"),
+                "longitude": form_data.get("longitude"),
+                "images": []
+            }
+            
+            # Parse colors if it's a JSON string
+            if isinstance(report_data["colors"], str):
+                try:
+                    import json
+                    report_data["colors"] = json.loads(report_data["colors"])
+                except:
+                    report_data["colors"] = []
+            
+            # Handle latitude/longitude
+            if report_data["latitude"]:
+                try:
+                    report_data["latitude"] = float(report_data["latitude"])
+                except:
+                    report_data["latitude"] = None
+            
+            if report_data["longitude"]:
+                try:
+                    report_data["longitude"] = float(report_data["longitude"])
+                except:
+                    report_data["longitude"] = None
+            
+            # Parse occurred_at
+            if report_data["occurred_at"]:
+                try:
+                    from datetime import datetime
+                    report_data["occurred_at"] = datetime.fromisoformat(report_data["occurred_at"].replace('Z', '+00:00'))
+                except:
+                    report_data["occurred_at"] = datetime.utcnow()
+            else:
+                report_data["occurred_at"] = datetime.utcnow()
+            
+            # Validate required fields
+            if not report_data["type"] or not report_data["title"] or not report_data["category"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Missing required fields: type, title, category"
+                )
+            
+            logger.info(f"Multipart report data: {report_data}")
+            
+        else:
+            # Handle JSON data
+            json_data = await request.json()
+            report_data = json_data
+            logger.info(f"JSON report data: {report_data}")
+        
         # Create report
         report = Report(
             id=str(uuid.uuid4()),
             owner_id=user.id,
-            type=report_data.type,
-            status=ReportStatus.PENDING,
-            title=report_data.title,
-            description=report_data.description,
-            category=report_data.category,
-            location=report_data.location,
-            latitude=report_data.latitude,
-            longitude=report_data.longitude,
-            contact_info=report_data.contact_info,
-            is_urgent=report_data.is_urgent or False,
-            reward_offered=report_data.reward_offered or False,
-            reward_amount=report_data.reward_amount
+            type=report_data["type"],
+            status="pending",
+            title=report_data["title"],
+            description=report_data.get("description"),
+            category=report_data["category"],
+            location_city=report_data.get("location_city"),
+            latitude=report_data.get("latitude"),
+            longitude=report_data.get("longitude"),
+            contact_info=report_data.get("contact_info"),
+            is_urgent=report_data.get("is_urgent", False),
+            reward_offered=report_data.get("reward_offered", False),
+            reward_amount=report_data.get("reward_amount"),
+            occurred_at=report_data.get("occurred_at", datetime.utcnow()),
+            colors=report_data.get("colors", []),
+            images=report_data.get("images", []),
+            image_hashes=[],
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
         
         db.add(report)
@@ -175,8 +253,8 @@ async def create_quick_report(
         await db.refresh(report)
         
         # Background processing for images and matching
-        if report_data.images:
-            background_tasks.add_task(process_report_images, report.id, report_data.images)
+        if report_data.get("images"):
+            background_tasks.add_task(process_report_images, report.id, report_data["images"])
         
         background_tasks.add_task(generate_report_embeddings, report.id)
         background_tasks.add_task(find_initial_matches, report.id)
@@ -185,11 +263,22 @@ async def create_quick_report(
         
         return ReportResponse.from_orm(report)
         
+    except ValueError as e:
+        logger.error(f"Validation error in quick report creation: {e}")
+        logger.error(f"Report data: {report_data}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid report data: {str(e)}"
+        )
     except Exception as e:
         logger.error(f"Quick report creation failed: {e}")
+        logger.error(f"Report data: {report_data}")
+        logger.error(f"User ID: {user.id}")
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Report creation failed"
+            detail=f"Report creation failed: {str(e)}"
         )
 
 

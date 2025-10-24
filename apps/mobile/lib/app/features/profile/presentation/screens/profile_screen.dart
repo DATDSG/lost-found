@@ -28,7 +28,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    // Initialize TabController with 3 tabs: Active, Drafts, Resolved
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -83,14 +84,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               SizedBox(
                 height:
                     screenSize.height *
-                    0.45, // Reduced height to prevent overflow
+                    0.5, // Increased height for better content display
                 child: TabBarView(
                   controller: _tabController,
                   children: [
                     _buildActiveTab(isSmallScreen),
                     _buildDraftsTab(isSmallScreen),
                     _buildResolvedTab(isSmallScreen),
-                    _buildEditTab(isSmallScreen),
                   ],
                 ),
               ),
@@ -117,13 +117,218 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
       return Container(
         margin: EdgeInsets.all(isSmallScreen ? DT.s.sm : DT.s.md),
-        child: ProfileInfoCard(
-          user: authState.user!,
-          showEditButton: true,
-          onEditPressed: _navigateToEditProfile,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              DT.c.brand,
+              DT.c.brand.withValues(alpha: 0.9),
+              DT.c.accentGreen.withValues(alpha: 0.7),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ),
+          borderRadius: BorderRadius.circular(DT.r.xl),
+          boxShadow: [
+            BoxShadow(
+              color: DT.c.brand.withValues(alpha: 0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(DT.s.lg),
+          child: Column(
+            children: [
+              // Enhanced Profile Info Section
+              Row(
+                children: [
+                  // Enhanced Avatar with Better Design
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: DT.c.textOnBrand.withValues(alpha: 0.4),
+                        width: 4,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                          spreadRadius: 1,
+                        ),
+                        BoxShadow(
+                          color: DT.c.textOnBrand.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 45,
+                      backgroundColor: DT.c.textOnBrand.withValues(alpha: 0.15),
+                      child: Icon(
+                        Icons.person_outline_rounded,
+                        color: DT.c.textOnBrand,
+                        size: 45,
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(width: DT.s.lg),
+
+                  // Enhanced User Info with Better Typography
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Welcome Back!',
+                          style: DT.t.bodyMedium.copyWith(
+                            color: DT.c.textOnBrand.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: DT.s.xs),
+                        Text(
+                          authState.user!.displayName ?? 'User',
+                          style: DT.t.headlineSmall.copyWith(
+                            color: DT.c.textOnBrand,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        SizedBox(height: DT.s.xs),
+                        Text(
+                          authState.user!.email,
+                          style: DT.t.bodyMedium.copyWith(
+                            color: DT.c.textOnBrand.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Enhanced Action Buttons
+                  Row(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: DT.c.textOnBrand.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(DT.r.md),
+                          border: Border.all(
+                            color: DT.c.textOnBrand.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.edit_rounded,
+                            color: DT.c.textOnBrand,
+                            size: 20,
+                          ),
+                          onPressed: _navigateToEditProfile,
+                        ),
+                      ),
+                      SizedBox(width: DT.s.sm),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: DT.c.accentRed.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(DT.r.md),
+                          border: Border.all(
+                            color: DT.c.accentRed.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.logout_rounded,
+                            color: DT.c.accentRed,
+                            size: 20,
+                          ),
+                          onPressed: _handleLogout,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              SizedBox(height: DT.s.lg),
+
+              // Enhanced Action Buttons Row
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildProfileActionButton(
+                      title: 'Edit Profile',
+                      icon: Icons.person_outline_rounded,
+                      onTap: _navigateToEditProfile,
+                    ),
+                  ),
+                  SizedBox(width: DT.s.sm),
+                  Expanded(
+                    child: _buildProfileActionButton(
+                      title: 'Privacy',
+                      icon: Icons.privacy_tip_outlined,
+                      onTap: () => context.go(privacySettingsRoute),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     },
+  );
+
+  Widget _buildProfileActionButton({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: EdgeInsets.symmetric(horizontal: DT.s.lg, vertical: DT.s.md),
+      decoration: BoxDecoration(
+        color: DT.c.textOnBrand.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(DT.r.lg),
+        border: Border.all(
+          color: DT.c.textOnBrand.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: DT.c.textOnBrand, size: 18),
+          SizedBox(width: DT.s.sm),
+          Text(
+            title,
+            style: DT.t.bodyMedium.copyWith(
+              color: DT.c.textOnBrand,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 
   Widget _buildTabBar(bool isSmallScreen) =>
@@ -238,145 +443,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ],
     ),
   );
-
-  Widget _buildEditTab(bool isSmallScreen) => SingleChildScrollView(
-    padding: EdgeInsets.all(isSmallScreen ? DT.s.sm : DT.s.md),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Profile Settings',
-          style: DT.t.title.copyWith(
-            color: DT.c.text,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        SizedBox(height: DT.s.lg),
-
-        // Settings Options with improved accessibility
-        Container(
-          padding: EdgeInsets.all(DT.s.lg),
-          decoration: BoxDecoration(
-            color: DT.c.surface,
-            borderRadius: BorderRadius.circular(DT.r.md),
-            boxShadow: DT.e.card,
-          ),
-          child: Column(
-            children: [
-              // Edit Profile Option
-              _buildSettingsOption(
-                icon: Icons.edit_outlined,
-                title: 'Edit Profile',
-                subtitle: 'Update your personal information',
-                onTap: _navigateToEditProfile,
-              ),
-
-              Divider(color: DT.c.divider),
-
-              // Change Password Option
-              _buildSettingsOption(
-                icon: Icons.lock_outline,
-                title: 'Change Password',
-                subtitle: 'Update your account password',
-                onTap: _navigateToEditProfile,
-              ),
-
-              Divider(color: DT.c.divider),
-
-              // Privacy Settings Option
-              _buildSettingsOption(
-                icon: Icons.privacy_tip_outlined,
-                title: 'Privacy Settings',
-                subtitle: 'Manage your privacy preferences',
-                onTap: () {
-                  context.push(privacySettingsRoute);
-                },
-              ),
-
-              Divider(color: DT.c.divider),
-
-              // Logout Option
-              _buildSettingsOption(
-                icon: Icons.logout,
-                title: 'Logout',
-                subtitle: 'Sign out of your account',
-                isDestructive: true,
-                onTap: _handleLogout,
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildSettingsOption({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
-    final color = isDestructive ? DT.c.accentRed : DT.c.text;
-
-    return Semantics(
-      label: '$title. $subtitle',
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(DT.r.sm),
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: DT.s.md),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(DT.s.sm),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(DT.r.sm),
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 20,
-                  semanticLabel: '$title icon',
-                ),
-              ),
-              SizedBox(width: DT.s.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: DT.t.body.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: DT.s.xs),
-                    Text(
-                      subtitle,
-                      style: DT.t.bodySmall.copyWith(
-                        color: DT.c.textMuted,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: DT.c.textMuted,
-                size: 16,
-                semanticLabel: 'Navigate to $title',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildResolvedTab(bool isSmallScreen) => SingleChildScrollView(
     padding: EdgeInsets.all(isSmallScreen ? DT.s.sm : DT.s.md),

@@ -55,16 +55,73 @@ class ApiService {
 
     // Dashboard API
     async getDashboardStats(): Promise<DashboardStats> {
-        const response: AxiosResponse<DashboardStats> = await this.api.get('/admin/dashboard/stats');
-        return response.data;
+        const response: AxiosResponse<any> = await this.api.get('/admin/dashboard/stats');
+        const data = response.data;
+
+        // Transform backend response to match frontend expectations
+        return {
+            total_users: data.users?.total || 0,
+            active_users: data.users?.active || 0,
+            new_users_30d: data.users?.new_30d || 0,
+            total_reports: data.reports?.total || 0,
+            pending_reports: data.reports?.pending || 0,
+            approved_reports: data.reports?.approved || 0,
+            lost_reports: data.reports?.lost || 0,
+            found_reports: data.reports?.found || 0,
+            total_matches: data.matches?.total || 0,
+            promoted_matches: data.matches?.promoted || 0,
+            pending_matches: data.matches?.total - data.matches?.promoted || 0,
+            fraud_detections: 0, // Not available in current API
+            pending_fraud_reviews: 0, // Not available in current API
+            recent_activity: [], // Will be fetched separately
+            generated_at: data.generated_at
+        };
+    }
+
+    async getRecentActivity(): Promise<any[]> {
+        const response: AxiosResponse<any> = await this.api.get('/admin/dashboard/activity');
+        return response.data.activity || [];
     }
 
     // Users API
     async getUsers(filters: UserFilters = {}): Promise<PaginatedResponse<User>> {
-        const response: AxiosResponse<PaginatedResponse<User>> = await this.api.get('/admin/users', {
-            params: filters,
+        const params = {
+            skip: ((filters.page || 1) - 1) * (filters.limit || 25),
+            limit: filters.limit || 25,
+            role: filters.role,
+            status_filter: filters.status,
+            search: filters.search,
+        };
+
+        const response: AxiosResponse<any> = await this.api.get('/admin/users', {
+            params,
         });
-        return response.data;
+
+        // Transform backend response to match frontend expectations
+        const data = response.data;
+        return {
+            items: (data.items || []).map((user: any) => ({
+                id: user.id,
+                email: user.email,
+                first_name: user.display_name?.split(' ')[0] || '',
+                last_name: user.display_name?.split(' ').slice(1).join(' ') || '',
+                display_name: user.display_name,
+                role: user.role,
+                status: user.status,
+                is_active: user.is_active,
+                is_verified: user.status === 'verified',
+                created_at: user.created_at,
+                updated_at: user.updated_at,
+                last_login_at: user.last_login_at,
+                reports_count: 0, // Will be fetched separately
+                matches_count: 0, // Will be fetched separately
+            })),
+            total: data.total || 0,
+            page: filters.page || 1,
+            per_page: filters.limit || 25,
+            pages: Math.ceil((data.total || 0) / (filters.limit || 25)),
+            total_pages: Math.ceil((data.total || 0) / (filters.limit || 25)),
+        };
     }
 
     async getUser(userId: string): Promise<User> {
@@ -80,21 +137,47 @@ class ApiService {
         await this.api.patch(`/admin/users/${userId}/role`, { role });
     }
 
-    // Reports API
-    async getReports(filters: ReportFilters = {}): Promise<PaginatedResponse<Report>> {
-        const response: AxiosResponse<PaginatedResponse<Report>> = await this.api.get('/admin/reports', {
-            params: filters,
-        });
+    async getUserStats(): Promise<any> {
+        const response: AxiosResponse<any> = await this.api.get('/admin/users/stats');
         return response.data;
     }
 
+    // Reports API
+    async getReports(filters: ReportFilters = {}): Promise<PaginatedResponse<Report>> {
+        const params = {
+            skip: ((filters.page || 1) - 1) * (filters.limit || 25),
+            limit: filters.limit || 25,
+            status_filter: filters.status,
+            report_type: filters.type,
+            search: filters.search,
+        };
+
+        const response: AxiosResponse<PaginatedResponse<Report>> = await this.api.get('/admin/reports', {
+            params,
+        });
+
+        // Transform backend response to match frontend expectations
+        const data = response.data;
+        return {
+            items: data.items || [],
+            total: data.total || 0,
+            page: filters.page || 1,
+            per_page: filters.limit || 25,
+            pages: Math.ceil((data.total || 0) / (filters.limit || 25)),
+            total_pages: Math.ceil((data.total || 0) / (filters.limit || 25)),
+        };
+    }
+
     async getReport(reportId: string): Promise<Report> {
-        const response: AxiosResponse<ApiResponse<Report>> = await this.api.get(`/admin/reports/${reportId}`);
-        return response.data.data;
+        const response: AxiosResponse<Report> = await this.api.get(`/admin/reports/${reportId}`);
+        return response.data;
     }
 
     async updateReportStatus(reportId: string, status: string): Promise<void> {
-        await this.api.patch(`/admin/reports/${reportId}/status`, { status });
+        await this.api.patch(`/admin/reports/${reportId}/status`, {
+            status: status,
+            admin_notes: `Status updated to ${status}`
+        });
     }
 
     async deleteReport(reportId: string): Promise<void> {
@@ -147,6 +230,11 @@ class ApiService {
             candidate_report_id: candidateReportId,
         });
         return response.data.data;
+    }
+
+    async getMatchStats(): Promise<any> {
+        const response: AxiosResponse<any> = await this.api.get('/admin/matches/stats');
+        return response.data;
     }
 
     // Fraud Detection API
