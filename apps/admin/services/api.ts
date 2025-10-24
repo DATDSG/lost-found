@@ -20,7 +20,7 @@ class ApiService {
 
     constructor() {
         this.api = axios.create({
-            baseURL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1`,
+            baseURL: `${process.env.NODE_ENV === 'production' ? 'http://172.104.40.189:8000' : 'http://localhost:8000'}/v1`,
             timeout: 10000,
             headers: {
                 'Content-Type': 'application/json',
