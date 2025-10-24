@@ -135,6 +135,9 @@ services:
       - NLP_SERVICE_URL=http://nlp:8001
       - VISION_SERVICE_URL=http://vision:8002
 
+      # CORS configuration
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://admin:3000
+
       # Application settings
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

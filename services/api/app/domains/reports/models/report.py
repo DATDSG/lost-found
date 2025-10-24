@@ -31,6 +31,7 @@ class ReportStatus(str, enum.Enum):
     HIDDEN = "hidden"
     REMOVED = "removed"
     REJECTED = "rejected"
+    RESOLVED = "resolved"
 
 
 class Report(Base):

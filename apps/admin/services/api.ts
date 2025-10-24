@@ -142,6 +142,20 @@ class ApiService {
         return response.data;
     }
 
+    async createUser(userData: any): Promise<User> {
+        const response: AxiosResponse<ApiResponse<User>> = await this.api.post('/admin/users', userData);
+        return response.data.data;
+    }
+
+    async updateUser(userId: string, userData: any): Promise<User> {
+        const response: AxiosResponse<ApiResponse<User>> = await this.api.patch(`/admin/users/${userId}`, userData);
+        return response.data.data;
+    }
+
+    async deleteUser(userId: string): Promise<void> {
+        await this.api.delete(`/admin/users/${userId}`);
+    }
+
     // Reports API
     async getReports(filters: ReportFilters = {}): Promise<PaginatedResponse<Report>> {
         const params = {

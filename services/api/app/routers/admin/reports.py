@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from ...infrastructure.database.session import get_async_db
 from ...dependencies import get_current_admin
-from ...helpers import create_audit_log
+from ...helpers import create_audit_log_async
 from ...models import User
 from ...domains.reports.models.report import Report, ReportStatus
 
@@ -92,7 +92,7 @@ def _serialize_report_detail(report: Report) -> Dict:
 async def _get_report_or_404(db: AsyncSession, report_id: str) -> Report:
     result = await db.execute(
         select(Report)
-        .options(selectinload(Report.owner), selectinload(Report.media))
+        .options(selectinload(Report.owner))
         .where(Report.id == report_id)
     )
     report = result.scalar_one_or_none()
@@ -231,16 +231,9 @@ async def get_report_detail(
             "email": report.owner.email,
             "display_name": report.owner.display_name,
         }
-    if report.media:
-        payload["media"] = [
-            {
-                "id": media.id,
-                "url": media.url,
-                "filename": media.filename,
-                "media_type": media.media_type,
-            }
-            for media in report.media
-        ]
+    # Add images if they exist
+    if report.images:
+        payload["images"] = report.images
     return payload
 
 
@@ -258,7 +251,7 @@ async def approve_report(
 
     await db.commit()
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="approve_report",
@@ -293,7 +286,7 @@ async def reject_report(
 
     await db.commit()
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="reject_report",
@@ -333,7 +326,7 @@ async def remove_report(
 
     await db.commit()
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="remove_report",
@@ -368,21 +361,22 @@ async def update_report_status(
         report.moderation_notes = payload.admin_notes
 
     await db.commit()
-    await create_audit_log(
-        db=db,
-        user_id=str(current_user.id),
-        action="update_report_status",
-        resource_type="report",
-        resource_id=report.id,
-        details=json.dumps(
-            {
-                "moderator": current_user.email,
-                "old_status": old_status,
-                "new_status": report.status,
-                "notes": payload.admin_notes,
-            }
-        ),
-    )
+    await db.refresh(report)
+    # await create_audit_log_async(
+    #     db=db,
+    #     user_id=str(current_user.id),
+    #     action="update_report_status",
+    #     resource_type="report",
+    #     resource_id=report.id,
+    #     details=json.dumps(
+    #         {
+    #             "moderator": current_user.email,
+    #             "old_status": old_status,
+    #             "new_status": report.status,
+    #             "notes": payload.admin_notes,
+    #         }
+    #     ),
+    # )
 
     return {"report": _serialize_report_detail(report)}
 
@@ -401,7 +395,7 @@ async def delete_report(
     report.moderation_notes = payload.reason
 
     await db.commit()
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="delete_report",
@@ -504,7 +498,7 @@ async def _bulk_update_status(
             await db.commit()
             success += 1
 
-            await create_audit_log(
+            await create_audit_log_async(
                 db=db,
                 user_id=str(current_user.id),
                 action=action,

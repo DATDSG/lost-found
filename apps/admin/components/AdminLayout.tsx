@@ -3,6 +3,7 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import Image from "next/image";
 import {
   HomeIcon,
   DocumentTextIcon,
@@ -13,6 +14,9 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
+  UserIcon,
+  Cog6ToothIcon,
+  BellIcon,
 } from "@heroicons/react/24/outline";
 
 interface LayoutProps {
@@ -28,6 +32,7 @@ const AdminLayout: React.FC<LayoutProps> = ({
 }) => {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -37,6 +42,23 @@ const AdminLayout: React.FC<LayoutProps> = ({
       setUser(JSON.parse(userData));
     }
   }, []);
+
+  // Close profile popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileOpen) {
+        const target = event.target as HTMLElement;
+        if (!target.closest("[data-profile-dropdown]")) {
+          setProfileOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [profileOpen]);
 
   const handleLogout = () => {
     localStorage.removeItem("admin_token");
@@ -105,12 +127,34 @@ const AdminLayout: React.FC<LayoutProps> = ({
           className="fixed inset-0 bg-gray-600 bg-opacity-75"
           onClick={() => setSidebarOpen(false)}
         />
-        <div className="relative flex w-64 flex-col bg-white">
+        <div className="relative flex w-64 flex-col bg-gradient-to-br from-blue-50 to-indigo-100 border-r border-blue-200">
           <div className="flex h-16 items-center justify-between px-4">
-            <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-lg border-2 border-blue-200 overflow-hidden">
+                <Image
+                  src="/App Logo.png"
+                  alt="Lost & Found Logo"
+                  width={32}
+                  height={32}
+                  className="rounded-lg object-contain"
+                  priority
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = "/logo-fallback.svg";
+                    target.onerror = null; // Prevent infinite loop
+                  }}
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-gray-800">
+                  Lost & Found
+                </span>
+                <span className="text-xs text-gray-500">Admin Portal</span>
+              </div>
+            </div>
             <button
               type="button"
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
               onClick={() => setSidebarOpen(false)}
               aria-label="Close sidebar"
             >
@@ -123,17 +167,17 @@ const AdminLayout: React.FC<LayoutProps> = ({
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    className={`group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${
                       item.current
-                        ? "bg-gray-100 text-gray-900"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+                        : "text-gray-700 hover:bg-white/50 hover:text-blue-700 hover:shadow-md"
                     }`}
                   >
                     <item.icon
-                      className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                      className={`mr-3 h-5 w-5 flex-shrink-0 transition-colors duration-200 ${
                         item.current
-                          ? "text-gray-500"
-                          : "text-gray-400 group-hover:text-gray-500"
+                          ? "text-white"
+                          : "text-gray-500 group-hover:text-blue-600"
                       }`}
                     />
                     {item.name}
@@ -142,14 +186,45 @@ const AdminLayout: React.FC<LayoutProps> = ({
               ))}
             </ul>
           </nav>
+          <div className="border-t border-blue-200 p-4">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center px-3 py-3 text-sm font-medium text-gray-700 hover:bg-white/50 hover:text-red-600 rounded-lg transition-all duration-200"
+            >
+              <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-500" />
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
+        <div className="flex flex-col flex-grow bg-gradient-to-br from-blue-50 to-indigo-100 border-r border-blue-200">
           <div className="flex h-16 items-center px-4">
-            <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-lg border-2 border-blue-200 overflow-hidden">
+                <Image
+                  src="/App Logo.png"
+                  alt="Lost & Found Logo"
+                  width={32}
+                  height={32}
+                  className="rounded-lg object-contain"
+                  priority
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = "/logo-fallback.svg";
+                    target.onerror = null; // Prevent infinite loop
+                  }}
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-gray-800">
+                  Lost & Found
+                </span>
+                <span className="text-xs text-gray-500">Admin Portal</span>
+              </div>
+            </div>
           </div>
           <nav className="flex-1 px-4 pb-4">
             <ul className="space-y-2">
@@ -157,17 +232,17 @@ const AdminLayout: React.FC<LayoutProps> = ({
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    className={`group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${
                       item.current
-                        ? "bg-gray-100 text-gray-900"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+                        : "text-gray-700 hover:bg-white/50 hover:text-blue-700 hover:shadow-md"
                     }`}
                   >
                     <item.icon
-                      className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                      className={`mr-3 h-5 w-5 flex-shrink-0 transition-colors duration-200 ${
                         item.current
-                          ? "text-gray-500"
-                          : "text-gray-400 group-hover:text-gray-500"
+                          ? "text-white"
+                          : "text-gray-500 group-hover:text-blue-600"
                       }`}
                     />
                     {item.name}
@@ -176,12 +251,12 @@ const AdminLayout: React.FC<LayoutProps> = ({
               ))}
             </ul>
           </nav>
-          <div className="border-t border-gray-200 p-4">
+          <div className="border-t border-blue-200 p-4">
             <button
               onClick={handleLogout}
-              className="flex w-full items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md"
+              className="flex w-full items-center px-3 py-3 text-sm font-medium text-gray-700 hover:bg-white/50 hover:text-red-600 rounded-lg transition-all duration-200"
             >
-              <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-400" />
+              <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-500" />
               Sign Out
             </button>
           </div>
@@ -202,17 +277,158 @@ const AdminLayout: React.FC<LayoutProps> = ({
           </button>
 
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="flex flex-1"></div>
+            <div className="flex flex-1 items-center">
+              <h1 className="text-xl font-semibold text-gray-900">
+                Admin Panel
+              </h1>
+            </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <div className="flex items-center gap-x-2">
-                <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
-                  <span className="text-sm font-medium text-gray-700">
-                    {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
-                  </span>
-                </div>
-                <span className="text-sm font-medium text-gray-700">
-                  {user?.name || "Admin User"}
+              {/* Notifications */}
+              <button className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors duration-200">
+                <BellIcon className="h-6 w-6" />
+                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
+                  3
                 </span>
+              </button>
+
+              {/* Profile dropdown */}
+              <div className="relative" data-profile-dropdown>
+                <button
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex items-center gap-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+                    <span className="text-sm font-medium text-white">
+                      {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-gray-900">
+                      {user?.name || "Admin User"}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {user?.role || "Administrator"}
+                    </p>
+                  </div>
+                </button>
+
+                {/* Profile popup */}
+                {profileOpen && (
+                  <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+                          <span className="text-lg font-medium text-white">
+                            {user?.name
+                              ? user.name.charAt(0).toUpperCase()
+                              : "A"}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-gray-900">
+                            {user?.name || "Admin User"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {user?.email || "admin@example.com"}
+                          </p>
+                          <p className="text-xs text-blue-600 font-medium">
+                            {user?.role || "Administrator"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* User Details Section */}
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                        Account Information
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">User ID:</span>
+                          <span className="text-gray-900 font-mono">
+                            {user?.id ? user.id.substring(0, 8) + "..." : "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Status:</span>
+                          <span className="text-green-600 font-medium">
+                            Active
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Last Login:</span>
+                          <span className="text-gray-900">
+                            {user?.last_login_at
+                              ? new Date(
+                                  user.last_login_at
+                                ).toLocaleDateString()
+                              : "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Member Since:</span>
+                          <span className="text-gray-900">
+                            {user?.created_at
+                              ? new Date(user.created_at).toLocaleDateString()
+                              : "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Activity Summary */}
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                        Activity Summary
+                      </h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-blue-600">
+                            {user?.reports_count || 0}
+                          </p>
+                          <p className="text-xs text-gray-500">Reports</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-green-600">
+                            {user?.matches_count || 0}
+                          </p>
+                          <p className="text-xs text-gray-500">Matches</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-purple-600">
+                            {user?.successful_matches || 0}
+                          </p>
+                          <p className="text-xs text-gray-500">Successful</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="py-2">
+                      <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                        <UserIcon className="mr-3 h-4 w-4 text-gray-400" />
+                        View Full Profile
+                      </button>
+                      <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                        <Cog6ToothIcon className="mr-3 h-4 w-4 text-gray-400" />
+                        Account Settings
+                      </button>
+                      <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                        <BellIcon className="mr-3 h-4 w-4 text-gray-400" />
+                        Notification Preferences
+                      </button>
+                      <hr className="my-2" />
+                      <button
+                        onClick={handleLogout}
+                        className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200"
+                      >
+                        <ArrowRightOnRectangleIcon className="mr-3 h-4 w-4 text-red-500" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

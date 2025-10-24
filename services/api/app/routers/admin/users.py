@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...infrastructure.database.session import get_async_db
 from ...dependencies import get_current_admin
-from ...helpers import create_audit_log
+from ...helpers import create_audit_log_async
 from ...models import User
 from ...domains.matches.models.match import Match
 from ...domains.reports.models.report import Report
@@ -45,6 +45,11 @@ class RoleUpdateRequest(BaseModel):
 
 
 class StatusActionRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class UserStatusUpdateRequest(BaseModel):
+    status: str
     reason: Optional[str] = None
 
 
@@ -161,7 +166,7 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="create_user",
@@ -302,7 +307,7 @@ async def update_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="update_user",
@@ -331,13 +336,70 @@ async def update_user_role(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="update_user_role",
         resource_type="user",
         resource_id=str(user.id),
         details=json.dumps({"old_role": old_role, "new_role": payload.role}),
+    )
+
+    return {"user": _serialize_user(user)}
+
+
+@router.patch("/{user_id}/status")
+async def update_user_status(
+    user_id: str,
+    payload: UserStatusUpdateRequest,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Update the user's status."""
+    user = await _get_user_or_404(db, user_id)
+    old_status = user.status
+    old_is_active = user.is_active
+    
+    # Prevent admin users from deactivating themselves
+    if str(user.id) == str(current_user.id) and payload.status in ["inactive", "banned", "suspended"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin users cannot deactivate themselves"
+        )
+    
+    # Map status to is_active and status fields
+    if payload.status == "active":
+        user.is_active = True
+        user.status = "active"
+    elif payload.status == "inactive":
+        user.is_active = False
+        user.status = "inactive"
+    elif payload.status == "banned":
+        user.is_active = False
+        user.status = "banned"
+    elif payload.status == "suspended":
+        user.is_active = False
+        user.status = "suspended"
+    else:
+        # For other statuses, just update the status field
+        user.status = payload.status
+    
+    await db.commit()
+    await db.refresh(user)
+
+    await create_audit_log_async(
+        db=db,
+        user_id=str(current_user.id),
+        action="update_user_status",
+        resource_type="user",
+        resource_id=str(user.id),
+        details=json.dumps({
+            "old_status": old_status,
+            "old_is_active": old_is_active,
+            "new_status": user.status,
+            "new_is_active": user.is_active,
+            "reason": payload.reason,
+        }),
     )
 
     return {"user": _serialize_user(user)}
@@ -358,7 +420,7 @@ async def ban_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="ban_user",
@@ -386,7 +448,7 @@ async def unban_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="unban_user",
@@ -413,7 +475,7 @@ async def suspend_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="suspend_user",
@@ -439,7 +501,7 @@ async def activate_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="activate_user",
@@ -466,7 +528,7 @@ async def delete_user(
     await db.commit()
     await db.refresh(user)
 
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="delete_user",

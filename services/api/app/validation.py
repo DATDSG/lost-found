@@ -26,6 +26,9 @@ class BaseValidationMixin:
     def validate_email_address(email: str) -> str:
         """Validate email address format."""
         try:
+            # Allow example.com for development/testing
+            if email.endswith('@example.com'):
+                return email
             validated_email = validate_email(email)
             return validated_email.email
         except EmailNotValidError as e:

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { NextPage } from "next";
+import { useRouter } from "next/router";
 import {
   ChartBarIcon,
   UserGroupIcon,
@@ -16,6 +17,7 @@ import { DashboardStats } from "../types";
 import apiService from "../services/api";
 
 const Dashboard: NextPage = () => {
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,25 @@ const Dashboard: NextPage = () => {
       console.error("Dashboard error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickAction = (action: string) => {
+    switch (action) {
+      case "reports":
+        router.push("/reports");
+        break;
+      case "fraud":
+        router.push("/fraud-detection");
+        break;
+      case "matches":
+        router.push("/matching");
+        break;
+      case "users":
+        router.push("/users");
+        break;
+      default:
+        break;
     }
   };
 
@@ -283,11 +304,14 @@ const Dashboard: NextPage = () => {
 
         <Card title="Quick Actions" subtitle="Common administrative tasks">
           <div className="space-y-3">
-            <button className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => handleQuickAction("reports")}
+              className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 group"
+            >
               <div className="flex items-center">
-                <DocumentTextIcon className="h-5 w-5 text-blue-500 mr-3" />
+                <DocumentTextIcon className="h-5 w-5 text-blue-500 mr-3 group-hover:text-blue-600" />
                 <div>
-                  <p className="font-medium text-gray-900">
+                  <p className="font-medium text-gray-900 group-hover:text-blue-900">
                     Review Pending Reports
                   </p>
                   <p className="text-sm text-gray-500">
@@ -297,11 +321,14 @@ const Dashboard: NextPage = () => {
               </div>
             </button>
 
-            <button className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => handleQuickAction("fraud")}
+              className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all duration-200 group"
+            >
               <div className="flex items-center">
-                <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-3" />
+                <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-3 group-hover:text-red-600" />
                 <div>
-                  <p className="font-medium text-gray-900">
+                  <p className="font-medium text-gray-900 group-hover:text-red-900">
                     Review Fraud Detections
                   </p>
                   <p className="text-sm text-gray-500">
@@ -311,11 +338,16 @@ const Dashboard: NextPage = () => {
               </div>
             </button>
 
-            <button className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => handleQuickAction("matches")}
+              className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-all duration-200 group"
+            >
               <div className="flex items-center">
-                <ChartBarIcon className="h-5 w-5 text-green-500 mr-3" />
+                <ChartBarIcon className="h-5 w-5 text-green-500 mr-3 group-hover:text-green-600" />
                 <div>
-                  <p className="font-medium text-gray-900">Review Matches</p>
+                  <p className="font-medium text-gray-900 group-hover:text-green-900">
+                    Review Matches
+                  </p>
                   <p className="text-sm text-gray-500">
                     {stats?.pending_matches || 0} matches pending
                   </p>
@@ -323,11 +355,16 @@ const Dashboard: NextPage = () => {
               </div>
             </button>
 
-            <button className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => handleQuickAction("users")}
+              className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-all duration-200 group"
+            >
               <div className="flex items-center">
-                <UserGroupIcon className="h-5 w-5 text-purple-500 mr-3" />
+                <UserGroupIcon className="h-5 w-5 text-purple-500 mr-3 group-hover:text-purple-600" />
                 <div>
-                  <p className="font-medium text-gray-900">Manage Users</p>
+                  <p className="font-medium text-gray-900 group-hover:text-purple-900">
+                    Manage Users
+                  </p>
                   <p className="text-sm text-gray-500">
                     {stats?.total_users || 0} total users
                   </p>

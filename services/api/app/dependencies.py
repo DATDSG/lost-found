@@ -63,18 +63,18 @@ async def get_current_admin_dev(
     import os
     if os.getenv("ENVIRONMENT") == "development":
         # Create or get a test admin user
-        result = await db.execute(select(User).where(User.email == "admin@lostfound.com"))
+        result = await db.execute(select(User).where(User.email == "admin@example.com"))
         user = result.scalar_one_or_none()
         if user is None:
             # Create test admin user
             from .auth import get_password_hash
             user = User(
                 id="test-admin-123",
-                email="admin@lostfound.com",
+                email="admin@example.com",
                 display_name="Admin User",
                 role="admin",
                 is_active=True,
-                hashed_password=get_password_hash("admin123")
+                hashed_password=get_password_hash("Admin123")
             )
             db.add(user)
             await db.commit()

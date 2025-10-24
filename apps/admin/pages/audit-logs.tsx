@@ -17,6 +17,7 @@ import {
   Badge,
   LoadingSpinner,
   EmptyState,
+  Modal,
 } from "../components/ui";
 import { AuditLog, AuditFilters, PaginatedResponse } from "../types";
 import apiService from "../services/api";
@@ -27,6 +28,8 @@ const AuditLogs: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<AuditFilters>({});
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -64,6 +67,11 @@ const AuditLogs: NextPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewDetails = (log: AuditLog) => {
+    setSelectedLog(log);
+    setShowDetailsModal(true);
   };
 
   const getActionColor = (action: string) => {
@@ -343,6 +351,7 @@ const AuditLogs: NextPage = () => {
                         size="sm"
                         variant="secondary"
                         title="View Details"
+                        onClick={() => handleViewDetails(log)}
                       >
                         <EyeIcon className="h-4 w-4" />
                       </Button>
@@ -354,6 +363,167 @@ const AuditLogs: NextPage = () => {
           </table>
         </div>
       </Card>
+
+      {/* Audit Log Details Modal */}
+      {selectedLog && (
+        <Modal
+          isOpen={showDetailsModal}
+          onClose={() => setShowDetailsModal(false)}
+          title="Audit Log Details"
+        >
+          <div className="space-y-6">
+            {/* Log Overview */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Log Information
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Log ID</p>
+                  <p className="text-sm text-gray-900 font-mono">
+                    {selectedLog.id}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Action</p>
+                  <Badge variant={getActionColor(selectedLog.action) as any}>
+                    {selectedLog.action}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Resource Type
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {selectedLog.resource_type ||
+                      selectedLog.resource ||
+                      "Unknown"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Resource ID
+                  </p>
+                  <p className="text-sm text-gray-900 font-mono">
+                    {selectedLog.resource_id || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Actor Email
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {selectedLog.actor_email}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Actor ID</p>
+                  <p className="text-sm text-gray-900 font-mono">
+                    {selectedLog.user_id || selectedLog.actor_id || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Timestamp</p>
+                  <p className="text-sm text-gray-900">
+                    {new Date(selectedLog.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    IP Address
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {selectedLog.ip_address || "N/A"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Details */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Action Details
+              </h3>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Reason/Details
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedLog.details ||
+                        selectedLog.reason ||
+                        "No details provided"}
+                    </p>
+                  </div>
+                  {selectedLog.metadata && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Metadata
+                      </p>
+                      <pre className="text-xs text-gray-900 bg-white p-2 rounded border overflow-auto max-h-32">
+                        {JSON.stringify(selectedLog.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  {selectedLog.changes && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Changes
+                      </p>
+                      <pre className="text-xs text-gray-900 bg-white p-2 rounded border overflow-auto max-h-32">
+                        {JSON.stringify(selectedLog.changes, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Information */}
+            {(selectedLog.session_id || selectedLog.user_agent) && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Session Information
+                </h3>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="space-y-3">
+                    {selectedLog.session_id && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">
+                          Session ID
+                        </p>
+                        <p className="text-sm text-gray-900 font-mono">
+                          {selectedLog.session_id}
+                        </p>
+                      </div>
+                    )}
+                    {selectedLog.user_agent && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">
+                          User Agent
+                        </p>
+                        <p className="text-sm text-gray-900 break-all">
+                          {selectedLog.user_agent}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDetailsModal(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </AdminLayout>
   );
 };

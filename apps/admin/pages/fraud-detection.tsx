@@ -18,6 +18,7 @@ import {
   Badge,
   LoadingSpinner,
   EmptyState,
+  Modal,
 } from "../components/ui";
 import {
   FraudDetectionResult,
@@ -33,6 +34,9 @@ const FraudDetection: NextPage = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FraudFilters>({});
+  const [selectedResult, setSelectedResult] =
+    useState<FraudDetectionResult | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -78,6 +82,11 @@ const FraudDetection: NextPage = () => {
     } catch (err) {
       console.error("Review error:", err);
     }
+  };
+
+  const handleViewDetails = (result: FraudDetectionResult) => {
+    setSelectedResult(result);
+    setShowDetailsModal(true);
   };
 
   const getRiskLevelColor = (level: string) => {
@@ -404,6 +413,7 @@ const FraudDetection: NextPage = () => {
                           size="sm"
                           variant="secondary"
                           title="View Details"
+                          onClick={() => handleViewDetails(result)}
                         >
                           <EyeIcon className="h-4 w-4" />
                         </Button>
@@ -416,6 +426,260 @@ const FraudDetection: NextPage = () => {
           </table>
         </div>
       </Card>
+
+      {/* Fraud Detection Details Modal */}
+      {selectedResult && (
+        <Modal
+          isOpen={showDetailsModal}
+          onClose={() => setShowDetailsModal(false)}
+          title="Fraud Detection Details"
+        >
+          <div className="space-y-6">
+            {/* Detection Overview */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Detection Information
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Detection ID
+                  </p>
+                  <p className="text-sm text-gray-900 font-mono">
+                    {selectedResult.id}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Report ID</p>
+                  <p className="text-sm text-gray-900 font-mono">
+                    {selectedResult.report_id}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Risk Level
+                  </p>
+                  <Badge
+                    variant={
+                      getRiskLevelColor(selectedResult.risk_level) as any
+                    }
+                  >
+                    {selectedResult.risk_level}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Fraud Score
+                  </p>
+                  <p
+                    className={`text-sm font-semibold ${getScoreColor(
+                      selectedResult.fraud_score
+                    )}`}
+                  >
+                    {selectedResult.fraud_score}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Confidence
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {selectedResult.confidence
+                      ? `${selectedResult.confidence}%`
+                      : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <Badge
+                    variant={
+                      selectedResult.is_reviewed
+                        ? selectedResult.is_confirmed_fraud
+                          ? "danger"
+                          : "success"
+                        : "warning"
+                    }
+                  >
+                    {selectedResult.is_reviewed
+                      ? selectedResult.is_confirmed_fraud
+                        ? "Confirmed Fraud"
+                        : "False Positive"
+                      : "Pending Review"}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Detected At
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {selectedResult.detected_at
+                      ? new Date(selectedResult.detected_at).toLocaleString()
+                      : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Created At
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {new Date(selectedResult.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Flags */}
+            {selectedResult.flags && selectedResult.flags.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Detection Flags
+                </h3>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedResult.flags.map((flag, index) => (
+                      <Badge key={index} variant="danger">
+                        {flag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Report Information */}
+            {selectedResult.report && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Report Information
+                </h3>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Title</p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.report.title}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Type</p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.report.type}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Category
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.report.category}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Location
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.report.location_city}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedResult.report.description && (
+                    <div className="mt-3">
+                      <p className="text-sm font-medium text-gray-500">
+                        Description
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.report.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Admin Notes */}
+            {selectedResult.admin_notes && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Admin Notes
+                </h3>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-900">
+                    {selectedResult.admin_notes}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Review Information */}
+            {selectedResult.is_reviewed && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Review Information
+                </h3>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Reviewed By
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.reviewed_by || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Reviewed At
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {selectedResult.reviewed_at
+                          ? new Date(
+                              selectedResult.reviewed_at
+                            ).toLocaleString()
+                          : "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end space-x-3 pt-4 border-t">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDetailsModal(false)}
+              >
+                Close
+              </Button>
+              {!selectedResult.is_reviewed && (
+                <>
+                  <Button
+                    variant="success"
+                    onClick={() => {
+                      reviewResult(selectedResult.id, true);
+                      setShowDetailsModal(false);
+                    }}
+                  >
+                    <CheckCircleIcon className="h-4 w-4 mr-2" />
+                    Confirm Fraud
+                  </Button>
+                  <Button
+                    variant="warning"
+                    onClick={() => {
+                      reviewResult(selectedResult.id, false);
+                      setShowDetailsModal(false);
+                    }}
+                  >
+                    <XCircleIcon className="h-4 w-4 mr-2" />
+                    Mark as False Positive
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
     </AdminLayout>
   );
 };

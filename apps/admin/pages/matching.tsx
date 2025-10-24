@@ -17,6 +17,7 @@ import {
   Badge,
   LoadingSpinner,
   EmptyState,
+  Modal,
 } from "../components/ui";
 import { Match, MatchFilters, PaginatedResponse } from "../types";
 import apiService from "../services/api";
@@ -27,6 +28,8 @@ const Matching: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<MatchFilters>({});
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -76,6 +79,11 @@ const Matching: NextPage = () => {
     } catch (err) {
       console.error("Status update error:", err);
     }
+  };
+
+  const handleViewDetails = (match: Match) => {
+    setSelectedMatch(match);
+    setShowDetailsModal(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -387,6 +395,7 @@ const Matching: NextPage = () => {
                           size="sm"
                           variant="secondary"
                           title="View Details"
+                          onClick={() => handleViewDetails(match)}
                         >
                           <EyeIcon className="h-4 w-4" />
                         </Button>
@@ -399,6 +408,250 @@ const Matching: NextPage = () => {
           </table>
         </div>
       </Card>
+
+      {/* Match Details Modal */}
+      {selectedMatch && (
+        <Modal
+          isOpen={showDetailsModal}
+          onClose={() => setShowDetailsModal(false)}
+          title="Match Details"
+        >
+          <div className="space-y-6">
+            {/* Match Overview */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Match Overview
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Match ID</p>
+                  <p className="text-sm text-gray-900">{selectedMatch.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Overall Score
+                  </p>
+                  <p className="text-sm text-gray-900">
+                    {typeof selectedMatch.overall_score === "number" &&
+                    !isNaN(selectedMatch.overall_score)
+                      ? (selectedMatch.overall_score * 100).toFixed(1)
+                      : "0.0"}
+                    %
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <Badge variant={getStatusColor(selectedMatch.status) as any}>
+                    {selectedMatch.status}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Created</p>
+                  <p className="text-sm text-gray-900">
+                    {new Date(selectedMatch.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Source Report */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Source Report
+              </h3>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Title</p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.source_report.title}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Category
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.source_report.category}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Type</p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.source_report.type}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Location
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.source_report.location_city}
+                    </p>
+                  </div>
+                </div>
+                {selectedMatch.source_report.description && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-500">
+                      Description
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.source_report.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Candidate Report */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Candidate Report
+              </h3>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Title</p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.candidate_report.title}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Category
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.candidate_report.category}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Type</p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.candidate_report.type}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Location
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.candidate_report.location_city}
+                    </p>
+                  </div>
+                </div>
+                {selectedMatch.candidate_report.description && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-500">
+                      Description
+                    </p>
+                    <p className="text-sm text-gray-900">
+                      {selectedMatch.candidate_report.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Matching Process Details */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Matching Process
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">
+                    Text Similarity
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {selectedMatch.text_score
+                      ? (selectedMatch.text_score * 100).toFixed(1)
+                      : "N/A"}
+                    %
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">
+                    Geographic Similarity
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {selectedMatch.geo_score
+                      ? (selectedMatch.geo_score * 100).toFixed(1)
+                      : "N/A"}
+                    %
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">
+                    Image Similarity
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {selectedMatch.image_score
+                      ? (selectedMatch.image_score * 100).toFixed(1)
+                      : "N/A"}
+                    %
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">
+                    Time Proximity
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {selectedMatch.time_score
+                      ? (selectedMatch.time_score * 100).toFixed(1)
+                      : "N/A"}
+                    %
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">
+                    Color Similarity
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {selectedMatch.color_score
+                      ? (selectedMatch.color_score * 100).toFixed(1)
+                      : "N/A"}
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end space-x-3 pt-4 border-t">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDetailsModal(false)}
+              >
+                Close
+              </Button>
+              {selectedMatch.status === "candidate" && (
+                <>
+                  <Button
+                    variant="success"
+                    onClick={() => {
+                      updateMatchStatus(selectedMatch.id, "promoted");
+                      setShowDetailsModal(false);
+                    }}
+                  >
+                    <CheckCircleIcon className="h-4 w-4 mr-2" />
+                    Promote Match
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      updateMatchStatus(selectedMatch.id, "suppressed");
+                      setShowDetailsModal(false);
+                    }}
+                  >
+                    <XCircleIcon className="h-4 w-4 mr-2" />
+                    Suppress Match
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
     </AdminLayout>
   );
 };

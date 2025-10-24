@@ -19,12 +19,14 @@ export interface User {
     status: 'active' | 'inactive' | 'suspended';
     is_active?: boolean;
     is_verified?: boolean;
+    phone_number?: string;
     created_at: string;
     updated_at: string;
     last_login_at?: string;
     last_login?: string;
     reports_count: number;
     matches_count: number;
+    successful_matches?: number;
 }
 
 export interface UserFilters {
@@ -50,7 +52,7 @@ export interface Report {
     longitude?: number;
     reward_offered: boolean;
     reward_amount?: number;
-    status: 'pending' | 'approved' | 'rejected' | 'archived';
+    status: 'pending' | 'approved' | 'rejected' | 'resolved' | 'hidden' | 'removed';
     created_at: string;
     updated_at: string;
     owner_id: string;
@@ -139,6 +141,11 @@ export interface AuditLog {
     reason?: string; // Keep for backward compatibility
     details?: string; // New field from API
     created_at: string;
+    ip_address?: string;
+    session_id?: string;
+    user_agent?: string;
+    metadata?: any;
+    changes?: any;
 }
 
 export interface AuditFilters {

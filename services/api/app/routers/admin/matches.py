@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from ...infrastructure.database.session import get_async_db
 from ...dependencies import get_current_admin
-from ...helpers import create_audit_log
+from ...helpers import create_audit_log_async
 from ...models import User
 from ...domains.matches.models.match import Match, MatchStatus
 from ...domains.reports.models.report import Report
@@ -61,6 +61,54 @@ def _summarize_report(report: Optional[Report]) -> Optional[Dict]:
         "status": report.status,
         "type": report.type,
         "location_city": report.location_city or "Unknown",
+    }
+
+
+@router.get("/stats")
+async def get_match_stats(
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Aggregate match statistics for dashboard cards."""
+    total = (await db.execute(select(func.count()).select_from(Match))).scalar() or 0
+    candidate = (
+        await db.execute(
+            select(func.count()).select_from(Match).where(Match.status == "candidate")
+        )
+    ).scalar() or 0
+    promoted = (
+        await db.execute(
+            select(func.count()).select_from(Match).where(Match.status == "promoted")
+        )
+    ).scalar() or 0
+    suppressed = (
+        await db.execute(
+            select(func.count()).select_from(Match).where(Match.status == "suppressed")
+        )
+    ).scalar() or 0
+    dismissed = (
+        await db.execute(
+            select(func.count()).select_from(Match).where(Match.status == "dismissed")
+        )
+    ).scalar() or 0
+
+    scores_result = await db.execute(select(Match.score_total))
+    scores = [row[0] for row in scores_result if row[0] is not None]
+    avg_score = round(mean(scores), 4) if scores else 0.0
+
+    return {
+        "total": total,
+        "candidate": candidate,
+        "promoted": promoted,
+        "suppressed": suppressed,
+        "dismissed": dismissed,
+        "avg_score": avg_score,
+        "by_status": {
+            "candidate": candidate,
+            "promoted": promoted,
+            "suppressed": suppressed,
+            "dismissed": dismissed,
+        },
     }
 
 
@@ -154,54 +202,6 @@ async def get_match_detail(
     }
 
 
-@router.get("/stats")
-async def get_match_stats(
-    current_user: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Aggregate match statistics for dashboard cards."""
-    total = (await db.execute(select(func.count()).select_from(Match))).scalar() or 0
-    candidate = (
-        await db.execute(
-            select(func.count()).select_from(Match).where(Match.status == "candidate")
-        )
-    ).scalar() or 0
-    promoted = (
-        await db.execute(
-            select(func.count()).select_from(Match).where(Match.status == "promoted")
-        )
-    ).scalar() or 0
-    suppressed = (
-        await db.execute(
-            select(func.count()).select_from(Match).where(Match.status == "suppressed")
-        )
-    ).scalar() or 0
-    dismissed = (
-        await db.execute(
-            select(func.count()).select_from(Match).where(Match.status == "dismissed")
-        )
-    ).scalar() or 0
-
-    scores_result = await db.execute(select(Match.score_total))
-    scores = [row[0] for row in scores_result if row[0] is not None]
-    avg_score = round(mean(scores), 4) if scores else 0.0
-
-    return {
-        "total": total,
-        "candidate": candidate,
-        "promoted": promoted,
-        "suppressed": suppressed,
-        "dismissed": dismissed,
-        "avg_score": avg_score,
-        "by_status": {
-            "candidate": candidate,
-            "promoted": promoted,
-            "suppressed": suppressed,
-            "dismissed": dismissed,
-        },
-    }
-
-
 @router.patch("/{match_id}/status")
 async def update_match_status(
     match_id: str,
@@ -215,7 +215,7 @@ async def update_match_status(
     match.status = payload.status.value
 
     await db.commit()
-    await create_audit_log(
+    await create_audit_log_async(
         db=db,
         user_id=str(current_user.id),
         action="update_match_status",
@@ -308,7 +308,7 @@ async def _bulk_update_matches(
             await db.commit()
             success += 1
 
-            await create_audit_log(
+            await create_audit_log_async(
                 db=db,
                 user_id=str(current_user.id),
                 action=action,

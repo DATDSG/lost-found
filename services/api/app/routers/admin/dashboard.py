@@ -201,9 +201,9 @@ async def get_recent_activity(
             {
                 "id": str(log.id),
                 "action": log.action,
-                "resource": log.resource,
+                "resource": getattr(log, "resource_type", None),
                 "resource_id": str(getattr(log, "resource_id", "")) or None,
-                "details": log.reason,
+                "details": getattr(log, "details", None),
                 "created_at": log.created_at.isoformat()
                 if getattr(log, "created_at", None)
                 else None,
