@@ -29,67 +29,8 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 -- ============================================================================
 -- SECTION 2: CUSTOM TYPES (Enums for Data Integrity)
 -- ============================================================================
--- Report type enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'reporttype'
-) THEN CREATE TYPE reporttype AS ENUM ('lost', 'found');
-END IF;
-END $$;
--- Report status enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'reportstatus'
-) THEN CREATE TYPE reportstatus AS ENUM ('pending', 'approved', 'hidden', 'removed');
-END IF;
-END $$;
--- Match status enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'matchstatus'
-) THEN CREATE TYPE matchstatus AS ENUM (
-    'candidate',
-    'promoted',
-    'suppressed',
-    'dismissed'
-);
-END IF;
-END $$;
--- Message type enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'messagetype'
-) THEN CREATE TYPE messagetype AS ENUM ('text', 'image', 'location', 'system');
-END IF;
-END $$;
--- User role enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'userrole'
-) THEN CREATE TYPE userrole AS ENUM ('user', 'moderator', 'admin');
-END IF;
-END $$;
--- User status enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'userstatus'
-) THEN CREATE TYPE userstatus AS ENUM ('active', 'inactive', 'suspended', 'banned');
-END IF;
-END $$;
--- Fraud risk level enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'fraudrisklevel'
-) THEN CREATE TYPE fraudrisklevel AS ENUM ('low', 'medium', 'high', 'critical');
-END IF;
-END $$;
+-- Note: Custom types are now handled by SQLAlchemy models
+-- This section is kept for reference but types are created by the ORM
 -- ============================================================================
 -- SECTION 3: DATABASE CONFIGURATION
 -- ============================================================================
@@ -135,14 +76,7 @@ GRANT ALL PRIVILEGES ON SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO postgres;
--- Grant usage on all custom types
-GRANT USAGE ON TYPE reporttype TO postgres;
-GRANT USAGE ON TYPE reportstatus TO postgres;
-GRANT USAGE ON TYPE matchstatus TO postgres;
-GRANT USAGE ON TYPE messagetype TO postgres;
-GRANT USAGE ON TYPE userrole TO postgres;
-GRANT USAGE ON TYPE userstatus TO postgres;
-GRANT USAGE ON TYPE fraudrisklevel TO postgres;
+-- Note: Custom type grants are now handled by SQLAlchemy models
 -- ============================================================================
 -- SECTION 5: PERFORMANCE OPTIMIZATIONS
 -- ============================================================================
@@ -168,28 +102,11 @@ WHERE extname IN (
         'pg_stat_statements'
     )
 ORDER BY extname;
--- Verify custom types are created
-SELECT typname AS type_name,
-    CASE
-        WHEN typtype = 'e' THEN 'enum'
-        WHEN typtype = 'c' THEN 'composite'
-        WHEN typtype = 'd' THEN 'domain'
-        ELSE 'other'
-    END AS type_kind
-FROM pg_type
-WHERE typname IN (
-        'reporttype',
-        'reportstatus',
-        'matchstatus',
-        'messagetype',
-        'userrole',
-        'userstatus',
-        'fraudrisklevel'
-    )
-ORDER BY typname;
+-- Verify custom types are created by SQLAlchemy
+-- Note: Custom types are now managed by the ORM
 -- Log successful completion
 DO $$ BEGIN RAISE NOTICE 'PostgreSQL initialization completed successfully for Lost & Found platform';
 RAISE NOTICE 'Extensions installed: uuid-ossp, postgis, pg_trgm, btree_gin, pg_stat_statements';
-RAISE NOTICE 'Custom types created: reporttype, reportstatus, matchstatus, messagetype, userrole, userstatus, fraudrisklevel';
+RAISE NOTICE 'Custom types will be created by SQLAlchemy ORM';
 RAISE NOTICE 'Database optimized for Lost & Found workload';
 END $$;
