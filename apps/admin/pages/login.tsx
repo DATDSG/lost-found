@@ -12,9 +12,13 @@ export default function Login() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // Check for access denied error from URL params
+    // Check for error messages from URL params
     if (router.query.error === "access_denied") {
       setError("Access denied. Only administrators can access this panel.");
+    } else if (router.query.error === "session_expired") {
+      setError("Your session has expired. Please log in again.");
+    } else if (router.query.error === "auth_failed") {
+      setError("Authentication failed. Please try logging in again.");
     }
   }, [router.query]);
 
@@ -44,8 +48,13 @@ export default function Login() {
       if (response.ok) {
         const data = await response.json();
 
-        // Store auth token in localStorage (in a real app, use secure storage)
-        localStorage.setItem("auth_token", data.access_token);
+        // Store auth token with timestamp for expiration tracking
+        const tokenData = {
+          token: data.access_token,
+          timestamp: Date.now(),
+          expiresIn: 30 * 60 * 1000, // 30 minutes in milliseconds
+        };
+        localStorage.setItem("auth_token", JSON.stringify(tokenData));
 
         // Get user info from the /me endpoint
         const userResponse = await fetch(

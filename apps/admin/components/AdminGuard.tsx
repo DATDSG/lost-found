@@ -28,10 +28,30 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     const checkAdminAccess = async () => {
       try {
         // Check if user is logged in
-        const token = localStorage.getItem("auth_token");
+        const tokenData = localStorage.getItem("auth_token");
         const userData = localStorage.getItem("admin_user");
 
-        if (!token || !userData) {
+        if (!tokenData || !userData) {
+          router.push("/login");
+          return;
+        }
+
+        // Check if token is expired
+        try {
+          const parsed = JSON.parse(tokenData);
+          if (parsed.timestamp && parsed.expiresIn) {
+            const isExpired = Date.now() - parsed.timestamp > parsed.expiresIn;
+            if (isExpired) {
+              localStorage.removeItem("auth_token");
+              localStorage.removeItem("admin_user");
+              router.push("/login?error=session_expired");
+              return;
+            }
+          }
+        } catch {
+          // Invalid token format, clear and redirect
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("admin_user");
           router.push("/login");
           return;
         }
@@ -52,6 +72,9 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
         // Verify token is still valid by calling /me endpoint
         try {
+          // Get the actual token from the stored data
+          const token = JSON.parse(tokenData).token || tokenData;
+
           const response = await fetch(
             `${
               process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
@@ -65,10 +88,16 @@ export default function AdminGuard({ children }: AdminGuardProps) {
           );
 
           if (!response.ok) {
-            // Token is invalid
+            // Token is invalid - clear all auth data
             localStorage.removeItem("auth_token");
             localStorage.removeItem("admin_user");
-            router.push("/login");
+
+            // Check if it's a 401 error
+            if (response.status === 401) {
+              router.push("/login?error=session_expired");
+            } else {
+              router.push("/login?error=auth_failed");
+            }
             return;
           }
 
@@ -81,6 +110,17 @@ export default function AdminGuard({ children }: AdminGuardProps) {
             router.push("/login?error=access_denied");
             return;
           }
+
+          // Update local user data with fresh server data
+          localStorage.setItem(
+            "admin_user",
+            JSON.stringify({
+              id: currentUser.id,
+              email: currentUser.email,
+              name: currentUser.display_name || currentUser.email.split("@")[0],
+              role: currentUser.role,
+            })
+          );
         } catch (serverError) {
           console.warn(
             "Server verification failed, but allowing access based on local data:",

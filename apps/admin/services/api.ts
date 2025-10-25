@@ -36,6 +36,36 @@ const getApiUrl = (): string => {
     return API_BASE_URL;
 };
 
+// Helper functions for token management
+const isTokenExpired = (): boolean => {
+    try {
+        const tokenData = localStorage.getItem('auth_token');
+        if (!tokenData) return true;
+
+        const parsed = JSON.parse(tokenData);
+        if (parsed.timestamp && parsed.expiresIn) {
+            return Date.now() - parsed.timestamp > parsed.expiresIn;
+        }
+
+        // Fallback: if token doesn't have timestamp, consider it expired
+        return true;
+    } catch {
+        return true;
+    }
+};
+
+const getToken = (): string | null => {
+    try {
+        const tokenData = localStorage.getItem('auth_token');
+        if (!tokenData) return null;
+
+        const parsed = JSON.parse(tokenData);
+        return parsed.token || tokenData; // Support both old and new format
+    } catch {
+        return localStorage.getItem('auth_token');
+    }
+};
+
 // Request/Response interceptors for better error handling
 const createApiClient = (): AxiosInstance => {
     const client = axios.create({
@@ -50,13 +80,19 @@ const createApiClient = (): AxiosInstance => {
     // Request interceptor
     client.interceptors.request.use(
         (config: InternalAxiosRequestConfig) => {
-            // Add authentication token if available
-            const token = localStorage.getItem('auth_token');
-            if (token) {
+            // Add authentication token if available and not expired
+            const token = getToken();
+            if (token && !isTokenExpired()) {
+                config.headers = config.headers || {};
                 config.headers.Authorization = `Bearer ${token}`;
+            } else if (isTokenExpired()) {
+                // Token is expired, clear it
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('admin_user');
             }
 
             // Add request ID for tracking
+            config.headers = config.headers || {};
             config.headers['X-Request-ID'] = generateRequestId();
 
             // Log request in development
@@ -88,12 +124,16 @@ const createApiClient = (): AxiosInstance => {
             if (error.response?.status === 401 && !originalRequest._retry) {
                 originalRequest._retry = true;
 
-                // Clear invalid token
+                // Clear invalid token and user data
                 localStorage.removeItem('auth_token');
+                localStorage.removeItem('admin_user');
 
-                // Redirect to login
+                // Show error message
+                toast.error('Session expired. Please log in again.');
+
+                // Redirect to login with error message
                 if (typeof window !== 'undefined') {
-                    window.location.href = '/login';
+                    window.location.href = '/login?error=session_expired';
                 }
 
                 return Promise.reject(error);
@@ -187,19 +227,42 @@ export class ApiService {
 
     // Authentication
     async login(credentials: { email: string; password: string }): Promise<any> {
-        return this.request({
-            method: 'POST',
-            url: '/auth/login',
-            data: credentials,
-        });
+        try {
+            const response = await this.request({
+                method: 'POST',
+                url: '/auth/login',
+                data: credentials,
+            });
+
+            // Store token with timestamp for expiration tracking
+            if (response && typeof response === 'object' && 'access_token' in response) {
+                const tokenData = {
+                    token: (response as any).access_token,
+                    timestamp: Date.now(),
+                    expiresIn: 30 * 60 * 1000 // 30 minutes in milliseconds
+                };
+                localStorage.setItem('auth_token', JSON.stringify(tokenData));
+            }
+
+            return response;
+        } catch (error: any) {
+            console.error('Login failed:', error);
+            throw error;
+        }
     }
 
     async logout(): Promise<void> {
-        localStorage.removeItem('auth_token');
-        return this.request({
-            method: 'POST',
-            url: '/auth/logout',
-        });
+        try {
+            await this.request({
+                method: 'POST',
+                url: '/auth/logout',
+            });
+        } catch (error) {
+            console.warn('Logout request failed:', error);
+        } finally {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('admin_user');
+        }
     }
 
     async getCurrentUser(): Promise<any> {
@@ -207,6 +270,15 @@ export class ApiService {
             method: 'GET',
             url: '/auth/me',
         });
+    }
+
+    // Token management - using helper functions
+    private isTokenExpired(): boolean {
+        return isTokenExpired();
+    }
+
+    private getToken(): string | null {
+        return getToken();
     }
 
     async getUserStats(userId: string): Promise<any> {
@@ -303,11 +375,19 @@ export class ApiService {
 
     // Users
     async getUsers(params?: any): Promise<any> {
-        return this.request({
-            method: 'GET',
-            url: '/admin/users',
-            params,
-        });
+        try {
+            return await this.request({
+                method: 'GET',
+                url: '/admin/users',
+                params,
+            });
+        } catch (error: any) {
+            console.error('Failed to fetch users:', error);
+            if (error.response?.status === 401) {
+                throw new Error('Authentication failed. Please log in again.');
+            }
+            throw error;
+        }
     }
 
     async getUser(id: string): Promise<any> {
@@ -417,11 +497,19 @@ export class ApiService {
 
     // Fraud detection
     async getFraudReports(params?: any): Promise<any> {
-        return this.request({
-            method: 'GET',
-            url: '/admin/fraud-detection',
-            params,
-        });
+        try {
+            return await this.request({
+                method: 'GET',
+                url: '/admin/fraud-detection',
+                params,
+            });
+        } catch (error: any) {
+            console.error('Failed to fetch fraud reports:', error);
+            if (error.response?.status === 401) {
+                throw new Error('Authentication failed. Please log in again.');
+            }
+            throw error;
+        }
     }
 
     async flagReport(id: string, reason: string): Promise<any> {

@@ -62,9 +62,17 @@ const Users: NextPage = () => {
       setUsers(usersResponse.items || usersResponse.data || []);
       setStats(statsResponse);
       setLastUpdate(new Date());
-    } catch (err) {
-      setError("Failed to fetch users data");
+    } catch (err: any) {
       console.error("Users error:", err);
+      if (err.message?.includes("Authentication failed")) {
+        setError("Authentication failed. Please log in again.");
+        // Clear auth data and redirect
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("admin_user");
+        window.location.href = "/login?error=session_expired";
+      } else {
+        setError("Failed to fetch users data. Please try again.");
+      }
     }
   }, [filters]);
 

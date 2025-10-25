@@ -15,6 +15,8 @@
 /// - Local development: Uses localhost:8000
 library;
 
+import 'package:flutter/foundation.dart';
+
 /// Available environments for the application
 enum Environment {
   /// Development environment for local testing
@@ -81,7 +83,13 @@ class EnvironmentConfig {
       return true;
     }
 
-    // For now, default to real device (server URL)
+    // For release builds, always use server URL for real devices
+    // Debug builds can use emulator detection
+    if (kReleaseMode) {
+      return false; // Always use server URL in release builds
+    }
+
+    // For debug builds, default to real device (server URL)
     // In a production app, you would implement proper device detection here
     // using platform-specific APIs to detect emulator vs real device
     return false;

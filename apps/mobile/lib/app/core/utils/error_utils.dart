@@ -37,7 +37,7 @@ Exception handleError(Object error) {
 Exception handleErrorWithContext(Object error, String context) {
   final debugService = DebugService();
 
-  debugService.error(
+  debugService..error(
     'Error in context: $context',
     category: 'error_handling',
     data: {
