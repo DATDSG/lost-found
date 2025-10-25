@@ -215,7 +215,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       expect(find.text('Email Address'), findsOneWidget);
@@ -227,7 +227,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       expect(find.text("Don't have an account?"), findsOneWidget);
@@ -238,7 +238,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       expect(find.text('Welcome Back!'), findsOneWidget);
@@ -248,7 +248,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       expect(find.text('Forgot Password?'), findsOneWidget);
@@ -346,7 +346,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       expect(find.byType(LoginScreen), findsOneWidget);
@@ -356,7 +356,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       // Verify login screen elements are present
@@ -371,7 +371,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       // Verify the screen renders without throwing exceptions
@@ -395,7 +395,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       // Test that the screen renders without errors
@@ -406,7 +406,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       // Test that the app renders without errors
@@ -419,7 +419,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       // Test accessibility features
@@ -430,7 +430,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        ProviderScope(child: const MaterialApp(home: LoginScreen())),
+        const ProviderScope(child: MaterialApp(home: LoginScreen())),
       );
 
       // Test accessibility support
