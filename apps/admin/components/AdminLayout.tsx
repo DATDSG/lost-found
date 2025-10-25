@@ -4,6 +4,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import Image from "next/image";
+import AdminGuard from "./AdminGuard";
 import {
   HomeIcon,
   DocumentTextIcon,
@@ -15,8 +16,6 @@ import {
   XMarkIcon,
   ArrowRightOnRectangleIcon,
   UserIcon,
-  Cog6ToothIcon,
-  BellIcon,
 } from "@heroicons/react/24/outline";
 
 interface LayoutProps {
@@ -26,6 +25,20 @@ interface LayoutProps {
 }
 
 const AdminLayout: React.FC<LayoutProps> = ({
+  children,
+  title,
+  description,
+}) => {
+  return (
+    <AdminGuard>
+      <AdminLayoutContent title={title} description={description}>
+        {children}
+      </AdminLayoutContent>
+    </AdminGuard>
+  );
+};
+
+const AdminLayoutContent: React.FC<LayoutProps> = ({
   children,
   title,
   description,
@@ -64,6 +77,12 @@ const AdminLayout: React.FC<LayoutProps> = ({
     localStorage.removeItem("admin_token");
     localStorage.removeItem("admin_user");
     router.push("/login");
+  };
+
+  const handleViewFullProfile = () => {
+    // Navigate to user profile page or open profile modal
+    router.push("/profile");
+    setProfileOpen(false);
   };
 
   const navigation = [
@@ -283,14 +302,6 @@ const AdminLayout: React.FC<LayoutProps> = ({
               </h1>
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
-              {/* Notifications */}
-              <button className="relative p-2 text-gray-400 hover:text-gray-500 transition-colors duration-200">
-                <BellIcon className="h-6 w-6" />
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
-                  3
-                </span>
-              </button>
-
               {/* Profile dropdown */}
               <div className="relative" data-profile-dropdown>
                 <button
@@ -406,17 +417,12 @@ const AdminLayout: React.FC<LayoutProps> = ({
 
                     {/* Actions */}
                     <div className="py-2">
-                      <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
+                      <button
+                        onClick={handleViewFullProfile}
+                        className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+                      >
                         <UserIcon className="mr-3 h-4 w-4 text-gray-400" />
                         View Full Profile
-                      </button>
-                      <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
-                        <Cog6ToothIcon className="mr-3 h-4 w-4 text-gray-400" />
-                        Account Settings
-                      </button>
-                      <button className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200">
-                        <BellIcon className="mr-3 h-4 w-4 text-gray-400" />
-                        Notification Preferences
                       </button>
                       <hr className="my-2" />
                       <button

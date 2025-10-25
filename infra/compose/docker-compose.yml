@@ -6,9 +6,9 @@
 # ================================================================
 
 services:
-  # Database with pgvector support
+  # Database with PostGIS support
   db:
-    image: pgvector/pgvector:pg18
+    image: postgis/postgis:16-3.4
     container_name: lost-found-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -136,7 +136,7 @@ services:
       - VISION_SERVICE_URL=http://vision:8002
 
       # CORS configuration
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://admin:3000,http://172.104.40.189:3000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:8080,http://admin:3000,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002
 
       # Application settings
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -340,7 +340,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: lost-found-pgadmin
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-postgres}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@lostfound.local}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-postgres}
       - PGADMIN_CONFIG_SERVER_MODE=False
       - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
@@ -377,7 +377,7 @@ services:
     container_name: lost-found-admin
     environment:
       # API Configuration
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://api:8000
       - NEXT_PUBLIC_API_VERSION=v1
 
       # Authentication
@@ -418,7 +418,13 @@ services:
     volumes:
       - admin_logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -445,7 +451,10 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 30s
@@ -495,6 +504,3 @@ volumes:
 networks:
   lost-found-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

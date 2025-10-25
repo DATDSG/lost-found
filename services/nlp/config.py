@@ -21,7 +21,7 @@ class Config:
     WORKERS: int = int(os.getenv("WORKERS", "1"))
     
     # Redis Configuration
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/2")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://:LF_Redis_2025_Pass!@redis:6379/2")
     REDIS_CACHE_TTL: int = int(os.getenv("REDIS_CACHE_TTL", "3600"))  # 1 hour
     REDIS_TIMEOUT: int = int(os.getenv("REDIS_TIMEOUT", "5"))
     

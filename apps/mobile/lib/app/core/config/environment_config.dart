@@ -37,11 +37,18 @@ class EnvironmentConfig {
   }
 
   /// Get development URL dynamically
-  static String _getDevelopmentUrl() =>
-      // Try different common development URLs
-      // 10.0.2.2 is Android emulator's host machine
-      // localhost works for iOS simulator and physical devices on same network
-      'http://10.0.2.2:8000';
+  static String _getDevelopmentUrl() {
+    // Try different common development URLs
+    // 10.0.2.2 is Android emulator's host machine
+    // localhost works for iOS simulator and physical devices on same network
+    // 172.104.40.189 is the server address
+    const localUrl = 'http://10.0.2.2:8000';
+    const serverUrl = 'http://172.104.40.189:8000';
+
+    // For now, return server URL as primary, with local as fallback
+    // This can be made configurable via environment variables or settings
+    return serverUrl;
+  }
 
   /// Get API timeout for current environment
   static Duration get apiTimeout {

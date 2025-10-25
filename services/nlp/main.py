@@ -141,14 +141,18 @@ async def startup_event():
             redis_client = redis.from_url(
                 config.REDIS_URL,
                 decode_responses=True,
-                socket_timeout=config.REDIS_TIMEOUT
+                socket_timeout=2,  # Shorter timeout
+                socket_connect_timeout=2,  # Connection timeout
+                retry_on_timeout=True,
+                health_check_interval=30
             )
-            redis_client.ping()  # Remove await - this is synchronous
+            # Test connection with timeout
+            redis_client.ping()
             logger.info("Redis connection established")
         else:
             logger.info("Redis caching disabled")
     except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
+        logger.warning(f"Redis connection failed, continuing without cache: {e}")
         redis_client = None
 
 @app.on_event("shutdown")

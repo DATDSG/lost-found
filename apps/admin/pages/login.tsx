@@ -1,13 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 
 export default function Login() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    // Check for access denied error from URL params
+    if (router.query.error === "access_denied") {
+      setError("Access denied. Only administrators can access this panel.");
+    }
+  }, [router.query]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +62,16 @@ export default function Login() {
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
+
+          // Check if user is admin
+          if (userData.role !== "admin") {
+            setError(
+              "Access denied. Only administrators can access this panel."
+            );
+            localStorage.removeItem("auth_token");
+            return;
+          }
+
           localStorage.setItem(
             "admin_user",
             JSON.stringify({
@@ -62,10 +81,14 @@ export default function Login() {
               role: userData.role,
             })
           );
+        } else {
+          setError("Failed to get user information. Please try again.");
+          localStorage.removeItem("auth_token");
+          return;
         }
 
-        // Redirect to dashboard
-        window.location.href = "/dashboard";
+        // Redirect to dashboard using Next.js router
+        router.push("/dashboard");
       } else {
         const errorData = await response.json();
         setError(errorData.message || "Invalid email or password");

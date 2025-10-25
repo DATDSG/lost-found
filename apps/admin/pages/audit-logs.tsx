@@ -20,7 +20,7 @@ import {
   Modal,
 } from "../components/ui";
 import { AuditLog, AuditFilters, PaginatedResponse } from "../types";
-import apiService from "../services/api";
+import { apiService } from "../services/api";
 
 const AuditLogs: NextPage = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -41,22 +41,7 @@ const AuditLogs: NextPage = () => {
       setError(null);
       const [logsResponse, statsResponse] = await Promise.all([
         apiService.getAuditLogs(filters),
-        // Mock stats for now - would come from API
-        Promise.resolve({
-          total_logs: 15420,
-          logs_today: 45,
-          logs_this_week: 320,
-          logs_this_month: 1280,
-          top_actions: [
-            { action: "create_report", count: 1250 },
-            { action: "update_report", count: 890 },
-            { action: "approve_report", count: 650 },
-          ],
-          top_actors: [
-            { actor_email: "admin@example.com", count: 2100 },
-            { actor_email: "moderator@example.com", count: 1800 },
-          ],
-        }),
+        apiService.getAuditLogsStats(),
       ]);
 
       setLogs(logsResponse.items);

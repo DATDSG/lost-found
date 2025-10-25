@@ -41,7 +41,7 @@ import {
   Match,
   FraudDetectionResult,
 } from "../types";
-import apiService from "../services/api";
+import { apiService } from "../services/api";
 
 const Reports: NextPage = () => {
   const [reports, setReports] = useState<Report[]>([]);
@@ -128,7 +128,7 @@ const Reports: NextPage = () => {
 
     try {
       // Fetch fraud detection data for this report
-      const fraudResults = await apiService.getFraudDetectionResults({});
+      const fraudResults = await apiService.getFraudReports({});
       setFraudData(fraudResults.items?.[0] || null);
     } catch (err) {
       console.error("Error fetching fraud data:", err);
@@ -167,7 +167,7 @@ const Reports: NextPage = () => {
     try {
       await Promise.all(
         selectedReports.map((reportId) =>
-          apiService.updateReportStatus(reportId, bulkAction)
+          apiService.updateReport(reportId, { status: bulkAction })
         )
       );
       setSelectedReports([]);
@@ -180,7 +180,7 @@ const Reports: NextPage = () => {
 
   const handleReportStatusUpdate = async (reportId: string, status: string) => {
     try {
-      await apiService.updateReportStatus(reportId, status);
+      await apiService.updateReport(reportId, { status });
       fetchReports();
     } catch (err) {
       console.error("Status update error:", err);

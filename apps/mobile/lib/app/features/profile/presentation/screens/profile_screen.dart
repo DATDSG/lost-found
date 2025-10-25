@@ -273,14 +273,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       onTap: _navigateToEditProfile,
                     ),
                   ),
-                  SizedBox(width: DT.s.sm),
-                  Expanded(
-                    child: _buildProfileActionButton(
-                      title: 'Privacy',
-                      icon: Icons.privacy_tip_outlined,
-                      onTap: () => context.go(privacySettingsRoute),
-                    ),
-                  ),
                 ],
               ),
             ],

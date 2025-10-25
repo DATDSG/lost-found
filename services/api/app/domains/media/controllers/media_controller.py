@@ -54,20 +54,31 @@ async def upload_media(
         # Generate unique filename
         file_id = str(uuid.uuid4())
         file_extension = os.path.splitext(file.filename)[1] if file.filename else '.jpg'
-        object_name = generate_object_name(file_id, file_extension)
+        object_name = generate_object_name(f"{file_id}{file_extension}")
         
         # Upload to MinIO
         minio_client = get_minio_client()
-        minio_client.put_object(
-            bucket_name=config.MINIO_BUCKET_NAME,
+        
+        # Convert bytes to BytesIO for MinIO
+        import io
+        data_stream = io.BytesIO(file_content)
+        
+        upload_result = minio_client.upload_data(
+            data=data_stream,
             object_name=object_name,
-            data=file_content,
-            length=len(file_content),
-            content_type=file.content_type
+            bucket_name=config.MINIO_BUCKET_NAME,
+            content_type=file.content_type,
+            length=len(file_content)
         )
         
+        if not upload_result.get("success", False):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to upload file to storage: {upload_result.get('error', 'Unknown error')}"
+            )
+        
         # Generate public URL
-        file_url = f"{config.MINIO_ENDPOINT}/{config.MINIO_BUCKET_NAME}/{object_name}"
+        file_url = upload_result.get("url", f"{config.MINIO_ENDPOINT}/{config.MINIO_BUCKET_NAME}/{object_name}")
         
         logger.info(f"File uploaded successfully: {file_id}")
         

@@ -17,6 +17,73 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
+@router.get("/stats")
+async def get_audit_logs_stats(
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Get audit logs statistics for dashboard."""
+    from sqlalchemy import select, func, and_
+    from datetime import datetime, timedelta, timezone
+    
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+    
+    # Total logs
+    total_logs = (await db.execute(select(func.count()).select_from(AuditLog))).scalar() or 0
+    
+    # Logs today
+    logs_today = (
+        await db.execute(
+            select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= today_start)
+        )
+    ).scalar() or 0
+    
+    # Logs this week
+    logs_this_week = (
+        await db.execute(
+            select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= week_ago)
+        )
+    ).scalar() or 0
+    
+    # Logs this month
+    logs_this_month = (
+        await db.execute(
+            select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= month_ago)
+        )
+    ).scalar() or 0
+    
+    # Top actions
+    top_actions_result = await db.execute(
+        select(AuditLog.action, func.count().label('count'))
+        .group_by(AuditLog.action)
+        .order_by(func.count().desc())
+        .limit(5)
+    )
+    top_actions = [{"action": row[0], "count": row[1]} for row in top_actions_result.fetchall()]
+    
+    # Top actors (users who performed most actions)
+    top_actors_result = await db.execute(
+        select(User.email, func.count().label('count'))
+        .join(AuditLog, User.id == AuditLog.user_id)
+        .group_by(User.email)
+        .order_by(func.count().desc())
+        .limit(5)
+    )
+    top_actors = [{"actor_email": row[0], "count": row[1]} for row in top_actors_result.fetchall()]
+    
+    return {
+        "total_logs": total_logs,
+        "logs_today": logs_today,
+        "logs_this_week": logs_this_week,
+        "logs_this_month": logs_this_month,
+        "top_actions": top_actions,
+        "top_actors": top_actors,
+        "generated_at": now.isoformat()
+    }
+
+
 @router.get("")
 async def list_audit_logs(
     skip: int = Query(0, ge=0),

@@ -94,6 +94,7 @@ async def list_users(
     role: Optional[str] = None,
     status_filter: Optional[str] = None,
     search: Optional[str] = None,
+    current_user: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Return paginated list of users with optional filters."""

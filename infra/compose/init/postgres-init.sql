@@ -9,9 +9,11 @@
 -- ============================================================================
 -- Enable UUID generation (built-in in PostgreSQL 13+)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
--- Enable pgvector for semantic search (AI embeddings)
+-- Install pgvector for semantic search (AI embeddings)
 -- Required for vector similarity search
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Note: pgvector needs to be installed manually in PostGIS image
+-- For now, we'll use TEXT to store embeddings as JSON
+-- CREATE EXTENSION IF NOT EXISTS vector;
 -- Enable PostGIS for geospatial queries
 -- Required for location-based matching
 CREATE EXTENSION IF NOT EXISTS postgis;
@@ -160,7 +162,6 @@ FROM pg_extension e
     LEFT JOIN pg_namespace n ON n.oid = e.extnamespace
 WHERE extname IN (
         'uuid-ossp',
-        'vector',
         'postgis',
         'pg_trgm',
         'btree_gin',
@@ -188,7 +189,7 @@ WHERE typname IN (
 ORDER BY typname;
 -- Log successful completion
 DO $$ BEGIN RAISE NOTICE 'PostgreSQL initialization completed successfully for Lost & Found platform';
-RAISE NOTICE 'Extensions installed: uuid-ossp, vector, postgis, pg_trgm, btree_gin, pg_stat_statements';
+RAISE NOTICE 'Extensions installed: uuid-ossp, postgis, pg_trgm, btree_gin, pg_stat_statements';
 RAISE NOTICE 'Custom types created: reporttype, reportstatus, matchstatus, notificationtype, messagetype, userrole, userstatus';
 RAISE NOTICE 'Database optimized for Lost & Found workload';
 END $$;

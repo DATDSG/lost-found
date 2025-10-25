@@ -373,12 +373,11 @@ def generate_object_name(original_filename: str, prefix: str = "") -> str:
     return object_name
 
 
-def validate_file_type(filename: str, allowed_types: list = None) -> bool:
+def validate_file_type(content_type: str, allowed_types: list = None) -> bool:
     """Validate file type against allowed types."""
     if allowed_types is None:
         allowed_types = config.ALLOWED_IMAGE_TYPES
     
-    content_type, _ = mimetypes.guess_type(filename)
     return content_type in allowed_types
 
 

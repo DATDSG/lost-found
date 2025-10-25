@@ -64,9 +64,6 @@ class ApiConfig {
   /// Delete account endpoint
   static const String deleteAccountEndpoint = '$usersEndpoint/me';
 
-  /// Privacy settings endpoint
-  static const String privacySettingsEndpoint = '$usersEndpoint/me/privacy';
-
   /// Download user data endpoint
   static const String downloadDataEndpoint = '$usersEndpoint/me/export-data';
 

@@ -14,7 +14,7 @@ import {
 import AdminLayout from "../components/AdminLayout";
 import { Card, Badge, LoadingSpinner } from "../components/ui";
 import { DashboardStats } from "../types";
-import apiService from "../services/api";
+import { apiService } from "../services/api";
 
 const Dashboard: NextPage = () => {
   const router = useRouter();
@@ -32,8 +32,8 @@ const Dashboard: NextPage = () => {
       setLoading(true);
       setError(null);
       const [statsData, activityData] = await Promise.all([
-        apiService.getDashboardStats(),
-        apiService.getRecentActivity(),
+        apiService.getDashboardData(),
+        apiService.getStatistics(),
       ]);
 
       setStats({

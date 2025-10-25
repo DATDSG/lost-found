@@ -62,6 +62,17 @@ def register(user_data: UserRegister, db: Session = Depends(get_sync_db)):
         db.commit()
         db.refresh(user)
         
+        # Create audit log for user registration
+        from ..helpers import create_audit_log
+        create_audit_log(
+            db=db,
+            user_id=str(user.id),
+            action="register",
+            resource_type="user",
+            resource_id=str(user.id),
+            details=f"User registered with email: {user.email}"
+        )
+        
         # Generate access token
         access_token = create_access_token(data={"sub": str(user.id)})
         
@@ -101,6 +112,17 @@ def login(credentials: UserLogin, db: Session = Depends(get_sync_db)):
         
         if not user.is_active:
             raise AuthenticationError("User account is disabled")
+        
+        # Create audit log for user login
+        from ..helpers import create_audit_log
+        create_audit_log(
+            db=db,
+            user_id=str(user.id),
+            action="login",
+            resource_type="auth",
+            resource_id=None,
+            details=f"User logged in successfully from IP: {credentials.email}"
+        )
         
         # Generate access token
         access_token = create_access_token(data={"sub": str(user.id)})

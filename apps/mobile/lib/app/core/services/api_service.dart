@@ -567,45 +567,7 @@ class ApiService {
     }
   }
 
-  // Privacy and account methods
-
-  /// Get user privacy settings
-  Future<Map<String, dynamic>> getPrivacySettings() async {
-    try {
-      final url = _buildUrl(ApiConfig.privacySettingsEndpoint);
-      final response = await _makeRequest('GET', url, _getHeaders());
-      return _handleResponse(response) as Map<String, dynamic>;
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        print('GetPrivacySettings error: $e');
-      }
-      rethrow;
-    }
-  }
-
-  /// Update user privacy settings
-  Future<Map<String, dynamic>> updatePrivacySettings(
-    Map<String, dynamic> settings,
-  ) async {
-    try {
-      final url = _buildUrl(ApiConfig.privacySettingsEndpoint);
-      final body = json.encode(settings);
-
-      final response = await _makeRequest(
-        'PUT',
-        url,
-        _getHeaders(),
-        body: body,
-      );
-
-      return _handleResponse(response) as Map<String, dynamic>;
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        print('UpdatePrivacySettings error: $e');
-      }
-      rethrow;
-    }
-  }
+  // Account methods
 
   /// Delete user account with password confirmation
   Future<Map<String, dynamic>> deleteAccount({
@@ -644,7 +606,6 @@ class ApiService {
         'format': 'json',
         'include_reports': true,
         'include_matches': true,
-        'include_messages': false,
         'include_analytics': false,
       });
 

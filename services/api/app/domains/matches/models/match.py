@@ -35,11 +35,11 @@ class Match(Base):
     __tablename__ = "matches"
 
     # Primary Key
-    id = Column(String, primary_key=True, default=lambda: str(uuid_pkg.uuid4()))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid_pkg.uuid4)
     
     # Domain Identity
-    source_report_id = Column(String, ForeignKey("reports.id"), nullable=False, index=True)
-    candidate_report_id = Column(String, ForeignKey("reports.id"), nullable=False, index=True)
+    source_report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id"), nullable=False, index=True)
+    candidate_report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id"), nullable=False, index=True)
     
     # Match Scoring
     score_total = Column(Float, nullable=False, index=True)

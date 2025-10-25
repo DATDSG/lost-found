@@ -111,7 +111,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen>
                       error: (_, _) => '-',
                     ),
                     DT.c.accentOrange,
-                    Icons.notifications_active,
+                    Icons.fiber_new,
                     hasUnwatched: unwatchedCountAsync.when(
                       data: (count) => count > 0,
                       loading: () => false,

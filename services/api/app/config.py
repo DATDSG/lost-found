@@ -29,7 +29,7 @@ class Config:
     # ========== Database Configuration ==========
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@host.docker.internal:5432/lostfound"
+        "postgresql+asyncpg://postgres:postgres@db:5432/lostfound"
     )
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
@@ -44,18 +44,19 @@ class Config:
     
     # ========== Service Integration ==========
     # NLP Service
-    NLP_SERVICE_URL: str = os.getenv("NLP_SERVICE_URL", "http://localhost:8001")
+    NLP_SERVICE_URL: str = os.getenv("NLP_SERVICE_URL", "http://nlp:8001")
     NLP_SERVICE_TIMEOUT: int = int(os.getenv("NLP_SERVICE_TIMEOUT", "30"))
     NLP_BATCH_SIZE: int = int(os.getenv("NLP_BATCH_SIZE", "32"))
     ENABLE_NLP_CACHE: bool = os.getenv("ENABLE_NLP_CACHE", "true").lower() == "true"
     
     # Vision Service
-    VISION_SERVICE_URL: str = os.getenv("VISION_SERVICE_URL", "http://localhost:8002")
-    VISION_SERVICE_TIMEOUT: int = int(os.getenv("VISION_SERVICE_TIMEOUT", "30"))
+    VISION_SERVICE_URL: str = os.getenv("VISION_SERVICE_URL", "http://vision:8002")
+    VISION_SERVICE_TIMEOUT: int = int(os.getenv("VISION_SERVICE_TIMEOUT", "60"))
+    VISION_BATCH_SIZE: int = int(os.getenv("VISION_BATCH_SIZE", "16"))
     ENABLE_VISION_CACHE: bool = os.getenv("ENABLE_VISION_CACHE", "true").lower() == "true"
     
     # ========== Redis Configuration ==========
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://:LF_Redis_2025_Pass!@redis:6379/0")
     REDIS_CACHE_TTL: int = int(os.getenv("REDIS_CACHE_TTL", "3600"))  # 1 hour
     REDIS_MAX_CONNECTIONS: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "10"))
     ENABLE_REDIS_CACHE: bool = os.getenv("ENABLE_REDIS_CACHE", "true").lower() == "true"
@@ -64,13 +65,14 @@ class Config:
     MEDIA_ROOT: str = os.getenv("MEDIA_ROOT", "/app/media")
     MEDIA_URL: str = os.getenv("MEDIA_URL", "/media")
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+    MAX_FILE_SIZE: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # Convert MB to bytes
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp"]
     STRIP_EXIF: bool = os.getenv("STRIP_EXIF", "true").lower() == "true"
     
     # MinIO Object Storage
-    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "minio:9000")
     MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
     MINIO_BUCKET_NAME: str = os.getenv("MINIO_BUCKET_NAME", "lost-found-media")
     MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
     MINIO_REGION: str = os.getenv("MINIO_REGION", "us-east-1")
@@ -108,7 +110,7 @@ class Config:
     # ========== Security & CORS ==========
     CORS_ORIGINS: List[str] = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://10.0.2.2:8000"
+        "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://admin:3000,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002"
     ).split(",")
     CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
     

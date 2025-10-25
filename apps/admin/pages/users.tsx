@@ -22,7 +22,7 @@ import {
   Modal,
 } from "../components/ui";
 import { User, UserFilters, PaginatedResponse } from "../types";
-import apiService from "../services/api";
+import { apiService } from "../services/api";
 
 const Users: NextPage = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -56,7 +56,7 @@ const Users: NextPage = () => {
       setError(null);
       const [usersResponse, statsResponse] = await Promise.all([
         apiService.getUsers(filters),
-        apiService.getUserStats(),
+        apiService.getStatistics(),
       ]);
 
       setUsers(usersResponse.items);
@@ -71,10 +71,9 @@ const Users: NextPage = () => {
 
   const updateUserStatus = async (userId: string, isActive: boolean) => {
     try {
-      await apiService.updateUserStatus(
-        userId,
-        isActive ? "active" : "inactive"
-      );
+      await apiService.updateUser(userId, {
+        is_active: isActive,
+      });
       fetchData(); // Refresh data
     } catch (err) {
       console.error("Status update error:", err);

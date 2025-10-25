@@ -1,254 +1,334 @@
-"""Comprehensive health check endpoints."""
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text, select
-from typing import Dict, Any
+"""
+Enhanced Health Check System for Lost & Found Services
+Provides comprehensive health monitoring and service status reporting
+"""
+
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from typing import Dict, Any, Optional
 import asyncio
 import time
-import logging
+import psutil
+import os
+from datetime import datetime, timezone
 
-from ..infrastructure.database.session import get_async_db, async_engine
 from ..config import config
 from ..clients import get_nlp_client, get_vision_client
+from ..cache import get_redis_client
+from ..storage import get_minio_client
+from ..infrastructure.database.session import check_database_health
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/health", tags=["health"])
 
+class HealthStatus(BaseModel):
+    """Health status response model"""
+    status: str
+    service: str
+    version: str
+    timestamp: datetime
+    uptime_seconds: float
+    environment: str
+    features: Dict[str, bool]
+    dependencies: Dict[str, Any]
+    metrics: Dict[str, Any]
 
-async def check_database_health(db: AsyncSession) -> Dict[str, Any]:
-    """Check database connectivity and basic query."""
-    try:
-        start_time = time.time()
-        
-        # Execute a simple query
-        result = await db.execute(text("SELECT 1"))
-        result.scalar()
-        
-        duration = time.time() - start_time
-        
-        # Check if pgvector extension is available
-        vector_result = await db.execute(
-            text("SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'")
-        )
-        has_pgvector = vector_result.scalar() > 0
-        
-        return {
-            "status": "healthy",
-            "response_time_ms": round(duration * 1000, 2),
-            "pgvector_available": has_pgvector,
-            "driver": "asyncpg"
-        }
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+class ServiceHealth(BaseModel):
+    """Individual service health model"""
+    status: str
+    response_time_ms: Optional[float] = None
+    error: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
 
+class SystemMetrics(BaseModel):
+    """System metrics model"""
+    cpu_percent: float
+    memory_percent: float
+    memory_used_mb: float
+    memory_total_mb: float
+    disk_percent: float
+    disk_used_gb: float
+    disk_total_gb: float
+    load_average: Optional[tuple] = None
 
-async def check_redis_health() -> Dict[str, Any]:
-    """Check Redis connectivity."""
-    try:
-        import redis.asyncio as redis
-        
-        start_time = time.time()
-        client = await redis.from_url(config.REDIS_URL, decode_responses=True)
-        
-        # Ping Redis
-        await client.ping()
-        duration = time.time() - start_time
-        
-        # Get info
-        info = await client.info()
-        
-        await client.close()
-        
-        return {
-            "status": "healthy",
-            "response_time_ms": round(duration * 1000, 2),
-            "version": info.get("redis_version", "unknown"),
-            "connected_clients": info.get("connected_clients", 0)
-        }
-    except Exception as e:
-        logger.error(f"Redis health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+# Global startup time
+STARTUP_TIME = time.time()
 
-
-async def check_nlp_service_health() -> Dict[str, Any]:
-    """Check NLP service connectivity."""
-    try:
-        start_time = time.time()
-        
-        async with get_nlp_client() as nlp_client:
-            healthy = await nlp_client.health_check()
-        
-        duration = time.time() - start_time
-        
-        return {
-            "status": "healthy" if healthy else "unhealthy",
-            "response_time_ms": round(duration * 1000, 2),
-            "url": config.NLP_SERVICE_URL
-        }
-    except Exception as e:
-        logger.error(f"NLP service health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "url": config.NLP_SERVICE_URL
-        }
-
-
-async def check_vision_service_health() -> Dict[str, Any]:
-    """Check Vision service connectivity."""
-    try:
-        start_time = time.time()
-        
-        async with get_vision_client() as vision_client:
-            healthy = await vision_client.health_check()
-        
-        duration = time.time() - start_time
-        
-        return {
-            "status": "healthy" if healthy else "unhealthy",
-            "response_time_ms": round(duration * 1000, 2),
-            "url": config.VISION_SERVICE_URL
-        }
-    except Exception as e:
-        logger.error(f"Vision service health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "url": config.VISION_SERVICE_URL
-        }
-
-
-@router.get("/health/detailed")
-async def detailed_health_check(db: AsyncSession = Depends(get_async_db)):
-    """
-    Comprehensive health check for all system components.
+@router.get("/", response_model=HealthStatus)
+async def health_check():
+    """Comprehensive health check endpoint"""
+    current_time = datetime.now(timezone.utc)
+    uptime = time.time() - STARTUP_TIME
     
-    Returns detailed status of:
-    - API service
-    - Database (PostgreSQL + pgvector)
-    - Redis cache
-    - NLP service
-    - Vision service
-    """
-    start_time = time.time()
+    # Check all dependencies
+    dependencies = await check_all_dependencies()
     
-    # Run all checks in parallel
-    results = await asyncio.gather(
-        check_database_health(db),
-        check_redis_health(),
-        check_nlp_service_health(),
-        check_vision_service_health(),
-        return_exceptions=True
-    )
+    # Get system metrics
+    metrics = get_system_metrics()
     
-    database_health, redis_health, nlp_health, vision_health = results
+    # Determine overall status
+    overall_status = "healthy"
+    for dep_name, dep_health in dependencies.items():
+        if dep_health.get("status") == "unhealthy":
+            overall_status = "degraded"
+        elif dep_health.get("status") == "unavailable":
+            overall_status = "degraded"
     
-    # Handle exceptions
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            component_name = ["database", "redis", "nlp", "vision"][i]
-            logger.error(f"{component_name} health check exception: {result}")
-            results[i] = {"status": "error", "error": str(result)}
-    
-    # Determine overall health
-    all_healthy = all(
-        isinstance(r, dict) and r.get("status") == "healthy"
-        for r in results
-    )
-    
-    overall_duration = time.time() - start_time
-    
-    return {
-        "status": "healthy" if all_healthy else "degraded",
-        "timestamp": time.time(),
-        "total_check_time_ms": round(overall_duration * 1000, 2),
-        "components": {
-            "api": {
-                "status": "healthy",
-                "version": "2.0.0",
-                "environment": config.ENVIRONMENT
-            },
-            "database": database_health,
-            "redis": redis_health,
-            "nlp_service": nlp_health,
-            "vision_service": vision_health
+    return HealthStatus(
+        status=overall_status,
+        service="api",
+        version="2.0.0",
+        timestamp=current_time,
+        uptime_seconds=uptime,
+        environment=config.ENVIRONMENT,
+        features={
+            "metrics": config.ENABLE_METRICS,
+            "rate_limit": config.ENABLE_RATE_LIMIT,
+            "redis_cache": config.ENABLE_REDIS_CACHE,
+            "minio_storage": True,
+            "nlp_service": True,
+            "vision_service": True,
         },
-        "configuration": {
-            "async_database": True,
-            "cache_enabled": config.ENABLE_REDIS_CACHE,
-            "metrics_enabled": config.ENABLE_METRICS,
-            "rate_limiting_enabled": config.ENABLE_RATE_LIMIT
-        }
-    }
+        dependencies=dependencies,
+        metrics=metrics,
+    )
 
+@router.get("/ready")
+async def readiness_check():
+    """Kubernetes readiness probe"""
+    dependencies = await check_all_dependencies()
+    
+    # Check critical dependencies
+    critical_deps = ["database", "redis"]
+    for dep in critical_deps:
+        if dependencies.get(dep, {}).get("status") != "healthy":
+            raise HTTPException(status_code=503, detail=f"Service not ready: {dep}")
+    
+    return {"status": "ready"}
 
-@router.get("/health/ready")
-async def readiness_check(db: AsyncSession = Depends(get_async_db)):
-    """
-    Kubernetes-style readiness probe.
-    Returns 200 if service is ready to accept requests.
-    """
-    try:
-        # Check database connectivity
-        await db.execute(text("SELECT 1"))
-        
-        return {
-            "ready": True,
-            "timestamp": time.time()
-        }
-    except Exception as e:
-        logger.error(f"Readiness check failed: {e}")
-        return {
-            "ready": False,
-            "error": str(e),
-            "timestamp": time.time()
-        }
-
-
-@router.get("/health/live")
+@router.get("/live")
 async def liveness_check():
-    """
-    Kubernetes-style liveness probe.
-    Returns 200 if service is alive (not deadlocked).
-    """
+    """Kubernetes liveness probe"""
+    return {"status": "alive", "timestamp": datetime.now(timezone.utc)}
+
+@router.get("/dependencies")
+async def dependencies_check():
+    """Detailed dependencies health check"""
+    return await check_all_dependencies()
+
+@router.get("/metrics")
+async def metrics_endpoint():
+    """System and application metrics"""
     return {
-        "alive": True,
-        "timestamp": time.time(),
-        "service": "api",
-        "version": "2.0.0"
+        "system": get_system_metrics(),
+        "application": get_application_metrics(),
+        "timestamp": datetime.now(timezone.utc),
     }
 
-
-@router.get("/health/startup")
-async def startup_check(db: AsyncSession = Depends(get_async_db)):
-    """
-    Kubernetes-style startup probe.
-    Returns 200 when service has fully started.
-    """
+async def check_all_dependencies() -> Dict[str, Any]:
+    """Check health of all service dependencies"""
+    dependencies = {}
+    
+    # Database health
     try:
-        # Check critical dependencies
-        await db.execute(text("SELECT 1"))
+        db_health = await check_database_health()
+        dependencies["database"] = db_health
+    except Exception as e:
+        dependencies["database"] = {
+            "status": "unhealthy",
+            "error": str(e),
+            "response_time_ms": None
+        }
+    
+    # Redis health
+    try:
+        redis_client = get_redis_client()
+        start_time = time.time()
+        redis_health = await redis_client.health_check()
+        response_time = (time.time() - start_time) * 1000
         
-        # Verify configuration
-        config.validate()
-        
-        return {
-            "started": True,
-            "timestamp": time.time(),
-            "environment": config.ENVIRONMENT
+        dependencies["redis"] = {
+            **redis_health,
+            "response_time_ms": response_time
         }
     except Exception as e:
-        logger.error(f"Startup check failed: {e}")
-        return {
-            "started": False,
+        dependencies["redis"] = {
+            "status": "unhealthy",
             "error": str(e),
-            "timestamp": time.time()
+            "response_time_ms": None
+        }
+    
+    # MinIO health
+    try:
+        minio_client = get_minio_client()
+        if minio_client:
+            start_time = time.time()
+            minio_health = minio_client.health_check()
+            response_time = (time.time() - start_time) * 1000
+            
+            dependencies["minio"] = {
+                **minio_health,
+                "response_time_ms": response_time
+            }
+        else:
+            dependencies["minio"] = {
+                "status": "unavailable",
+                "error": "MinIO client not available",
+                "response_time_ms": None
+            }
+    except Exception as e:
+        dependencies["minio"] = {
+            "status": "unhealthy",
+            "error": str(e),
+            "response_time_ms": None
+        }
+    
+    # NLP Service health
+    try:
+        start_time = time.time()
+        nlp_client = get_nlp_client()
+        # Test direct HTTP call
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{config.NLP_SERVICE_URL}/health", timeout=5.0)
+            response_time = (time.time() - start_time) * 1000
+            
+            dependencies["nlp"] = {
+                "status": "healthy" if response.status_code == 200 else "unhealthy",
+                "response_time_ms": response_time,
+                "version": response.json().get("version", "unknown") if response.status_code == 200 else None,
+                "error": None if response.status_code == 200 else f"HTTP {response.status_code}"
+            }
+    except Exception as e:
+        dependencies["nlp"] = {
+            "status": "unavailable",
+            "error": str(e),
+            "response_time_ms": None
+        }
+    
+    # Vision Service health
+    try:
+        start_time = time.time()
+        vision_client = get_vision_client()
+        # Test direct HTTP call
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{config.VISION_SERVICE_URL}/health", timeout=5.0)
+            response_time = (time.time() - start_time) * 1000
+            
+            dependencies["vision"] = {
+                "status": "healthy" if response.status_code == 200 else "unhealthy",
+                "response_time_ms": response_time,
+                "version": response.json().get("version", "unknown") if response.status_code == 200 else None,
+                "error": None if response.status_code == 200 else f"HTTP {response.status_code}"
+            }
+    except Exception as e:
+        dependencies["vision"] = {
+            "status": "unavailable",
+            "error": str(e),
+            "response_time_ms": None
+        }
+    
+    return dependencies
+
+def get_system_metrics() -> Dict[str, Any]:
+    """Get system resource metrics"""
+    try:
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=1)
+        
+        # Memory usage
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
+        memory_used_mb = memory.used / (1024 * 1024)
+        memory_total_mb = memory.total / (1024 * 1024)
+        
+        # Disk usage
+        disk = psutil.disk_usage('/')
+        disk_percent = (disk.used / disk.total) * 100
+        disk_used_gb = disk.used / (1024 * 1024 * 1024)
+        disk_total_gb = disk.total / (1024 * 1024 * 1024)
+        
+        # Load average (Unix only)
+        load_average = None
+        if hasattr(os, 'getloadavg'):
+            try:
+                load_average = os.getloadavg()
+            except OSError:
+                pass
+        
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "memory_used_mb": round(memory_used_mb, 2),
+            "memory_total_mb": round(memory_total_mb, 2),
+            "disk_percent": round(disk_percent, 2),
+            "disk_used_gb": round(disk_used_gb, 2),
+            "disk_total_gb": round(disk_total_gb, 2),
+            "load_average": load_average,
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "cpu_percent": 0,
+            "memory_percent": 0,
+            "memory_used_mb": 0,
+            "memory_total_mb": 0,
+            "disk_percent": 0,
+            "disk_used_gb": 0,
+            "disk_total_gb": 0,
         }
 
+def get_application_metrics() -> Dict[str, Any]:
+    """Get application-specific metrics"""
+    try:
+        # Process info
+        process = psutil.Process()
+        
+        return {
+            "process_id": process.pid,
+            "process_cpu_percent": process.cpu_percent(),
+            "process_memory_mb": process.memory_info().rss / (1024 * 1024),
+            "process_threads": process.num_threads(),
+            "process_open_files": len(process.open_files()),
+            "process_connections": len(process.connections()),
+            "uptime_seconds": time.time() - STARTUP_TIME,
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "uptime_seconds": time.time() - STARTUP_TIME,
+        }
+
+# Health check for external services
+@router.get("/external/{service_name}")
+async def external_service_health(service_name: str):
+    """Check health of external services"""
+    service_urls = {
+        "nlp": config.NLP_SERVICE_URL,
+        "vision": config.VISION_SERVICE_URL,
+    }
+    
+    if service_name not in service_urls:
+        raise HTTPException(status_code=404, detail=f"Service {service_name} not found")
+    
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            start_time = time.time()
+            response = await client.get(f"{service_urls[service_name]}/health", timeout=10.0)
+            response_time = (time.time() - start_time) * 1000
+            
+            return {
+                "service": service_name,
+                "status": "healthy" if response.status_code == 200 else "unhealthy",
+                "response_time_ms": response_time,
+                "status_code": response.status_code,
+                "data": response.json() if response.status_code == 200 else None,
+            }
+    except Exception as e:
+        return {
+            "service": service_name,
+            "status": "unavailable",
+            "error": str(e),
+            "response_time_ms": None,
+        }

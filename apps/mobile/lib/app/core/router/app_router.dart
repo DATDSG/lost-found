@@ -9,7 +9,6 @@ import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/matches/presentation/screens/matches_screen.dart';
 import '../../features/matches/presentation/screens/matching_details_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
-import '../../features/profile/presentation/screens/privacy_settings_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/reports/presentation/screens/found_item_report_form.dart';
 import '../../features/reports/presentation/screens/lost_item_report_form.dart';
@@ -96,11 +95,6 @@ final appRouterProvider = Provider<GoRouter>(
         path: editProfileRoute,
         name: 'edit-profile',
         builder: (context, state) => const EditProfileScreen(),
-      ),
-      GoRoute(
-        path: privacySettingsRoute,
-        name: 'privacy-settings',
-        builder: (context, state) => const PrivacySettingsScreen(),
       ),
       GoRoute(
         path: '/test-connectivity',

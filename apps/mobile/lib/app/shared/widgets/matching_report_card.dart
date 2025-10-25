@@ -265,9 +265,7 @@ class _MatchingReportCardState extends State<MatchingReportCard>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        unwatchedMatches > 0
-                            ? Icons.notifications_active
-                            : Icons.pending,
+                        unwatchedMatches > 0 ? Icons.fiber_new : Icons.pending,
                         color: Colors.white,
                         size: 12,
                       ),

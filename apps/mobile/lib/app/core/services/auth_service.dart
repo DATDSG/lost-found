@@ -205,26 +205,6 @@ class AuthService {
     }
   }
 
-  /// Get user privacy settings
-  Future<Map<String, dynamic>> getPrivacySettings() async {
-    try {
-      return await _authRepository.getPrivacySettings();
-    } on Exception catch (e) {
-      throw handleError(e);
-    }
-  }
-
-  /// Update user privacy settings
-  Future<Map<String, dynamic>> updatePrivacySettings(
-    Map<String, dynamic> settings,
-  ) async {
-    try {
-      return await _authRepository.updatePrivacySettings(settings);
-    } on Exception catch (e) {
-      throw handleError(e);
-    }
-  }
-
   /// Delete user account
   Future<void> deleteAccount({required String password, String? reason}) async {
     try {

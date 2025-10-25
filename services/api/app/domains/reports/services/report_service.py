@@ -46,7 +46,7 @@ class ReportService:
                 colors=report_data.colors or [],
                 occurred_at=report_data.occurred_at,
                 occurred_time=report_data.occurred_time,
-                location_name=report_data.location_name,
+                geo=report_data.geo,
                 location_city=report_data.location_city,
                 location_address=report_data.location_address,
                 latitude=report_data.latitude,
@@ -55,17 +55,17 @@ class ReportService:
                 is_urgent=report_data.is_urgent or False,
                 reward_offered=report_data.reward_offered or False,
                 reward_amount=report_data.reward_amount,
-                image_urls=report_data.image_urls or [],
-                image_hashes=report_data.image_hashes or []
+                images=report_data.images or [],
+                image_hashes=[]
             )
             
             # Save to repository
-            created_report = await self.repository.create(db, report)
+            created_report = await self.repository.create(report_dict)
             
             # Record metrics
             self.metrics.increment_request_count("create_report", "POST", 201)
             
-            return ReportResponse.from_orm(created_report)
+            return ReportResponse.model_validate(created_report)
             
         except Exception as e:
             logger.error(f"Failed to create report: {e}")
@@ -75,10 +75,10 @@ class ReportService:
     async def get_report(self, db: AsyncSession, report_id: str) -> Optional[ReportResponse]:
         """Get a report by ID."""
         try:
-            report = await self.repository.get_by_id(db, report_id)
+            report = await self.repository.get_by_id(report_id)
             if report:
                 self.metrics.increment_request_count("get_report", "GET", 200)
-                return ReportResponse.from_orm(report)
+                return ReportResponse.model_validate(report)
             else:
                 self.metrics.increment_request_count("get_report", "GET", 404)
                 return None
@@ -91,7 +91,7 @@ class ReportService:
         """Update a report."""
         try:
             # Get existing report
-            report = await self.repository.get_by_id(db, report_id)
+            report = await self.repository.get_by_id(report_id)
             if not report:
                 return None
             
@@ -100,15 +100,13 @@ class ReportService:
                 raise ValueError("Not authorized to update this report")
             
             # Update fields
-            update_dict = update_data.dict(exclude_unset=True)
-            for field, value in update_dict.items():
-                setattr(report, field, value)
+            update_dict = update_data.model_dump(exclude_unset=True)
             
             # Save changes
-            updated_report = await self.repository.update(db, report)
+            updated_report = await self.repository.update(report_id, update_dict)
             
             self.metrics.increment_request_count("update_report", "PUT", 200)
-            return ReportResponse.from_orm(updated_report)
+            return ReportResponse.model_validate(updated_report)
             
         except Exception as e:
             logger.error(f"Failed to update report: {e}")
@@ -119,7 +117,7 @@ class ReportService:
         """Delete a report."""
         try:
             # Get existing report
-            report = await self.repository.get_by_id(db, report_id)
+            report = await self.repository.get_by_id(report_id)
             if not report:
                 return False
             
@@ -128,7 +126,7 @@ class ReportService:
                 raise ValueError("Not authorized to delete this report")
             
             # Delete report
-            await self.repository.delete(db, report_id)
+            await self.repository.delete(report_id)
             
             self.metrics.increment_request_count("delete_report", "DELETE", 200)
             return True

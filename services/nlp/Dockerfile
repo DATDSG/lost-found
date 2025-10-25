@@ -55,5 +55,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Run the application with optimized settings
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2", "--access-log"]
+# Run the progressive application (starts fast, loads features in background)
+CMD ["uvicorn", "main_progressive:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1", "--access-log"]

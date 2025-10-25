@@ -20,7 +20,7 @@ import {
   Modal,
 } from "../components/ui";
 import { Match, MatchFilters, PaginatedResponse } from "../types";
-import apiService from "../services/api";
+import { apiService } from "../services/api";
 
 const Matching: NextPage = () => {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -41,11 +41,11 @@ const Matching: NextPage = () => {
       setError(null);
       const [matchesResponse, statsResponse] = await Promise.all([
         apiService.getMatches(filters),
-        apiService.getMatchStats(),
+        apiService.getStatistics(),
       ]);
 
       // Add safety checks for the data
-      const safeMatches = (matchesResponse.items || []).map((match) => ({
+      const safeMatches = (matchesResponse.items || []).map((match: any) => ({
         ...match,
         overall_score: match.overall_score ?? 0,
         source_report: match.source_report || {
@@ -74,7 +74,7 @@ const Matching: NextPage = () => {
 
   const updateMatchStatus = async (matchId: string, status: string) => {
     try {
-      await apiService.updateMatchStatus(matchId, status);
+      await apiService.updateReport(matchId, { status });
       fetchData(); // Refresh data
     } catch (err) {
       console.error("Status update error:", err);

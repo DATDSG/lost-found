@@ -35,6 +35,7 @@ class ReportBase(BaseModel):
     colors: Optional[List[str]] = Field(default_factory=list)
     occurred_at: datetime
     occurred_time: Optional[str] = Field(None, pattern=r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')
+    geo: Optional[str] = Field(None, max_length=1000)
     location_city: Optional[str] = Field(None, max_length=100)
     location_address: Optional[str] = Field(None, max_length=500)
     latitude: Optional[float] = Field(None, ge=-90, le=90)

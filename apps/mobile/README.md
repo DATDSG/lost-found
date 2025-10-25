@@ -39,7 +39,6 @@ lib/
 │   │   ├── home/                 # Home feature
 │   │   ├── reports/              # Reports feature
 │   │   ├── matches/              # Matches feature
-│   │   ├── chat/                 # Chat feature
 │   │   └── profile/              # Profile feature
 │   └── shared/                   # Shared components
 │       ├── models/               # Shared data models
@@ -90,9 +89,7 @@ lib/
 - **Authentication**: Login, signup, password reset
 - **Reports**: Create, view, edit lost/found items
 - **Matching**: AI-powered matching algorithm
-- **Chat**: Real-time messaging between users
 - **Profile**: User profile management
-- **Notifications**: Push notifications and in-app notifications
 - **Offline Support**: Offline-first architecture
 - **Internationalization**: Multi-language support (EN, ES)
 
@@ -120,6 +117,7 @@ lib/
    ```
 
 3. **Run the app**
+
    ```bash
    flutter run
    ```

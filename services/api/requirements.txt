@@ -56,4 +56,5 @@ scikit-learn==1.4.2
 
 # Additional Utilities
 aiofiles==24.1.0
+psutil==6.1.0
 

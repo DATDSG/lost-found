@@ -25,7 +25,7 @@ import {
   FraudFilters,
   PaginatedResponse,
 } from "../types";
-import apiService from "../services/api";
+import { apiService } from "../services/api";
 
 const FraudDetection: NextPage = () => {
   const [results, setResults] = useState<FraudDetectionResult[]>([]);
@@ -47,8 +47,8 @@ const FraudDetection: NextPage = () => {
       setLoading(true);
       setError(null);
       const [resultsResponse, statsResponse] = await Promise.all([
-        apiService.getFraudDetectionResults(filters),
-        apiService.getFraudStats(),
+        apiService.getFraudReports(filters),
+        apiService.getStatistics(),
       ]);
 
       setResults(resultsResponse.items);
@@ -77,7 +77,10 @@ const FraudDetection: NextPage = () => {
 
   const reviewResult = async (resultId: string, isConfirmed: boolean) => {
     try {
-      await apiService.reviewFraudResult(resultId, isConfirmed);
+      await apiService.flagReport(
+        resultId,
+        isConfirmed ? "confirmed" : "rejected"
+      );
       fetchData(); // Refresh data
     } catch (err) {
       console.error("Review error:", err);

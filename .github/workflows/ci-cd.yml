@@ -2,42 +2,48 @@ name: Lost & Found CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
     # Run tests daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
-  FLUTTER_VERSION: '3.16.0'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Code Quality Checks
+  # ================================================================
+  # Code Quality and Security Checks
+  # ================================================================
   code-quality:
-    name: Code Quality & Linting
+    name: Code Quality & Security
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.11"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: apps/admin/package-lock.json
 
       - name: Install Python dependencies
         run: |
-          pip install black isort flake8 mypy bandit safety
-          pip install -r services/api/requirements.txt
-          pip install -r services/api/requirements-dev.txt
+          cd services/api
+          pip install -r requirements.txt
+          pip install black flake8 mypy pytest pytest-cov bandit safety
 
       - name: Install Node.js dependencies
         run: |
@@ -46,48 +52,62 @@ jobs:
 
       - name: Python code formatting (Black)
         run: |
-          black --check services/
+          cd services/api
+          black --check --diff .
 
-      - name: Python import sorting (isort)
+      - name: Python linting (Flake8)
         run: |
-          isort --check-only services/
+          cd services/api
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-      - name: Python linting (flake8)
+      - name: Python type checking (MyPy)
         run: |
-          flake8 services/
+          cd services/api
+          mypy . --ignore-missing-imports
 
-      - name: Python type checking (mypy)
+      - name: Python security scan (Bandit)
         run: |
-          mypy services/
+          cd services/api
+          bandit -r . -f json -o bandit-report.json || true
 
-      - name: Python security check (bandit)
+      - name: Python dependency security scan (Safety)
         run: |
-          bandit -r services/
+          cd services/api
+          safety check --json --output safety-report.json || true
 
-      - name: Python dependency check (safety)
-        run: |
-          safety check
-
-      - name: TypeScript/JavaScript linting
+      - name: Node.js linting (ESLint)
         run: |
           cd apps/admin
           npm run lint
 
-      - name: TypeScript type checking
+      - name: Node.js security audit
         run: |
           cd apps/admin
-          npm run type-check
+          npm audit --audit-level=moderate
 
-  # Backend Tests
-  backend-tests:
-    name: Backend Tests
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            services/api/bandit-report.json
+            services/api/safety-report.json
+
+  # ================================================================
+  # API Service Tests
+  # ================================================================
+  api-tests:
+    name: API Service Tests
     runs-on: ubuntu-latest
+    needs: code-quality
+
     services:
       postgres:
-        image: postgres:15
+        image: pgvector/pgvector:pg18
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_lostfound
+          POSTGRES_DB: lostfound_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -97,7 +117,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:7
+        image: redis:7-alpine
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -113,55 +133,121 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          pip install -r services/api/requirements.txt
-          pip install -r services/api/requirements-dev.txt
-          pip install -r services/nlp/requirements.txt
-          pip install -r services/vision/requirements.txt
-
-      - name: Set up test environment
-        run: |
-          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_lostfound"
-          export REDIS_URL="redis://localhost:6379/15"
-          export JWT_SECRET_KEY="test-secret-key"
+          cd services/api
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
 
       - name: Run API tests
         run: |
           cd services/api
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
 
-      - name: Run NLP service tests
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: api-coverage
+          path: services/api/coverage.xml
+
+  # ================================================================
+  # NLP Service Tests
+  # ================================================================
+  nlp-tests:
+    name: NLP Service Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
         run: |
           cd services/nlp
-          pytest tests/ -v
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
 
-      - name: Run Vision service tests
+      - name: Download NLTK data
+        run: |
+          cd services/nlp
+          python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"
+
+      - name: Run NLP tests
+        run: |
+          cd services/nlp
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
+
+  # ================================================================
+  # Vision Service Tests
+  # ================================================================
+  vision-tests:
+    name: Vision Service Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+
+      - name: Install dependencies
         run: |
           cd services/vision
-          pytest tests/ -v
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
 
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./services/api/coverage.xml
-          flags: backend
-          name: backend-coverage
+      - name: Run Vision tests
+        run: |
+          cd services/vision
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
 
-  # Frontend Tests
-  frontend-tests:
-    name: Frontend Tests
+  # ================================================================
+  # Admin Panel Tests
+  # ================================================================
+  admin-tests:
+    name: Admin Panel Tests
     runs-on: ubuntu-latest
+    needs: code-quality
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -169,271 +255,38 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache Node.js dependencies
-        uses: actions/cache@v3
-        with:
-          path: apps/admin/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('apps/admin/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: apps/admin/package-lock.json
 
       - name: Install dependencies
         run: |
           cd apps/admin
           npm ci
 
+      - name: Run type checking
+        run: |
+          cd apps/admin
+          npm run type-check
+
       - name: Run tests
         run: |
           cd apps/admin
-          npm run test
+          npm test -- --coverage --watchAll=false
 
-      - name: Run build test
+      - name: Build application
         run: |
           cd apps/admin
           npm run build
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: frontend-test-results
-          path: apps/admin/coverage/
-
-  # Mobile Tests
-  mobile-tests:
-    name: Mobile Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-
-      - name: Cache Flutter dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pub-cache
-            apps/mobile/.dart_tool
-          key: ${{ runner.os }}-flutter-${{ hashFiles('apps/mobile/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-flutter-
-
-      - name: Install dependencies
-        run: |
-          cd apps/mobile
-          flutter pub get
-
-      - name: Run Flutter tests
-        run: |
-          cd apps/mobile
-          flutter test
-
-      - name: Run Flutter analyze
-        run: |
-          cd apps/mobile
-          flutter analyze
-
-      - name: Build APK (debug)
-        run: |
-          cd apps/mobile
-          flutter build apk --debug
-
+  # ================================================================
   # Integration Tests
+  # ================================================================
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests]
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_lostfound
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+    needs: [api-tests, nlp-tests, vision-tests, admin-tests]
 
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          pip install -r services/api/requirements.txt
-          pip install -r services/api/requirements-dev.txt
-          cd apps/admin && npm ci
-
-      - name: Start services
-        run: |
-          # Start API service
-          cd services/api
-          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          API_PID=$!
-          
-          # Start NLP service
-          cd ../nlp
-          python -m uvicorn main:app --host 0.0.0.0 --port 8001 &
-          NLP_PID=$!
-          
-          # Start Vision service
-          cd ../vision
-          python -m uvicorn main:app --host 0.0.0.0 --port 8002 &
-          VISION_PID=$!
-          
-          # Wait for services to start
-          sleep 10
-          
-          # Check service health
-          curl -f http://localhost:8000/health || exit 1
-          curl -f http://localhost:8001/health || exit 1
-          curl -f http://localhost:8002/health || exit 1
-
-      - name: Run integration tests
-        run: |
-          cd services/api
-          pytest tests/integration/ -v
-
-      - name: Test API endpoints
-        run: |
-          # Test user registration
-          curl -X POST http://localhost:8000/v1/auth/register \
-            -H "Content-Type: application/json" \
-            -d '{"email":"test@example.com","password":"TestPassword123!","display_name":"Test User"}'
-          
-          # Test user login
-          curl -X POST http://localhost:8000/v1/auth/login \
-            -H "Content-Type: application/json" \
-            -d '{"email":"test@example.com","password":"TestPassword123!"}'
-
-  # Performance Tests
-  performance-tests:
-    name: Performance Tests
-    runs-on: ubuntu-latest
-    needs: [backend-tests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_lostfound
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          pip install -r services/api/requirements.txt
-          pip install -r services/api/requirements-dev.txt
-          pip install locust
-
-      - name: Run performance tests
-        run: |
-          cd services/api
-          pytest tests/performance/ -v -m performance
-
-      - name: Run load tests
-        run: |
-          cd services/api
-          locust -f tests/load/locustfile.py --headless -u 10 -r 2 -t 30s --host http://localhost:8000
-
-  # Security Tests
-  security-tests:
-    name: Security Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install security tools
-        run: |
-          pip install bandit safety semgrep
-
-      - name: Run Bandit security scan
-        run: |
-          bandit -r services/ -f json -o bandit-report.json
-
-      - name: Run Safety dependency check
-        run: |
-          safety check --json --output safety-report.json
-
-      - name: Run Semgrep security scan
-        run: |
-          semgrep --config=auto services/ --json --output=semgrep-report.json
-
-      - name: Upload security reports
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: security-reports
-          path: |
-            bandit-report.json
-            safety-report.json
-            semgrep-report.json
-
-  # Docker Build & Test
-  docker-build:
-    name: Docker Build & Test
-    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -441,44 +294,192 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build API service
+      - name: Start services with Docker Compose
+        run: |
+          cd infra/compose
+          cp env.example .env
+          docker-compose up -d --build
+
+      - name: Wait for services to be ready
+        run: |
+          sleep 30
+          curl -f http://localhost:8080/health || exit 1
+          curl -f http://localhost:8000/v1/health || exit 1
+          curl -f http://localhost:8001/health || exit 1
+          curl -f http://localhost:8002/health || exit 1
+
+      - name: Run integration tests
         run: |
           cd services/api
-          docker build -t lost-found-api:test .
+          pip install pytest pytest-asyncio httpx
+          pytest tests/integration/ -v
 
-      - name: Build NLP service
+      - name: Test network connectivity
         run: |
-          cd services/nlp
-          docker build -t lost-found-nlp:test .
+          ./infra/compose/test-network-connectivity.sh
 
-      - name: Build Vision service
+      - name: Stop services
         run: |
-          cd services/vision
-          docker build -t lost-found-vision:test .
+          cd infra/compose
+          docker-compose down -v
 
-      - name: Build Admin frontend
+  # ================================================================
+  # Build and Push Docker Images
+  # ================================================================
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [api-tests, nlp-tests, vision-tests, admin-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/nlp
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/vision
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/admin
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/api
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push NLP image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/nlp
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/nlp:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Vision image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/vision
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/vision:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Admin image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/admin
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/admin:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ================================================================
+  # Security Scanning
+  # ================================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:${{ github.sha }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  # ================================================================
+  # Performance Tests
+  # ================================================================
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
         run: |
-          cd apps/admin
-          docker build -t lost-found-admin:test .
+          pip install locust pytest-benchmark
 
-      - name: Test Docker containers
+      - name: Start services for performance testing
         run: |
-          # Test API container
-          docker run --rm lost-found-api:test python -c "import app.main; print('API container OK')"
-          
-          # Test NLP container
-          docker run --rm lost-found-nlp:test python -c "import main; print('NLP container OK')"
-          
-          # Test Vision container
-          docker run --rm lost-found-vision:test python -c "import main; print('Vision container OK')"
+          cd infra/compose
+          cp env.example .env
+          docker-compose up -d --build
+          sleep 60
 
-  # Deployment (only on main branch)
+      - name: Run performance tests
+        run: |
+          cd services/api
+          locust -f tests/performance/locustfile.py --headless -u 100 -r 10 -t 60s --html performance-report.html
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-report
+          path: services/api/performance-report.html
+
+  # ================================================================
+  # Deployment (Production)
+  # ================================================================
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [code-quality, backend-tests, frontend-tests, integration-tests, security-tests, docker-build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [security-scan, performance-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -486,30 +487,29 @@ jobs:
       - name: Deploy to production
         run: |
           echo "Deploying to production..."
-          # Add your deployment commands here
-          # Example: kubectl apply -f k8s/
-          # Example: docker-compose -f docker-compose.prod.yml up -d
+          # Add your deployment script here
+          # This could be:
+          # - Kubernetes deployment
+          # - Docker Swarm deployment
+          # - Cloud provider deployment (AWS, GCP, Azure)
+          # - Custom deployment script
 
-      - name: Health check
+      - name: Notify deployment success
         run: |
-          echo "Performing health checks..."
-          # Add health check commands here
-          # Example: curl -f https://api.yourdomain.com/health
+          echo "Deployment successful!"
+          # Add notification logic here (Slack, Discord, email, etc.)
 
-  # Notification
-  notify:
-    name: Notify Results
+  # ================================================================
+  # Cleanup
+  # ================================================================
+  cleanup:
+    name: Cleanup
     runs-on: ubuntu-latest
-    needs: [code-quality, backend-tests, frontend-tests, integration-tests, security-tests, docker-build]
+    needs: [deploy]
     if: always()
-    steps:
-      - name: Notify on success
-        if: ${{ needs.code-quality.result == 'success' && needs.backend-tests.result == 'success' && needs.frontend-tests.result == 'success' }}
-        run: |
-          echo "✅ All tests passed! Pipeline successful."
 
-      - name: Notify on failure
-        if: ${{ needs.code-quality.result == 'failure' || needs.backend-tests.result == 'failure' || needs.frontend-tests.result == 'failure' }}
+    steps:
+      - name: Cleanup Docker images
         run: |
-          echo "❌ Some tests failed. Please check the logs."
-          exit 1
+          docker system prune -af
+          docker volume prune -f

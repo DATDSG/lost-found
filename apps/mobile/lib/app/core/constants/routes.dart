@@ -40,18 +40,12 @@ const String editProfileRoute = '/profile/edit';
 /// Route for the settings screen
 const String settingsRoute = '/settings';
 
-/// Route for the privacy settings screen
-const String privacySettingsRoute = '/privacy-settings';
-
 // Support routes
 /// Route for the support screen
 const String supportRoute = '/support';
 
 /// Route for the FAQ screen
 const String faqRoute = '/faq';
-
-/// Route for the privacy policy screen
-const String privacyPolicyRoute = '/privacy-policy';
 
 /// Route for the terms of service screen
 const String termsOfServiceRoute = '/terms-of-service';
@@ -67,9 +61,6 @@ const String bugReportRoute = '/bug-report';
 
 /// Route for the feature request screen
 const String featureRequestRoute = '/feature-request';
-
-/// Route for the live chat screen
-const String liveChatRoute = '/live-chat';
 
 // Helper functions for route generation
 /// Generates item details route with the given item ID

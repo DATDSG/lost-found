@@ -405,7 +405,7 @@ class _MatchingDetailsScreenState extends ConsumerState<MatchingDetailsScreen>
       children: [
         Icon(
           !match.isViewed && match.status == MatchStatus.pending
-              ? Icons.notifications_active
+              ? Icons.fiber_new
               : Icons.star,
           color: !match.isViewed && match.status == MatchStatus.pending
               ? DT.c.accentOrange

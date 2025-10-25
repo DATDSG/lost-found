@@ -44,7 +44,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     # Primary Key
-    id = Column(String, primary_key=True, default=lambda: str(uuid_pkg.uuid4()))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid_pkg.uuid4)
     
     # Domain Identity
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
@@ -86,7 +86,7 @@ class Report(Base):
     # Media and Processing
     images = Column(ARRAY(String))
     image_hashes = Column(ARRAY(String))
-    text_embedding = Column(Vector(384))  # For semantic search
+    # text_embedding = Column(Vector(384))  # For semantic search - disabled until pgvector is installed
     
     # Audit Fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
