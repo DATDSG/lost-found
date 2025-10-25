@@ -136,7 +136,7 @@ services:
       - VISION_SERVICE_URL=http://vision:8002
 
       # CORS configuration
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:8080,http://admin:3000,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://admin:3000,http://10.0.2.2:3000,http://10.0.2.2:8080,http://10.0.2.2:8000,http://10.0.2.2:8001,http://10.0.2.2:8002,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002
 
       # Application settings
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -340,13 +340,13 @@ services:
     image: dpage/pgadmin4:latest
     container_name: lost-found-pgadmin
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@lostfound.local}
+      - PGADMIN_DEFAULT_EMAIL=admin@lostfound.com
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-postgres}
       - PGADMIN_CONFIG_SERVER_MODE=False
       - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
       - PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION=True
       - PGADMIN_CONFIG_LOGIN_BANNER="Lost & Found Development Database"
-      - PYTHONWARNINGS=ignore::DeprecationWarning
+      - PYTHONWARNINGS=ignore
       - PYTHONDONTWRITEBYTECODE=1
     ports:
       - "${PGADMIN_PORT:-5050}:80"
@@ -356,7 +356,6 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
       - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
-      - ./pgadmin/suppress_warnings.py:/pgadmin4/suppress_warnings.py:ro
     restart: unless-stopped
     networks:
       - lost-found-network

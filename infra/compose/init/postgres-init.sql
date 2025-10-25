@@ -58,14 +58,6 @@ DO $$ BEGIN IF NOT EXISTS (
 );
 END IF;
 END $$;
--- Notification type enum
-DO $$ BEGIN IF NOT EXISTS (
-    SELECT 1
-    FROM pg_type
-    WHERE typname = 'notificationtype'
-) THEN CREATE TYPE notificationtype AS ENUM ('match', 'message', 'system', 'admin');
-END IF;
-END $$;
 -- Message type enum
 DO $$ BEGIN IF NOT EXISTS (
     SELECT 1
@@ -88,6 +80,14 @@ DO $$ BEGIN IF NOT EXISTS (
     FROM pg_type
     WHERE typname = 'userstatus'
 ) THEN CREATE TYPE userstatus AS ENUM ('active', 'inactive', 'suspended', 'banned');
+END IF;
+END $$;
+-- Fraud risk level enum
+DO $$ BEGIN IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type
+    WHERE typname = 'fraudrisklevel'
+) THEN CREATE TYPE fraudrisklevel AS ENUM ('low', 'medium', 'high', 'critical');
 END IF;
 END $$;
 -- ============================================================================
@@ -139,10 +139,10 @@ GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO postgres;
 GRANT USAGE ON TYPE reporttype TO postgres;
 GRANT USAGE ON TYPE reportstatus TO postgres;
 GRANT USAGE ON TYPE matchstatus TO postgres;
-GRANT USAGE ON TYPE notificationtype TO postgres;
 GRANT USAGE ON TYPE messagetype TO postgres;
 GRANT USAGE ON TYPE userrole TO postgres;
 GRANT USAGE ON TYPE userstatus TO postgres;
+GRANT USAGE ON TYPE fraudrisklevel TO postgres;
 -- ============================================================================
 -- SECTION 5: PERFORMANCE OPTIMIZATIONS
 -- ============================================================================
@@ -181,15 +181,15 @@ WHERE typname IN (
         'reporttype',
         'reportstatus',
         'matchstatus',
-        'notificationtype',
         'messagetype',
         'userrole',
-        'userstatus'
+        'userstatus',
+        'fraudrisklevel'
     )
 ORDER BY typname;
 -- Log successful completion
 DO $$ BEGIN RAISE NOTICE 'PostgreSQL initialization completed successfully for Lost & Found platform';
 RAISE NOTICE 'Extensions installed: uuid-ossp, postgis, pg_trgm, btree_gin, pg_stat_statements';
-RAISE NOTICE 'Custom types created: reporttype, reportstatus, matchstatus, notificationtype, messagetype, userrole, userstatus';
+RAISE NOTICE 'Custom types created: reporttype, reportstatus, matchstatus, messagetype, userrole, userstatus, fraudrisklevel';
 RAISE NOTICE 'Database optimized for Lost & Found workload';
 END $$;

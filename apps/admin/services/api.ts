@@ -3,21 +3,34 @@
  * Provides better error handling, retry logic, and service integration
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast';
 
-// API Configuration
+// API Configuration - Multi-network support
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const SERVER_API_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://172.104.40.189:8000';
+const EMULATOR_API_URL = process.env.NEXT_PUBLIC_EMULATOR_URL || 'http://10.0.2.2:8000';
 const API_VERSION = process.env.NEXT_PUBLIC_API_VERSION || 'v1';
 
 // Determine which API URL to use based on environment
 const getApiUrl = (): string => {
     if (typeof window !== 'undefined') {
-        // Client-side: check if we're accessing from server IP
+        // Client-side: check which network we're accessing from
         const hostname = window.location.hostname;
+
+        // Server network
         if (hostname === '172.104.40.189' || hostname.includes('172.104.40.189')) {
             return SERVER_API_URL;
+        }
+
+        // Android emulator network
+        if (hostname === '10.0.2.2' || hostname.includes('10.0.2.2')) {
+            return EMULATOR_API_URL;
+        }
+
+        // Localhost network
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return API_BASE_URL;
         }
     }
     return API_BASE_URL;
@@ -36,7 +49,7 @@ const createApiClient = (): AxiosInstance => {
 
     // Request interceptor
     client.interceptors.request.use(
-        (config) => {
+        (config: InternalAxiosRequestConfig) => {
             // Add authentication token if available
             const token = localStorage.getItem('auth_token');
             if (token) {
@@ -53,7 +66,7 @@ const createApiClient = (): AxiosInstance => {
 
             return config;
         },
-        (error) => {
+        (error: any) => {
             console.error('Request interceptor error:', error);
             return Promise.reject(error);
         }
@@ -68,7 +81,7 @@ const createApiClient = (): AxiosInstance => {
             }
             return response;
         },
-        async (error) => {
+        async (error: any) => {
             const originalRequest = error.config;
 
             // Handle authentication errors
@@ -137,7 +150,7 @@ export class ApiService {
 
     // Generic request method with retry logic
     private async request<T>(
-        config: AxiosRequestConfig,
+        config: Partial<InternalAxiosRequestConfig>,
         retries: number = 3
     ): Promise<T> {
         try {
@@ -189,6 +202,27 @@ export class ApiService {
         });
     }
 
+    async getCurrentUser(): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: '/auth/me',
+        });
+    }
+
+    async getUserStats(userId: string): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: `/admin/users/${userId}`,
+        });
+    }
+
+    async getUsersStats(): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: '/admin/users/stats',
+        });
+    }
+
     // Reports
     async getReports(params?: any): Promise<any> {
         return this.request({
@@ -215,16 +249,17 @@ export class ApiService {
 
     async updateReport(id: string, data: any): Promise<any> {
         return this.request({
-            method: 'PUT',
-            url: `/reports/${id}`,
+            method: 'PATCH',
+            url: `/admin/reports/${id}/status`,
             data,
         });
     }
 
-    async deleteReport(id: string): Promise<void> {
+    async deleteReport(id: string, reason?: string): Promise<void> {
         return this.request({
             method: 'DELETE',
-            url: `/reports/${id}`,
+            url: `/admin/reports/${id}`,
+            data: { reason: reason || 'Deleted by admin' },
         });
     }
 
@@ -240,21 +275,29 @@ export class ApiService {
     async getMatch(id: string): Promise<any> {
         return this.request({
             method: 'GET',
-            url: `/matches/${id}`,
+            url: `/admin/matches/${id}`,
         });
     }
 
     async confirmMatch(id: string): Promise<any> {
         return this.request({
             method: 'POST',
-            url: `/matches/${id}/confirm`,
+            url: `/admin/matches/${id}/confirm`,
         });
     }
 
     async rejectMatch(id: string): Promise<any> {
         return this.request({
             method: 'POST',
-            url: `/matches/${id}/reject`,
+            url: `/admin/matches/${id}/reject`,
+        });
+    }
+
+    async updateMatch(id: string, data: any): Promise<any> {
+        return this.request({
+            method: 'PATCH',
+            url: `/admin/matches/${id}/status`,
+            data,
         });
     }
 
@@ -308,8 +351,8 @@ export class ApiService {
             data: formData,
             headers: {
                 'Content-Type': 'multipart/form-data',
-            },
-            onUploadProgress: (progressEvent) => {
+            } as any,
+            onUploadProgress: (progressEvent: any) => {
                 if (onProgress && progressEvent.total) {
                     const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     onProgress(progress);
@@ -330,6 +373,29 @@ export class ApiService {
         return this.request({
             method: 'GET',
             url: '/admin/dashboard/stats',
+        });
+    }
+
+    async getRecentActivity(limit: number = 50): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: '/admin/dashboard/activity',
+            params: { limit },
+        });
+    }
+
+    async getReportsChart(days: number = 30): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: '/admin/dashboard/reports-chart',
+            params: { days },
+        });
+    }
+
+    async getSystemHealth(): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: '/admin/dashboard/system/health',
         });
     }
 

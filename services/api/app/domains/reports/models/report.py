@@ -93,10 +93,10 @@ class Report(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Domain Relationships
-    owner = relationship("User", back_populates="reports", foreign_keys=[owner_id])
-    source_matches = relationship("Match", back_populates="source_report", foreign_keys="Match.source_report_id")
-    candidate_matches = relationship("Match", back_populates="candidate_report", foreign_keys="Match.candidate_report_id")
-    fraud_detection_results = relationship("FraudDetectionResult", back_populates="report")
+    owner = relationship("User", foreign_keys=[owner_id])
+    source_matches = relationship("Match", foreign_keys="Match.source_report_id")
+    candidate_matches = relationship("Match", foreign_keys="Match.candidate_report_id")
+    fraud_detection_results = relationship("FraudDetectionResult", foreign_keys="FraudDetectionResult.report_id")
     
     def __repr__(self):
         return f"<Report(id='{self.id}', type='{self.type}', title='{self.title}')>"

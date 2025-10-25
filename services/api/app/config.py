@@ -1,40 +1,75 @@
 """
-Configuration for Lost & Found API Service
-------------------------------------------
-Centralized configuration management for:
-- Database connections
-- JWT authentication
-- Service integrations (NLP, Vision)
-- Media storage
-- Rate limiting
-- Monitoring & metrics
-- CORS & security
+Optimized Configuration for Lost & Found API Service
+==================================================
+Performance-optimized configuration with caching and connection pooling.
 """
+
 import os
 from typing import Optional, List
 from pathlib import Path
 
 
-class Config:
-    """Production configuration for API service."""
+class OptimizedConfig:
+    """Optimized configuration for better API performance."""
     
     # ========== Server Configuration ==========
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    WORKERS: int = int(os.getenv("WORKERS", "1"))
+    WORKERS: int = int(os.getenv("WORKERS", "4"))  # Increased workers
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")  # development, staging, production
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
-    # ========== Database Configuration ==========
+    # ========== Database Configuration (Optimized) ==========
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql+asyncpg://postgres:postgres@db:5432/lostfound"
     )
-    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
-    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
-    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "20"))  # Increased pool size
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "30"))  # Increased overflow
+    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "10"))  # Reduced timeout
     DB_ECHO: bool = os.getenv("DB_ECHO", "false").lower() == "true"
+    DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))  # 30 minutes
+    
+    # ========== Redis Configuration (Optimized) ==========
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://:LF_Redis_2025_Pass!@redis:6379/0")
+    REDIS_CACHE_TTL: int = int(os.getenv("REDIS_CACHE_TTL", "1800"))  # 30 minutes
+    REDIS_MAX_CONNECTIONS: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "20"))  # Increased
+    ENABLE_REDIS_CACHE: bool = os.getenv("ENABLE_REDIS_CACHE", "true").lower() == "true"
+    REDIS_TIMEOUT: int = int(os.getenv("REDIS_TIMEOUT", "5"))  # Reduced timeout
+    
+    # ========== Service Integration (Optimized) ==========
+    # NLP Service
+    NLP_SERVICE_URL: str = os.getenv("NLP_SERVICE_URL", "http://nlp:8001")
+    NLP_SERVICE_TIMEOUT: int = int(os.getenv("NLP_SERVICE_TIMEOUT", "10"))  # Reduced timeout
+    NLP_BATCH_SIZE: int = int(os.getenv("NLP_BATCH_SIZE", "64"))  # Increased batch size
+    ENABLE_NLP_CACHE: bool = os.getenv("ENABLE_NLP_CACHE", "true").lower() == "true"
+    
+    # Vision Service
+    VISION_SERVICE_URL: str = os.getenv("VISION_SERVICE_URL", "http://vision:8002")
+    VISION_SERVICE_TIMEOUT: int = int(os.getenv("VISION_SERVICE_TIMEOUT", "15"))  # Reduced timeout
+    VISION_BATCH_SIZE: int = int(os.getenv("VISION_BATCH_SIZE", "32"))  # Increased batch size
+    ENABLE_VISION_CACHE: bool = os.getenv("ENABLE_VISION_CACHE", "true").lower() == "true"
+    
+    # ========== HTTP Client Configuration ==========
+    HTTP_TIMEOUT: int = int(os.getenv("HTTP_TIMEOUT", "10"))
+    HTTP_MAX_RETRIES: int = int(os.getenv("HTTP_MAX_RETRIES", "3"))
+    HTTP_RETRY_DELAY: float = float(os.getenv("HTTP_RETRY_DELAY", "0.5"))
+    
+    # ========== Caching Configuration ==========
+    ENABLE_RESPONSE_CACHE: bool = os.getenv("ENABLE_RESPONSE_CACHE", "false").lower() == "true"
+    RESPONSE_CACHE_TTL: int = int(os.getenv("RESPONSE_CACHE_TTL", "300"))  # 5 minutes
+    ENABLE_QUERY_CACHE: bool = os.getenv("ENABLE_QUERY_CACHE", "true").lower() == "true"
+    QUERY_CACHE_TTL: int = int(os.getenv("QUERY_CACHE_TTL", "600"))  # 10 minutes
+    
+    # ========== Performance Configuration ==========
+    ENABLE_COMPRESSION: bool = os.getenv("ENABLE_COMPRESSION", "true").lower() == "true"
+    ENABLE_ASYNC_PROCESSING: bool = os.getenv("ENABLE_ASYNC_PROCESSING", "true").lower() == "true"
+    MAX_CONCURRENT_REQUESTS: int = int(os.getenv("MAX_CONCURRENT_REQUESTS", "100"))
+    
+    # ========== Health Check Optimization ==========
+    HEALTH_CHECK_CACHE_TTL: int = int(os.getenv("HEALTH_CHECK_CACHE_TTL", "30"))  # 30 seconds
+    ENABLE_HEALTH_CACHE: bool = os.getenv("ENABLE_HEALTH_CACHE", "true").lower() == "true"
     
     # ========== JWT Authentication ==========
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
@@ -42,30 +77,11 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
     
-    # ========== Service Integration ==========
-    # NLP Service
-    NLP_SERVICE_URL: str = os.getenv("NLP_SERVICE_URL", "http://nlp:8001")
-    NLP_SERVICE_TIMEOUT: int = int(os.getenv("NLP_SERVICE_TIMEOUT", "30"))
-    NLP_BATCH_SIZE: int = int(os.getenv("NLP_BATCH_SIZE", "32"))
-    ENABLE_NLP_CACHE: bool = os.getenv("ENABLE_NLP_CACHE", "true").lower() == "true"
-    
-    # Vision Service
-    VISION_SERVICE_URL: str = os.getenv("VISION_SERVICE_URL", "http://vision:8002")
-    VISION_SERVICE_TIMEOUT: int = int(os.getenv("VISION_SERVICE_TIMEOUT", "60"))
-    VISION_BATCH_SIZE: int = int(os.getenv("VISION_BATCH_SIZE", "16"))
-    ENABLE_VISION_CACHE: bool = os.getenv("ENABLE_VISION_CACHE", "true").lower() == "true"
-    
-    # ========== Redis Configuration ==========
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://:LF_Redis_2025_Pass!@redis:6379/0")
-    REDIS_CACHE_TTL: int = int(os.getenv("REDIS_CACHE_TTL", "3600"))  # 1 hour
-    REDIS_MAX_CONNECTIONS: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "10"))
-    ENABLE_REDIS_CACHE: bool = os.getenv("ENABLE_REDIS_CACHE", "true").lower() == "true"
-    
     # ========== Media Storage ==========
     MEDIA_ROOT: str = os.getenv("MEDIA_ROOT", "/app/media")
     MEDIA_URL: str = os.getenv("MEDIA_URL", "/media")
     MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
-    MAX_FILE_SIZE: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # Convert MB to bytes
+    MAX_FILE_SIZE: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp"]
     STRIP_EXIF: bool = os.getenv("STRIP_EXIF", "true").lower() == "true"
     
@@ -78,22 +94,19 @@ class Config:
     MINIO_REGION: str = os.getenv("MINIO_REGION", "us-east-1")
     
     # ========== Matching Configuration ==========
-    # Match scoring weights (must sum to ~1.0)
     MATCH_WEIGHT_TEXT: float = float(os.getenv("MATCH_WEIGHT_TEXT", "0.45"))
     MATCH_WEIGHT_IMAGE: float = float(os.getenv("MATCH_WEIGHT_IMAGE", "0.35"))
     MATCH_WEIGHT_GEO: float = float(os.getenv("MATCH_WEIGHT_GEO", "0.15"))
     MATCH_WEIGHT_TIME: float = float(os.getenv("MATCH_WEIGHT_TIME", "0.05"))
     
-    # Match thresholds
     MATCH_MIN_SCORE: float = float(os.getenv("MATCH_MIN_SCORE", "0.65"))
     MATCH_TEXT_THRESHOLD: float = float(os.getenv("MATCH_TEXT_THRESHOLD", "0.70"))
     MATCH_IMAGE_THRESHOLD: float = float(os.getenv("MATCH_IMAGE_THRESHOLD", "0.75"))
     MATCH_GEO_RADIUS_KM: float = float(os.getenv("MATCH_GEO_RADIUS_KM", "5.0"))
     MATCH_TIME_WINDOW_DAYS: int = int(os.getenv("MATCH_TIME_WINDOW_DAYS", "30"))
     
-    # ANN search parameters
-    ANN_TOP_K: int = int(os.getenv("ANN_TOP_K", "50"))  # Initial candidates from text similarity
-    MATCH_MAX_RESULTS: int = int(os.getenv("MATCH_MAX_RESULTS", "20"))  # Final matches returned
+    ANN_TOP_K: int = int(os.getenv("ANN_TOP_K", "50"))
+    MATCH_MAX_RESULTS: int = int(os.getenv("MATCH_MAX_RESULTS", "20"))
     
     # ========== Pagination ==========
     DEFAULT_PAGE_SIZE: int = int(os.getenv("DEFAULT_PAGE_SIZE", "20"))
@@ -101,20 +114,19 @@ class Config:
     
     # ========== Rate Limiting ==========
     ENABLE_RATE_LIMIT: bool = os.getenv("ENABLE_RATE_LIMIT", "true").lower() == "true"
-    RATE_LIMIT_AUTH: str = os.getenv("RATE_LIMIT_AUTH", "5/minute")  # Login attempts
-    RATE_LIMIT_UPLOAD: str = os.getenv("RATE_LIMIT_UPLOAD", "10/minute")  # Media uploads
+    RATE_LIMIT_AUTH: str = os.getenv("RATE_LIMIT_AUTH", "5/minute")
+    RATE_LIMIT_UPLOAD: str = os.getenv("RATE_LIMIT_UPLOAD", "10/minute")
     RATE_LIMIT_CREATE_REPORT: str = os.getenv("RATE_LIMIT_CREATE_REPORT", "20/hour")
     RATE_LIMIT_SEARCH: str = os.getenv("RATE_LIMIT_SEARCH", "60/minute")
-    RATE_LIMIT_STORAGE: str = os.getenv("RATE_LIMIT_STORAGE", "redis")  # redis or memory
+    RATE_LIMIT_STORAGE: str = os.getenv("RATE_LIMIT_STORAGE", "redis")
     
     # ========== Security & CORS ==========
     CORS_ORIGINS: List[str] = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://admin:3000,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002"
+        "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://admin:3000,http://10.0.2.2:3000,http://10.0.2.2:8080,http://10.0.2.2:8000,http://10.0.2.2:8001,http://10.0.2.2:8002,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002"
     ).split(",")
     CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
     
-    # Security headers
     ENABLE_SECURITY_HEADERS: bool = os.getenv("ENABLE_SECURITY_HEADERS", "true").lower() == "true"
     
     # ========== Monitoring & Metrics ==========
@@ -127,7 +139,7 @@ class Config:
     ENABLE_ADMIN_PANEL: bool = os.getenv("ENABLE_ADMIN_PANEL", "true").lower() == "true"
     
     # ========== Localization ==========
-    SUPPORTED_LANGUAGES: List[str] = ["en", "si", "ta"]  # English, Sinhala, Tamil
+    SUPPORTED_LANGUAGES: List[str] = ["en", "si", "ta"]
     DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "en")
     
     # ========== Background Tasks ==========
@@ -139,12 +151,12 @@ class Config:
     ENABLE_AUDIT_LOG: bool = os.getenv("ENABLE_AUDIT_LOG", "true").lower() == "true"
     
     # ========== Timeouts ==========
-    REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
+    REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "15"))  # Reduced timeout
     BACKGROUND_TASK_TIMEOUT: int = int(os.getenv("BACKGROUND_TASK_TIMEOUT", "300"))
     
     @classmethod
     def validate(cls) -> bool:
-        """Validate configuration."""
+        """Validate optimized configuration."""
         errors = []
         
         # Validate database URL
@@ -192,7 +204,7 @@ class Config:
     
     @classmethod
     def summary(cls) -> dict:
-        """Return configuration summary (safe for logging)."""
+        """Return optimized configuration summary."""
         return {
             "environment": cls.ENVIRONMENT,
             "server": {
@@ -201,10 +213,31 @@ class Config:
                 "workers": cls.WORKERS,
                 "debug": cls.DEBUG,
             },
+            "database": {
+                "pool_size": cls.DB_POOL_SIZE,
+                "max_overflow": cls.DB_MAX_OVERFLOW,
+                "pool_timeout": cls.DB_POOL_TIMEOUT,
+                "pool_recycle": cls.DB_POOL_RECYCLE,
+            },
+            "redis": {
+                "enabled": cls.ENABLE_REDIS_CACHE,
+                "max_connections": cls.REDIS_MAX_CONNECTIONS,
+                "timeout": cls.REDIS_TIMEOUT,
+            },
             "services": {
                 "nlp": cls.NLP_SERVICE_URL,
                 "vision": cls.VISION_SERVICE_URL,
-                "redis": "enabled" if cls.ENABLE_REDIS_CACHE else "disabled",
+                "timeouts": {
+                    "nlp": cls.NLP_SERVICE_TIMEOUT,
+                    "vision": cls.VISION_SERVICE_TIMEOUT,
+                }
+            },
+            "performance": {
+                "compression": cls.ENABLE_COMPRESSION,
+                "async_processing": cls.ENABLE_ASYNC_PROCESSING,
+                "max_concurrent_requests": cls.MAX_CONCURRENT_REQUESTS,
+                "response_cache": cls.ENABLE_RESPONSE_CACHE,
+                "query_cache": cls.ENABLE_QUERY_CACHE,
             },
             "features": {
                 "metrics": cls.ENABLE_METRICS,
@@ -231,5 +264,8 @@ class Config:
         }
 
 
-# Global config instance
-config = Config()
+# Global optimized config instance
+optimized_config = OptimizedConfig()
+
+# Alias for backward compatibility
+config = optimized_config

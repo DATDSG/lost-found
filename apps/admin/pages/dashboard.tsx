@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { NextPage } from "next";
 import { useRouter } from "next/router";
 import {
@@ -22,31 +22,94 @@ const Dashboard: NextPage = () => {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  // Real-time update interval (in milliseconds)
+  const UPDATE_INTERVAL = 30000; // 30 seconds
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
-      const [statsData, activityData] = await Promise.all([
-        apiService.getDashboardData(),
-        apiService.getStatistics(),
-      ]);
 
-      setStats({
-        ...statsData,
-        recent_activity: activityData,
-      });
+      // Try to get dashboard stats first
+      const statsData = await apiService.getDashboardData();
+
+      // Try to get recent activity, but don't fail if it doesn't work
+      let activityData = { activity: [] };
+      try {
+        activityData = await apiService.getRecentActivity(10);
+      } catch (activityError) {
+        console.warn("Could not fetch recent activity:", activityError);
+        // Fallback to empty activity data
+        activityData = { activity: [] };
+      }
+
+      const dashboardStats = {
+        total_users: statsData.users?.total || 0,
+        active_users: statsData.users?.active || 0,
+        new_users_30d: statsData.users?.new_30d || 0,
+        total_reports: statsData.reports?.total || 0,
+        pending_reports: statsData.reports?.pending || 0,
+        approved_reports: statsData.reports?.approved || 0,
+        lost_reports: statsData.reports?.lost || 0,
+        found_reports: statsData.reports?.found || 0,
+        total_matches: statsData.matches?.total || 0,
+        promoted_matches: statsData.matches?.promoted || 0,
+        pending_matches:
+          statsData.matches?.total - statsData.matches?.promoted || 0,
+        fraud_detections: 0, // This would need to be implemented in the API
+        pending_fraud_reviews: 0, // This would need to be implemented in the API
+        recent_activity: activityData.activity || [],
+        generated_at: statsData.generated_at,
+      };
+
+      setStats(dashboardStats);
+      setLastUpdate(new Date());
     } catch (err) {
       setError("Failed to load dashboard data");
       console.error("Dashboard error:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchRecentActivity = useCallback(async () => {
+    try {
+      const activityData = await apiService.getRecentActivity(10);
+      setRecentActivity(activityData.activity || []);
+    } catch (err) {
+      console.warn("Failed to fetch recent activity:", err);
+      // Don't update state on error to keep existing data
+    }
+  }, []);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      await fetchDashboardData();
+      setLoading(false);
+    };
+
+    loadInitialData();
+  }, [fetchDashboardData]);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!isRealTimeEnabled) return;
+
+    const interval = setInterval(() => {
+      fetchDashboardData();
+      fetchRecentActivity();
+    }, UPDATE_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [isRealTimeEnabled, fetchDashboardData, fetchRecentActivity]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsRealTimeEnabled(false);
+    };
+  }, []);
 
   const handleQuickAction = (action: string) => {
     switch (action) {
@@ -74,6 +137,7 @@ const Dashboard: NextPage = () => {
     changeType,
     icon: Icon,
     color = "blue",
+    isRealTime = false,
   }: {
     title: string;
     value: number | string;
@@ -81,6 +145,7 @@ const Dashboard: NextPage = () => {
     changeType?: "increase" | "decrease";
     icon: React.ComponentType<{ className?: string }>;
     color?: string;
+    isRealTime?: boolean;
   }) => {
     const colorClasses = {
       blue: "bg-blue-500",
@@ -91,7 +156,15 @@ const Dashboard: NextPage = () => {
     };
 
     return (
-      <Card className="p-6">
+      <Card className="p-6 relative">
+        {isRealTime && (
+          <div className="absolute top-2 right-2">
+            <div
+              className="w-2 h-2 bg-green-500 rounded-full animate-pulse"
+              title="Real-time data"
+            ></div>
+          </div>
+        )}
         <div className="flex items-center">
           <div
             className={`p-3 rounded-md ${
@@ -220,11 +293,44 @@ const Dashboard: NextPage = () => {
     <AdminLayout title="Dashboard" description="Admin dashboard overview">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-gray-600">
-          Welcome to the Lost & Found admin panel. Here's an overview of your
-          system.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="mt-2 text-gray-600">
+              Welcome to the Lost & Found admin panel. Here's an overview of
+              your system.
+            </p>
+            {lastUpdate && (
+              <p className="mt-1 text-sm text-gray-500">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+                {isRealTimeEnabled && (
+                  <span className="ml-2 inline-flex items-center text-green-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
+                    Live updates
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isRealTimeEnabled
+                  ? "bg-green-100 text-green-800 hover:bg-green-200"
+                  : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              {isRealTimeEnabled ? "Disable" : "Enable"} Real-time
+            </button>
+            <button
+              onClick={fetchDashboardData}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              Refresh Now
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -236,6 +342,7 @@ const Dashboard: NextPage = () => {
           changeType="increase"
           icon={UserGroupIcon}
           color="blue"
+          isRealTime={true}
         />
         <StatCard
           title="Total Reports"
@@ -244,12 +351,14 @@ const Dashboard: NextPage = () => {
           changeType="increase"
           icon={DocumentTextIcon}
           color="green"
+          isRealTime={true}
         />
         <StatCard
           title="Pending Reports"
           value={stats?.pending_reports || 0}
           icon={ClockIcon}
           color="yellow"
+          isRealTime={true}
         />
         <StatCard
           title="Total Matches"
@@ -258,6 +367,7 @@ const Dashboard: NextPage = () => {
           changeType="increase"
           icon={ChartBarIcon}
           color="purple"
+          isRealTime={true}
         />
       </div>
 
@@ -268,18 +378,21 @@ const Dashboard: NextPage = () => {
           value={stats?.pending_matches || 0}
           icon={ClockIcon}
           color="yellow"
+          isRealTime={true}
         />
         <StatCard
           title="Fraud Detections"
           value={stats?.fraud_detections || 0}
           icon={ExclamationTriangleIcon}
           color="red"
+          isRealTime={true}
         />
         <StatCard
           title="Pending Fraud Reviews"
           value={stats?.pending_fraud_reviews || 0}
           icon={ExclamationTriangleIcon}
           color="red"
+          isRealTime={true}
         />
       </div>
 

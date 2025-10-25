@@ -36,7 +36,7 @@ class LostFoundApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'Lost & Found',
+      title: 'Lost Finder',
       debugShowCheckedModeBanner: false,
       theme: appThemeLight,
       darkTheme: appThemeLight, // Using light theme for both modes for now

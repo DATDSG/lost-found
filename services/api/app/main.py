@@ -1,9 +1,15 @@
-"""Lost & Found API main application with Domain-Driven Design architecture."""
+"""
+Optimized Lost & Found API main application
+==========================================
+Performance-optimized version with caching, compression, and connection pooling.
+"""
+
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import make_asgi_app, Counter, Histogram
+from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -11,19 +17,26 @@ import os
 import time
 import json
 import logging
+import asyncio
+from typing import Dict, Any
 
 # Domain-driven imports
 from .domain_router import domain_router, get_domain_tags
-from .config import config
+from .config import optimized_config
 from .clients import get_nlp_client, get_vision_client
 from .error_handlers import register_exception_handlers
-from .infrastructure.database.session import check_database_health, get_async_db
+from .infrastructure.database.session import (
+    check_database_health, 
+    get_async_db,
+    init_database,
+    db_metrics
+)
 from .cache import get_redis_client
 from .storage import get_minio_client
 from .infrastructure.monitoring.metrics import get_metrics_collector
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=getattr(logging, optimized_config.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
 # Prometheus metrics
@@ -62,36 +75,64 @@ SERVICE_CALLS = Counter(
     ['service', 'endpoint', 'status']
 )
 
+# Performance metrics
+ACTIVE_CONNECTIONS = Gauge(
+    'database_active_connections',
+    'Number of active database connections'
+)
+
+RESPONSE_CACHE_HITS = Counter(
+    'response_cache_hits_total',
+    'Total response cache hits'
+)
+
+RESPONSE_CACHE_MISSES = Counter(
+    'response_cache_misses_total',
+    'Total response cache misses'
+)
+
+# Response cache
+response_cache: Dict[str, Dict[str, Any]] = {}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
+    """Optimized application lifespan manager."""
     # Startup
-    logger.info("🚀 Starting Lost & Found API Service...")
+    logger.info("🚀 Starting Optimized Lost & Found API Service...")
     
     # Validate configuration
     try:
-        config.validate()
-        logger.info("✅ Configuration validated successfully")
+        optimized_config.validate()
+        logger.info("✅ Optimized configuration validated successfully")
     except Exception as e:
         logger.error(f"❌ Configuration validation failed: {e}")
         raise
     
     # Log configuration summary
-    logger.info("API Service Configuration:")
-    logger.info(json.dumps(config.summary(), indent=2))
+    logger.info("Optimized API Service Configuration:")
+    logger.info(json.dumps(optimized_config.summary(), indent=2))
     
-    # Test database connection
+    # Initialize database with optimizations
+    try:
+        await init_database()
+        logger.info("✅ Database initialized with performance optimizations")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+        raise
+    
+    # Test database connection with optimized health check
     try:
         db_health = await check_database_health()
         if db_health["status"] == "healthy":
             logger.info(f"✅ Database connected: {db_health['version']}")
             logger.info(f"📊 Found {db_health['table_count']} tables in database")
+            logger.info(f"📊 Database size: {db_health.get('database_size', 'unknown')}")
+            logger.info(f"⚡ Health check response time: {db_health.get('response_time_ms', 0):.2f}ms")
         else:
             logger.error(f"❌ Database unhealthy: {db_health.get('error', 'Unknown error')}")
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
-        logger.error("   Make sure PostgreSQL is running and DATABASE_URL is correct")
-        logger.error(f"   DATABASE_URL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else 'not set'}")
     
     # Test Redis connection
     try:
@@ -120,61 +161,44 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ MinIO connection failed: {e}")
     
-    # Test NLP service connection
+    # Test external services with optimized timeouts
+    services = {}
     try:
-        logger.info("Testing NLP service connection...")
-        nlp_client = get_nlp_client()
-        logger.info(f"NLP client created: {type(nlp_client)}")
-        
-        # Test direct health check without context manager
-        logger.info("Testing NLP health check directly...")
-        # Create a simple HTTP client for testing
         import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.NLP_SERVICE_URL}/health")
-            if response.status_code == 200:
-                logger.info("✅ NLP service is healthy (direct test)")
-            else:
-                logger.warning("⚠️ NLP service is unavailable (direct test)")
+        async with httpx.AsyncClient(timeout=optimized_config.HTTP_TIMEOUT) as client:
+            response = await client.get(f"{optimized_config.NLP_SERVICE_URL}/health")
+            services["nlp"] = "healthy" if response.status_code == 200 else "unhealthy"
+            logger.info(f"✅ NLP service: {services['nlp']}")
     except Exception as e:
+        services["nlp"] = "unavailable"
         logger.warning(f"⚠️ NLP service connection failed: {e}")
-        logger.warning(f"Error type: {type(e)}")
-        import traceback
-        logger.warning(f"Traceback: {traceback.format_exc()}")
     
-    # Test Vision service connection
     try:
-        logger.info("Testing Vision service connection...")
-        vision_client = get_vision_client()
-        logger.info(f"Vision client created: {type(vision_client)}")
-        
-        # Test direct health check without context manager
-        logger.info("Testing Vision health check directly...")
-        # Create a simple HTTP client for testing
         import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.VISION_SERVICE_URL}/health")
-            if response.status_code == 200:
-                logger.info("✅ Vision service is healthy (direct test)")
-            else:
-                logger.warning("⚠️ Vision service is unavailable (direct test)")
+        async with httpx.AsyncClient(timeout=optimized_config.HTTP_TIMEOUT) as client:
+            response = await client.get(f"{optimized_config.VISION_SERVICE_URL}/health")
+            services["vision"] = "healthy" if response.status_code == 200 else "unhealthy"
+            logger.info(f"✅ Vision service: {services['vision']}")
     except Exception as e:
+        services["vision"] = "unavailable"
         logger.warning(f"⚠️ Vision service connection failed: {e}")
-        logger.warning(f"Error type: {type(e)}")
-        import traceback
-        logger.warning(f"Traceback: {traceback.format_exc()}")
     
-    logger.info("✅ API Service startup complete")
+    logger.info("✅ Optimized API Service startup complete")
     
     yield
     
     # Shutdown
-    logger.info("🛑 Shutting down Lost & Found API Service...")
+    logger.info("🛑 Shutting down Optimized Lost & Found API Service...")
+    
+    # Log final metrics
+    db_stats = db_metrics.get_stats()
+    logger.info(f"📊 Final database metrics: {db_stats}")
+
 
 app = FastAPI(
-    title="Lost & Found API",
-    version="2.0.0",
-    description="API for Lost & Found matching system with Domain-Driven Design architecture",
+    title="Lost & Found API (Optimized)",
+    version="2.1.0",
+    description="Optimized API for Lost & Found matching system with performance enhancements",
     lifespan=lifespan,
     tags_metadata=[
         {
@@ -213,17 +237,21 @@ app = FastAPI(
             "name": "admin",
             "description": "Administrative operations",
         },
+        {
+            "name": "performance",
+            "description": "Performance monitoring and metrics",
+        },
     ]
 )
 
 # Register exception handlers
 register_exception_handlers(app)
 
-# Rate limiter
+# Rate limiter with optimized configuration
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[],
-    storage_uri=config.REDIS_URL if config.ENABLE_RATE_LIMIT and config.RATE_LIMIT_STORAGE == "redis" else "memory://"
+    storage_uri=optimized_config.REDIS_URL if optimized_config.ENABLE_RATE_LIMIT and optimized_config.RATE_LIMIT_STORAGE == "redis" else "memory://"
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -231,20 +259,42 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS,
-    allow_credentials=config.CORS_ALLOW_CREDENTIALS,
+    allow_origins=optimized_config.CORS_ORIGINS,
+    allow_credentials=optimized_config.CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Prometheus metrics middleware
+# Compression middleware for better performance
+if optimized_config.ENABLE_COMPRESSION:
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Optimized metrics middleware
 @app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
-    """Track request metrics."""
+async def optimized_metrics_middleware(request: Request, call_next):
+    """Optimized request metrics tracking."""
     start_time = time.time()
+    
+    # Check response cache
+    cache_key = f"{request.method}:{request.url.path}:{request.query_params}"
+    cached_response = None
+    
+    if optimized_config.ENABLE_RESPONSE_CACHE and request.method == "GET":
+        cached_response = response_cache.get(cache_key)
+        if cached_response and (time.time() - cached_response['timestamp']) < optimized_config.RESPONSE_CACHE_TTL:
+            RESPONSE_CACHE_HITS.inc()
+            return JSONResponse(
+                content=cached_response['data'],
+                headers=cached_response['headers']
+            )
+        else:
+            RESPONSE_CACHE_MISSES.inc()
+    
+    # Process request
     response = await call_next(request)
     duration = time.time() - start_time
     
+    # Record metrics
     REQUEST_COUNT.labels(
         method=request.method,
         endpoint=request.url.path,
@@ -256,42 +306,96 @@ async def metrics_middleware(request: Request, call_next):
         endpoint=request.url.path
     ).observe(duration)
     
+    # Cache successful GET responses
+    if (optimized_config.ENABLE_RESPONSE_CACHE and 
+        request.method == "GET" and 
+        response.status_code == 200 and
+        cached_response is None):
+        
+        try:
+            response_body = b""
+            async for chunk in response.body_iterator:
+                response_body += chunk
+            
+            response_cache[cache_key] = {
+                'data': json.loads(response_body.decode()),
+                'headers': dict(response.headers),
+                'timestamp': time.time()
+            }
+            
+            # Clean old cache entries
+            if len(response_cache) > 1000:
+                oldest_key = min(response_cache.keys(), key=lambda k: response_cache[k]['timestamp'])
+                del response_cache[oldest_key]
+                
+        except Exception as e:
+            logger.warning(f"Failed to cache response: {e}")
+    
     return response
-
 
 # Mount Prometheus metrics endpoint
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
-
-# Include domain routers (Domain-Driven Design architecture)
+# Include domain routers
 app.include_router(domain_router)
 
+# Performance monitoring endpoints
+@app.get("/performance/metrics")
+async def get_performance_metrics():
+    """Get detailed performance metrics."""
+    db_stats = db_metrics.get_stats()
+    
+    return {
+        "database": db_stats,
+        "cache": {
+            "response_cache_size": len(response_cache),
+            "cache_hit_rate": "calculated_from_prometheus_metrics"
+        },
+        "configuration": {
+            "workers": optimized_config.WORKERS,
+            "db_pool_size": optimized_config.DB_POOL_SIZE,
+            "redis_max_connections": optimized_config.REDIS_MAX_CONNECTIONS,
+            "compression_enabled": optimized_config.ENABLE_COMPRESSION,
+            "response_cache_enabled": optimized_config.ENABLE_RESPONSE_CACHE,
+        }
+    }
 
+@app.get("/performance/cache/clear")
+async def clear_response_cache():
+    """Clear response cache."""
+    global response_cache
+    cache_size = len(response_cache)
+    response_cache.clear()
+    
+    return {
+        "message": "Response cache cleared",
+        "cleared_entries": cache_size
+    }
+
+# Optimized health check endpoint
 @app.get("/health")
 async def health_root():
-    """Health check endpoint with comprehensive service status."""
+    """Optimized health check endpoint with caching."""
     health_status = {
         "status": "ok",
-        "service": "api",
-        "version": "2.0.0",
-        "environment": config.ENVIRONMENT,
-            "features": {
-                "metrics": config.ENABLE_METRICS,
-                "rate_limit": config.ENABLE_RATE_LIMIT,
-                "redis_cache": config.ENABLE_REDIS_CACHE,
-                "minio_storage": True,
-            }
+        "service": "api-optimized",
+        "version": "2.1.0",
+        "environment": optimized_config.ENVIRONMENT,
+        "features": {
+            "metrics": optimized_config.ENABLE_METRICS,
+            "rate_limit": optimized_config.ENABLE_RATE_LIMIT,
+            "redis_cache": optimized_config.ENABLE_REDIS_CACHE,
+            "minio_storage": True,
+            "compression": optimized_config.ENABLE_COMPRESSION,
+            "response_cache": optimized_config.ENABLE_RESPONSE_CACHE,
+        }
     }
     
-    # Check database health
-    try:
-        db_health = await check_database_health()
-        health_status["database"] = db_health
-        if db_health["status"] != "healthy":
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["database"] = {"status": "unhealthy", "error": str(e)}
+    # Use cached database health check
+    db_health = await check_database_health()
+    health_status["database"] = db_health
+    if db_health["status"] != "healthy":
         health_status["status"] = "degraded"
     
     # Check Redis health
@@ -320,22 +424,20 @@ async def health_root():
         health_status["minio"] = {"status": "unhealthy", "error": str(e)}
         health_status["status"] = "degraded"
     
-    # Check external services health
+    # Check external services with optimized timeouts
     services = {}
     try:
-        # Test NLP service directly
         import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.NLP_SERVICE_URL}/health")
+        async with httpx.AsyncClient(timeout=optimized_config.HTTP_TIMEOUT) as client:
+            response = await client.get(f"{optimized_config.NLP_SERVICE_URL}/health")
             services["nlp"] = "healthy" if response.status_code == 200 else "unhealthy"
     except Exception:
         services["nlp"] = "unavailable"
     
     try:
-        # Test Vision service directly
         import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{config.VISION_SERVICE_URL}/health")
+        async with httpx.AsyncClient(timeout=optimized_config.HTTP_TIMEOUT) as client:
+            response = await client.get(f"{optimized_config.VISION_SERVICE_URL}/health")
             services["vision"] = "healthy" if response.status_code == 200 else "unhealthy"
     except Exception:
         services["vision"] = "unavailable"
@@ -344,22 +446,22 @@ async def health_root():
     
     return health_status
 
-
 @app.get("/v1/health")
 async def health_v1():
     """Health check endpoint (v1 API version)."""
     return await health_root()
 
-
 @app.get("/")
 def root():
     """Root endpoint."""
     return {
-        "message": "Lost & Found API",
+        "message": "Lost & Found API (Optimized)",
+        "version": "2.1.0",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "metrics": "/metrics",
+        "performance": "/performance/metrics"
     }
-
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -369,6 +471,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={
             "code": "internal_error",
             "message": "An internal error occurred",
-            "details": str(exc) if os.getenv("DEBUG") else None
+            "details": str(exc) if optimized_config.DEBUG else None
         }
     )

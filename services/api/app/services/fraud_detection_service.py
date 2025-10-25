@@ -21,15 +21,9 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import hashlib
 
+from ..models import FraudRiskLevel
+
 logger = logging.getLogger(__name__)
-
-
-class FraudRiskLevel(str, Enum):
-    """Fraud risk levels."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 @dataclass

@@ -786,32 +786,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Icon(icon, color: color, size: 20),
             ),
             if (trend != null) ...[
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: DT.s.xs,
-                  vertical: DT.s.xs / 2,
-                ),
-                decoration: BoxDecoration(
-                  color: _getTrendColor(trendIndicator).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(DT.r.xs),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _getTrendIcon(trendIndicator),
-                      size: 12,
-                      color: _getTrendColor(trendIndicator),
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      trend,
-                      style: DT.t.labelSmall.copyWith(
+              Flexible(
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: DT.s.xs,
+                    vertical: DT.s.xs / 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getTrendColor(
+                      trendIndicator,
+                    ).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(DT.r.xs),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getTrendIcon(trendIndicator),
+                        size: 12,
                         color: _getTrendColor(trendIndicator),
-                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 2),
+                      Flexible(
+                        child: Text(
+                          trend,
+                          style: DT.t.labelSmall.copyWith(
+                            color: _getTrendColor(trendIndicator),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

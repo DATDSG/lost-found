@@ -43,14 +43,25 @@ async def lost_found_exception_handler(request: Request, exc: LostFoundException
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """Handle FastAPI HTTP exceptions."""
-    logger.warning(
-        f"HTTPException: {exc.detail}",
-        extra={
-            "status_code": exc.status_code,
-            "path": request.url.path,
-            "method": request.method,
-        }
-    )
+    # Use debug level for authentication failures to reduce log noise
+    if exc.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]:
+        logger.debug(
+            f"Authentication/Authorization required: {exc.detail}",
+            extra={
+                "status_code": exc.status_code,
+                "path": request.url.path,
+                "method": request.method,
+            }
+        )
+    else:
+        logger.warning(
+            f"HTTPException: {exc.detail}",
+            extra={
+                "status_code": exc.status_code,
+                "path": request.url.path,
+                "method": request.method,
+            }
+        )
     
     return JSONResponse(
         status_code=exc.status_code,

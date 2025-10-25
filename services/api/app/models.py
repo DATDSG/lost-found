@@ -49,7 +49,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    reports = relationship("Report", back_populates="owner", foreign_keys="Report.owner_id")
+    reports = relationship("Report", foreign_keys="Report.owner_id")
     
     def __repr__(self):
         return f"<User(id='{self.id}', email='{self.email}', role='{self.role}')>"
@@ -118,7 +118,7 @@ class FraudDetectionResult(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    report = relationship("Report", back_populates="fraud_detection_results")
+    report = relationship("Report", foreign_keys=[report_id])
     
     def __repr__(self):
         return f"<FraudDetectionResult(id='{self.id}', report_id='{self.report_id}', risk_level='{self.risk_level}')>"
@@ -182,7 +182,7 @@ class FraudDetectionLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    report = relationship("Report")
+    report = relationship("Report", foreign_keys=[report_id])
     
     def __repr__(self):
         return f"<FraudDetectionLog(id='{self.id}', report_id='{self.report_id}', analysis_type='{self.analysis_type}')>"

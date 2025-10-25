@@ -256,7 +256,6 @@ class PrivacySettings(BaseModel):
     show_phone: bool = True
     allow_messages: bool = True
     show_location: bool = True
-    allow_notifications: bool = True
     data_sharing: bool = False
     
     class Config:
@@ -387,19 +386,13 @@ class UserPreferences(BaseModel):
     language: str = Field("en", pattern="^[a-z]{2}$")
     timezone: str = Field("UTC", max_length=50)
     theme: str = Field("light", pattern="^(light|dark|auto)$")
-    notifications: Dict[str, bool] = Field(default_factory=dict)
     
     class Config:
         json_schema_extra = {
             "example": {
                 "language": "en",
                 "timezone": "UTC",
-                "theme": "light",
-                "notifications": {
-                    "email": True,
-                    "push": True,
-                    "sms": False
-                }
+                "theme": "light"
             }
         }
 

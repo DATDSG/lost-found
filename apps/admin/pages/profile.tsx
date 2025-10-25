@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import AdminLayout from "../components/AdminLayout";
+import { apiService } from "../services/api";
 import {
   UserIcon,
   ArrowLeftIcon,
@@ -28,17 +29,57 @@ import {
 const ProfilePage: React.FC = () => {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [userStats, setUserStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showSensitiveData, setShowSensitiveData] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
-    // Get user info from localStorage
-    const userData = localStorage.getItem("admin_user");
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    setLoading(false);
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get current user info
+        const userData = await apiService.getCurrentUser();
+        setUser(userData);
+
+        // Get user statistics if user ID is available
+        if (userData?.id) {
+          try {
+            const statsData = await apiService.getUserStats(userData.id);
+            setUserStats(statsData);
+          } catch (statsError) {
+            console.warn("Could not fetch user statistics:", statsError);
+            // Set default stats if API call fails
+            setUserStats({
+              reports: 0,
+              matches: 0,
+              successful_matches: 0,
+            });
+          }
+        }
+      } catch (err) {
+        setError("Failed to load user profile data");
+        console.error("Profile error:", err);
+
+        // Fallback to localStorage data if API fails
+        const localUserData = localStorage.getItem("admin_user");
+        if (localUserData) {
+          setUser(JSON.parse(localUserData));
+          setUserStats({
+            reports: 0,
+            matches: 0,
+            successful_matches: 0,
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
   }, []);
 
   const tabs = [
@@ -79,6 +120,28 @@ const ProfilePage: React.FC = () => {
       <AdminLayout title="Profile">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (error && !user) {
+    return (
+      <AdminLayout title="Profile">
+        <div className="text-center py-12">
+          <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">
+            Error loading profile
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">{error}</p>
+          <div className="mt-6">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Try again
+            </button>
+          </div>
         </div>
       </AdminLayout>
     );
@@ -140,7 +203,7 @@ const ProfilePage: React.FC = () => {
 
               <div className="text-white flex-1">
                 <h2 className="text-3xl font-bold mb-2">
-                  {user?.name || "Admin User"}
+                  {user?.display_name || user?.name || "Admin User"}
                 </h2>
                 <p className="text-blue-100 text-lg mb-3">
                   {user?.email || "admin@example.com"}
@@ -150,9 +213,15 @@ const ProfilePage: React.FC = () => {
                     <ShieldCheckIcon className="h-4 w-4 mr-1" />
                     {user?.role || "Administrator"}
                   </span>
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/20 text-green-100 backdrop-blur-sm">
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium backdrop-blur-sm ${
+                      user?.is_active
+                        ? "bg-green-500/20 text-green-100"
+                        : "bg-red-500/20 text-red-100"
+                    }`}
+                  >
                     <CheckCircleIcon className="h-4 w-4 mr-1" />
-                    Active
+                    {user?.is_active ? "Active" : "Inactive"}
                   </span>
                 </div>
               </div>
@@ -207,7 +276,7 @@ const ProfilePage: React.FC = () => {
                               Full Name
                             </label>
                             <p className="text-sm text-gray-900 font-medium">
-                              {user?.name || "Admin User"}
+                              {user?.display_name || user?.name || "Admin User"}
                             </p>
                           </div>
                         </div>
@@ -300,7 +369,9 @@ const ProfilePage: React.FC = () => {
                           </div>
                         </div>
                         <span className="text-2xl font-bold text-blue-600">
-                          {user?.reports_count || 0}
+                          {userStats?.statistics?.reports ||
+                            user?.reports_count ||
+                            0}
                         </span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
@@ -314,7 +385,9 @@ const ProfilePage: React.FC = () => {
                           </div>
                         </div>
                         <span className="text-2xl font-bold text-green-600">
-                          {user?.matches_count || 0}
+                          {userStats?.statistics?.matches ||
+                            user?.matches_count ||
+                            0}
                         </span>
                       </div>
                       <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
@@ -328,7 +401,9 @@ const ProfilePage: React.FC = () => {
                           </div>
                         </div>
                         <span className="text-2xl font-bold text-purple-600">
-                          {user?.successful_matches || 0}
+                          {userStats?.statistics?.successful_matches ||
+                            user?.successful_matches ||
+                            0}
                         </span>
                       </div>
                     </div>
@@ -352,21 +427,27 @@ const ProfilePage: React.FC = () => {
                   <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
                     <DocumentTextIcon className="h-12 w-12 text-blue-600 mx-auto mb-3" />
                     <p className="text-3xl font-bold text-blue-600 mb-1">
-                      {user?.reports_count || 0}
+                      {userStats?.statistics?.reports ||
+                        user?.reports_count ||
+                        0}
                     </p>
                     <p className="text-sm text-gray-600">Total Reports</p>
                   </div>
                   <div className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl">
                     <CheckCircleIcon className="h-12 w-12 text-green-600 mx-auto mb-3" />
                     <p className="text-3xl font-bold text-green-600 mb-1">
-                      {user?.matches_count || 0}
+                      {userStats?.statistics?.matches ||
+                        user?.matches_count ||
+                        0}
                     </p>
                     <p className="text-sm text-gray-600">Matches Found</p>
                   </div>
                   <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl">
                     <ChartBarIcon className="h-12 w-12 text-purple-600 mx-auto mb-3" />
                     <p className="text-3xl font-bold text-purple-600 mb-1">
-                      {user?.successful_matches || 0}
+                      {userStats?.statistics?.successful_matches ||
+                        user?.successful_matches ||
+                        0}
                     </p>
                     <p className="text-sm text-gray-600">Successful</p>
                   </div>
@@ -526,37 +607,6 @@ const ProfilePage: React.FC = () => {
                           aria-label="Toggle compact view"
                         >
                           <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-6" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-4">
-                      Notification Settings
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-700">
-                          Email Notifications
-                        </span>
-                        <button
-                          className="relative inline-flex h-6 w-11 items-center rounded-full bg-blue-600 transition-colors duration-200"
-                          title="Toggle email notifications"
-                          aria-label="Toggle email notifications"
-                        >
-                          <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-6" />
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-700">
-                          Push Notifications
-                        </span>
-                        <button
-                          className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 transition-colors duration-200"
-                          title="Toggle push notifications"
-                          aria-label="Toggle push notifications"
-                        >
-                          <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-1" />
                         </button>
                       </div>
                     </div>

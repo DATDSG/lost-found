@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { NextPage } from "next";
 import {
   ChartBarIcon,
@@ -30,14 +30,14 @@ const Matching: NextPage = () => {
   const [filters, setFilters] = useState<MatchFilters>({});
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-  }, [filters]);
+  // Real-time update interval (in milliseconds)
+  const UPDATE_INTERVAL = 30000; // 30 seconds
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       const [matchesResponse, statsResponse] = await Promise.all([
         apiService.getMatches(filters),
@@ -64,17 +64,44 @@ const Matching: NextPage = () => {
 
       setMatches(safeMatches);
       setStats(statsResponse);
+      setLastUpdate(new Date());
     } catch (err) {
       setError("Failed to fetch matching data");
       console.error("Matching error:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      await fetchData();
+      setLoading(false);
+    };
+
+    loadInitialData();
+  }, [fetchData]);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!isRealTimeEnabled) return;
+
+    const interval = setInterval(() => {
+      fetchData();
+    }, UPDATE_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [isRealTimeEnabled, fetchData]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsRealTimeEnabled(false);
+    };
+  }, []);
 
   const updateMatchStatus = async (matchId: string, status: string) => {
     try {
-      await apiService.updateReport(matchId, { status });
+      await apiService.updateMatch(matchId, { status });
       fetchData(); // Refresh data
     } catch (err) {
       console.error("Status update error:", err);
@@ -130,12 +157,43 @@ const Matching: NextPage = () => {
     >
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Matching Management
-        </h1>
-        <p className="mt-2 text-gray-600">
-          Review and manage matching results between reports
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Matching Management
+            </h1>
+            <p className="mt-2 text-gray-600">
+              Review and manage matching results between reports
+            </p>
+            {lastUpdate && (
+              <p className="mt-1 text-sm text-gray-500">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+                {isRealTimeEnabled && (
+                  <span className="ml-2 inline-flex items-center text-green-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
+                    Live updates
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isRealTimeEnabled
+                  ? "bg-green-100 text-green-800 hover:bg-green-200"
+                  : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              {isRealTimeEnabled ? "Disable" : "Enable"} Real-time
+            </button>
+            <Button onClick={fetchData} variant="secondary">
+              <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+        </div>
       </div>
 
       {error && (

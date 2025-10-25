@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { NextPage } from "next";
 import {
   UserGroupIcon,
@@ -45,29 +45,56 @@ const Users: NextPage = () => {
     role: "user",
     phone_number: "",
   });
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-  }, [filters]);
+  // Real-time update interval (in milliseconds)
+  const UPDATE_INTERVAL = 30000; // 30 seconds
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       const [usersResponse, statsResponse] = await Promise.all([
         apiService.getUsers(filters),
-        apiService.getStatistics(),
+        apiService.getUsersStats(),
       ]);
 
-      setUsers(usersResponse.items);
+      setUsers(usersResponse.items || usersResponse.data || []);
       setStats(statsResponse);
+      setLastUpdate(new Date());
     } catch (err) {
       setError("Failed to fetch users data");
       console.error("Users error:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      await fetchData();
+      setLoading(false);
+    };
+
+    loadInitialData();
+  }, [fetchData]);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!isRealTimeEnabled) return;
+
+    const interval = setInterval(() => {
+      fetchData();
+    }, UPDATE_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [isRealTimeEnabled, fetchData]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsRealTimeEnabled(false);
+    };
+  }, []);
 
   const updateUserStatus = async (userId: string, isActive: boolean) => {
     try {
@@ -201,10 +228,45 @@ const Users: NextPage = () => {
     >
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Users Management</h1>
-        <p className="mt-2 text-gray-600">
-          Manage system users and their permissions
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Users Management
+            </h1>
+            <p className="mt-2 text-gray-600">
+              Manage system users and their permissions
+            </p>
+            {lastUpdate && (
+              <p className="mt-1 text-sm text-gray-500">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+                {isRealTimeEnabled && (
+                  <span className="ml-2 inline-flex items-center text-green-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
+                    Live updates
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isRealTimeEnabled
+                  ? "bg-green-100 text-green-800 hover:bg-green-200"
+                  : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              {isRealTimeEnabled ? "Disable" : "Enable"} Real-time
+            </button>
+            <button
+              onClick={fetchData}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              Refresh Now
+            </button>
+          </div>
+        </div>
       </div>
 
       {error && (

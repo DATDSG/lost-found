@@ -75,10 +75,10 @@ class EnhancedMatchingService:
         logger.info(f"Finding matches for report {report_id}: {source_report.title}")
         
         # Get candidate reports (opposite type, active status)
-        candidate_type = "found" if source_report.report_type == "lost" else "lost"
+        candidate_type = "found" if source_report.type == "lost" else "lost"
         candidate_reports = db.query(Report).filter(
             and_(
-                Report.report_type == candidate_type,
+                Report.type == candidate_type,
                 Report.status == "active",
                 Report.id != report_id
             )
@@ -376,7 +376,7 @@ class EnhancedMatchingService:
             for i, match in enumerate(matches):
                 db_match = Match(
                     source_report_id=report_id,
-                    target_report_id=match["candidate_report_id"],
+                    candidate_report_id=match["candidate_report_id"],
                     similarity_score=match["scores"]["combined_score"],
                     text_similarity=match["scores"]["text_similarity"],
                     image_similarity=match["scores"]["image_similarity"],
@@ -425,7 +425,7 @@ class EnhancedMatchingService:
             base_query = db.query(Report).filter(Report.status == "active")
             
             if report_type:
-                base_query = base_query.filter(Report.report_type == report_type)
+                base_query = base_query.filter(Report.type == report_type)
             
             if category:
                 base_query = base_query.filter(Report.category == category)
@@ -493,7 +493,7 @@ class EnhancedMatchingService:
                         "report_id": report.id,
                         "title": report.title,
                         "description": report.description,
-                        "report_type": report.report_type,
+                        "report_type": report.type,
                         "category": report.category,
                         "location": {
                             "latitude": report.latitude,

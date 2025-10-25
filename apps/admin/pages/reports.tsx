@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { NextPage } from "next";
 import {
   DocumentTextIcon,
@@ -45,6 +45,7 @@ import { apiService } from "../services/api";
 
 const Reports: NextPage = () => {
   const [reports, setReports] = useState<Report[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
@@ -56,6 +57,11 @@ const Reports: NextPage = () => {
   const [filters, setFilters] = useState<ReportFilters>({});
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<string>("");
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
+
+  // Real-time update interval (in milliseconds)
+  const UPDATE_INTERVAL = 30000; // 30 seconds
 
   // Modal states
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
@@ -71,32 +77,59 @@ const Reports: NextPage = () => {
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [loadingFraud, setLoadingFraud] = useState(false);
 
-  useEffect(() => {
-    fetchReports();
-  }, [filters, pagination.page]);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
-      const response: PaginatedResponse<Report> = await apiService.getReports({
-        ...filters,
-        page: pagination.page,
-        limit: pagination.limit,
-      });
-      setReports(response.items);
+      const [reportsResponse, statsResponse] = await Promise.all([
+        apiService.getReports({
+          ...filters,
+          page: pagination.page,
+          limit: pagination.limit,
+        }),
+        apiService.getStatistics(),
+      ]);
+
+      setReports(reportsResponse.items || reportsResponse.data || []);
+      setStats(statsResponse);
       setPagination((prev) => ({
         ...prev,
-        total: response.total,
-        totalPages: response.total_pages,
+        total: reportsResponse.total,
+        totalPages: reportsResponse.total_pages,
       }));
+      setLastUpdate(new Date());
     } catch (err) {
       setError("Failed to load reports");
       console.error("Reports error:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [filters, pagination.page, pagination.limit]);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      await fetchReports();
+      setLoading(false);
+    };
+
+    loadInitialData();
+  }, [fetchReports]);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!isRealTimeEnabled) return;
+
+    const interval = setInterval(() => {
+      fetchReports();
+    }, UPDATE_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [isRealTimeEnabled, fetchReports]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      setIsRealTimeEnabled(false);
+    };
+  }, []);
 
   // Modal handlers
   const handleViewReport = async (report: Report) => {
@@ -147,7 +180,7 @@ const Reports: NextPage = () => {
     if (!reportToDelete) return;
 
     try {
-      await apiService.deleteReport(reportToDelete);
+      await apiService.deleteReport(reportToDelete, "Deleted by admin");
       setShowDeleteModal(false);
       setReportToDelete(null);
       fetchReports();
@@ -167,7 +200,10 @@ const Reports: NextPage = () => {
     try {
       await Promise.all(
         selectedReports.map((reportId) =>
-          apiService.updateReport(reportId, { status: bulkAction })
+          apiService.updateReport(reportId, {
+            status: bulkAction,
+            admin_notes: `Bulk action: ${bulkAction}`,
+          })
         )
       );
       setSelectedReports([]);
@@ -180,7 +216,10 @@ const Reports: NextPage = () => {
 
   const handleReportStatusUpdate = async (reportId: string, status: string) => {
     try {
-      await apiService.updateReport(reportId, { status });
+      await apiService.updateReport(reportId, {
+        status,
+        admin_notes: `Status changed to ${status}`,
+      });
       fetchReports();
     } catch (err) {
       console.error("Status update error:", err);
@@ -292,9 +331,30 @@ const Reports: NextPage = () => {
             <p className="mt-2 text-gray-600">
               Review, approve, and manage all submitted reports
             </p>
+            {lastUpdate && (
+              <p className="mt-1 text-sm text-gray-500">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+                {isRealTimeEnabled && (
+                  <span className="ml-2 inline-flex items-center text-green-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
+                    Live updates
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <div className="flex items-center space-x-3">
             <Badge variant="info">{pagination.total} total reports</Badge>
+            <button
+              onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isRealTimeEnabled
+                  ? "bg-green-100 text-green-800 hover:bg-green-200"
+                  : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              {isRealTimeEnabled ? "Disable" : "Enable"} Real-time
+            </button>
             <Button onClick={fetchReports} variant="secondary">
               <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
               Refresh

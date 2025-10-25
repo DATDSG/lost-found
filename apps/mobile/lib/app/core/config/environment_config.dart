@@ -37,18 +37,23 @@ class EnvironmentConfig {
   }
 
   /// Get development URL dynamically
-  static String _getDevelopmentUrl() {
-    // Try different common development URLs
-    // 10.0.2.2 is Android emulator's host machine
-    // localhost works for iOS simulator and physical devices on same network
-    // 172.104.40.189 is the server address
-    const localUrl = 'http://10.0.2.2:8000';
-    const serverUrl = 'http://172.104.40.189:8000';
+  static String _getDevelopmentUrl() => emulatorUrl;
 
-    // For now, return server URL as primary, with local as fallback
-    // This can be made configurable via environment variables or settings
-    return serverUrl;
-  }
+  /// Get alternative development URLs
+  static Map<String, String> get developmentUrls => {
+    'emulator': 'http://10.0.2.2:8000',
+    'server': 'http://172.104.40.189:8000',
+    'localhost': 'http://localhost:8000',
+  };
+
+  /// Get server URL specifically
+  static String get serverUrl => 'http://172.104.40.189:8000';
+
+  /// Get emulator URL specifically
+  static String get emulatorUrl => 'http://10.0.2.2:8000';
+
+  /// Get localhost URL specifically
+  static String get localhostUrl => 'http://localhost:8000';
 
   /// Get API timeout for current environment
   static Duration get apiTimeout {
@@ -90,6 +95,10 @@ class EnvironmentConfig {
   static Map<String, dynamic> get config => {
     'environment': currentEnvironment.name,
     'baseUrl': baseUrl,
+    'serverUrl': serverUrl,
+    'emulatorUrl': emulatorUrl,
+    'localhostUrl': localhostUrl,
+    'developmentUrls': developmentUrls,
     'apiTimeout': apiTimeout.inSeconds,
     'enableDebugLogging': enableDebugLogging,
     'cacheTimeout': cacheTimeout.inMinutes,

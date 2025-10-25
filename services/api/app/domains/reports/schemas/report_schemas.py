@@ -107,6 +107,10 @@ class ReportResponse(ReportBase):
     def convert_uuid_to_string(cls, v):
         return str(v) if v is not None else v
     
+    @validator('id', pre=True)
+    def convert_id_uuid_to_string(cls, v):
+        return str(v) if v is not None else v
+    
     @validator('is_urgent', pre=True)
     def convert_none_to_false(cls, v):
         return v if v is not None else False
@@ -126,6 +130,10 @@ class ReportSummary(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+    
+    @validator('id', pre=True)
+    def convert_id_uuid_to_string(cls, v):
+        return str(v) if v is not None else v
 
 
 class ReportSearchRequest(BaseModel):

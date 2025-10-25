@@ -50,6 +50,7 @@ def _serialize_report_summary(report: Report, owner: Optional[User]) -> Dict:
         "occurred_at": report.occurred_at.isoformat() if report.occurred_at else None,
         "occurred_time": report.occurred_time,
         "created_at": report.created_at.isoformat() if report.created_at else None,
+        "images": report.images or [],
         "owner": {
             "id": str(owner.id) if owner else None,
             "email": owner.email if owner else None,
@@ -86,6 +87,7 @@ def _serialize_report_detail(report: Report) -> Dict:
         "is_resolved": report.is_resolved,
         "moderation_notes": report.moderation_notes,
         "owner_id": str(report.owner_id),
+        "images": report.images or [],
     }
 
 
@@ -231,9 +233,8 @@ async def get_report_detail(
             "email": report.owner.email,
             "display_name": report.owner.display_name,
         }
-    # Add images if they exist
-    if report.images:
-        payload["images"] = report.images
+    # Always include images field (empty array if no images)
+    payload["images"] = report.images or []
     return payload
 
 

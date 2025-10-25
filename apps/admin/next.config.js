@@ -4,7 +4,7 @@ const nextConfig = {
   swcMinify: true,
   output: "standalone",
 
-  // Environment variables
+  // Environment variables - Multi-network support
   env: {
     NEXT_PUBLIC_API_URL:
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
@@ -15,11 +15,13 @@ const nextConfig = {
     NEXT_PUBLIC_DEBUG_MODE: process.env.NEXT_PUBLIC_DEBUG_MODE || "false",
     NEXT_PUBLIC_SERVER_URL:
       process.env.NEXT_PUBLIC_SERVER_URL || "http://172.104.40.189:8000",
+    NEXT_PUBLIC_EMULATOR_URL:
+      process.env.NEXT_PUBLIC_EMULATOR_URL || "http://10.0.2.2:8000",
   },
 
-  // Image optimization
+  // Image optimization - Multi-network support
   images: {
-    domains: ["localhost", "127.0.0.1", "172.104.40.189"],
+    domains: ["localhost", "127.0.0.1", "10.0.2.2", "172.104.40.189"],
     formats: ["image/webp", "image/avif"],
   },
 

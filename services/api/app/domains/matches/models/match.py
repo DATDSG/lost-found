@@ -59,8 +59,8 @@ class Match(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Domain Relationships
-    source_report = relationship("Report", back_populates="source_matches", foreign_keys=[source_report_id])
-    candidate_report = relationship("Report", back_populates="candidate_matches", foreign_keys=[candidate_report_id])
+    source_report = relationship("Report", foreign_keys=[source_report_id])
+    candidate_report = relationship("Report", foreign_keys=[candidate_report_id])
     
     def __repr__(self):
         return f"<Match(id='{self.id}', score={self.score_total}, status='{self.status}')>"

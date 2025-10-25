@@ -69,12 +69,11 @@ async def get_current_admin_dev(
             # Create test admin user
             from .auth import get_password_hash
             user = User(
-                id="test-admin-123",
                 email="admin@example.com",
                 display_name="Admin User",
                 role="admin",
                 is_active=True,
-                hashed_password=get_password_hash("Admin123")
+                password=get_password_hash("Admin123")
             )
             db.add(user)
             await db.commit()

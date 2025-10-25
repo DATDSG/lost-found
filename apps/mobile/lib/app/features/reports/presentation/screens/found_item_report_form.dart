@@ -1088,6 +1088,14 @@ class _FoundItemReportFormState extends ConsumerState<FoundItemReportForm>
       print('Form key current state: ${_formKey.currentState}');
     }
 
+    // Prevent duplicate submissions
+    if (_isSubmitting) {
+      if (kDebugMode) {
+        print('Already submitting, ignoring duplicate request');
+      }
+      return;
+    }
+
     if (_formKey.currentState!.validate()) {
       if (kDebugMode) {
         print('Form validation passed');

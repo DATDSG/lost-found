@@ -107,10 +107,8 @@ final isLoadingProvider = StateProvider<bool>((ref) => false);
 final realTimeStatisticsProvider = StreamProvider<StatisticsData>((ref) {
   final service = realTimeStatisticsService;
 
-  // Start the service when first accessed
+  // Start the service when first accessed and set up cleanup
   service.start();
-
-  // Clean up when provider is disposed
   ref.onDispose(service.stop);
 
   return service.statisticsStream;

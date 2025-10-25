@@ -177,45 +177,53 @@ async def get_recent_activity(
     user: User = Depends(get_current_admin_dev),
 ):
     """Return recent audit log entries with user details."""
-    limit = max(1, min(100, limit))
-    logs_result = await db.execute(
-        select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
-    )
-    logs = logs_result.scalars().all()
-
-    user_ids = [
-        UUID(str(log.user_id))
-        for log in logs
-        if getattr(log, "user_id", None) is not None
-    ]
-    users_by_id: Dict[str, User] = {}
-    if user_ids:
-        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
-        users = users_result.scalars().all()
-        users_by_id = {str(u.id): u for u in users}
-
-    activity: List[Dict[str, Optional[str]]] = []
-    for log in logs:
-        actor = users_by_id.get(str(getattr(log, "user_id", "")))
-        activity.append(
-            {
-                "id": str(log.id),
-                "action": log.action,
-                "resource": getattr(log, "resource_type", None),
-                "resource_id": str(getattr(log, "resource_id", "")) or None,
-                "details": getattr(log, "details", None),
-                "created_at": log.created_at.isoformat()
-                if getattr(log, "created_at", None)
-                else None,
-                "actor": {
-                    "id": str(actor.id) if actor else None,
-                    "email": actor.email if actor else None,
-                    "display_name": actor.display_name if actor else None,
-                },
-            }
+    try:
+        limit = max(1, min(100, limit))
+        logs_result = await db.execute(
+            select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
         )
+        logs = logs_result.scalars().all()
 
-    return {"activity": activity, "count": len(activity)}
+        # Handle case when no logs exist
+        if not logs:
+            return {"activity": [], "count": 0}
+
+        user_ids = [
+            UUID(str(log.user_id))
+            for log in logs
+            if getattr(log, "user_id", None) is not None
+        ]
+        users_by_id: Dict[str, User] = {}
+        if user_ids:
+            users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+            users = users_result.scalars().all()
+            users_by_id = {str(u.id): u for u in users}
+
+        activity: List[Dict[str, Optional[str]]] = []
+        for log in logs:
+            actor = users_by_id.get(str(getattr(log, "user_id", "")))
+            activity.append(
+                {
+                    "id": str(log.id),
+                    "action": log.action,
+                    "resource": getattr(log, "resource_type", None),
+                    "resource_id": str(getattr(log, "resource_id", "")) or None,
+                    "details": getattr(log, "details", None),
+                    "created_at": log.created_at.isoformat()
+                    if getattr(log, "created_at", None)
+                    else None,
+                    "actor": {
+                        "id": str(actor.id) if actor else None,
+                        "email": actor.email if actor else None,
+                        "display_name": actor.display_name if actor else None,
+                    },
+                }
+            )
+
+        return {"activity": activity, "count": len(activity)}
+    except Exception as e:
+        # Return empty activity on any error
+        return {"activity": [], "count": 0, "error": str(e)}
 
 
 @router.get("/system/health")
