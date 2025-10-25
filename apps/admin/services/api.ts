@@ -419,7 +419,7 @@ export class ApiService {
     async getFraudReports(params?: any): Promise<any> {
         return this.request({
             method: 'GET',
-            url: '/admin/fraud-detection/results',
+            url: '/admin/fraud-detection',
             params,
         });
     }

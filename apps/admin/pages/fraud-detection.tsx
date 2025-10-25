@@ -46,13 +46,10 @@ const FraudDetection: NextPage = () => {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const [resultsResponse, statsResponse] = await Promise.all([
-        apiService.getFraudReports(filters),
-        apiService.getStatistics(),
-      ]);
+      const fraudResponse = await apiService.getFraudReports(filters);
 
-      setResults(resultsResponse.items);
-      setStats(statsResponse);
+      setResults(fraudResponse.items);
+      setStats(fraudResponse.stats);
       setLastUpdate(new Date());
     } catch (err) {
       setError("Failed to fetch fraud detection data");

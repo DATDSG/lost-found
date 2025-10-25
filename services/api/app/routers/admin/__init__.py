@@ -9,6 +9,7 @@ router = APIRouter()
 # Include all admin sub-routers
 router.include_router(dashboard.router, prefix="/dashboard", tags=["admin-dashboard"])
 router.include_router(users.router, prefix="/users", tags=["admin-users"])
+router.include_router(users.router, prefix="/user", tags=["admin-user"])  # Add singular user endpoint
 router.include_router(reports.router, prefix="/reports", tags=["admin-reports"])
 router.include_router(matches.router, prefix="/matches", tags=["admin-matches"])
 router.include_router(audit.router, prefix="/audit-logs", tags=["admin-audit"])

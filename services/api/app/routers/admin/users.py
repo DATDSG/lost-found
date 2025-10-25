@@ -22,6 +22,44 @@ from ...auth import get_password_hash
 router = APIRouter()
 
 
+@router.get("/me")
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get current admin user information."""
+    return {
+        "user": _serialize_user(current_user),
+        "permissions": {
+            "can_create_users": True,
+            "can_modify_users": True,
+            "can_delete_users": True,
+            "can_view_audit_logs": True,
+            "can_manage_reports": True,
+            "can_manage_matches": True,
+        }
+    }
+
+
+@router.get("")
+async def get_admin_user_info(
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get current admin user information (root endpoint)."""
+    return {
+        "user": _serialize_user(current_user),
+        "permissions": {
+            "can_create_users": True,
+            "can_modify_users": True,
+            "can_delete_users": True,
+            "can_view_audit_logs": True,
+            "can_manage_reports": True,
+            "can_manage_matches": True,
+        }
+    }
+
+
 class UserCreateRequest(BaseModel):
     email: EmailStr
     password: str

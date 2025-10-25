@@ -25,6 +25,93 @@ from ...helpers import create_audit_log
 router = APIRouter()
 
 
+@router.get("")
+async def get_fraud_detection_overview(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    risk_level: Optional[str] = None,
+    is_reviewed: Optional[bool] = None,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get fraud detection overview with results and stats."""
+    try:
+        # Get fraud detection results
+        query = select(FraudDetectionResult)
+        
+        # Apply filters
+        if risk_level:
+            query = query.where(FraudDetectionResult.risk_level == risk_level)
+        if is_reviewed is not None:
+            query = query.where(FraudDetectionResult.is_reviewed == is_reviewed)
+        
+        # Get total count
+        count_query = select(func.count()).select_from(FraudDetectionResult)
+        if risk_level:
+            count_query = count_query.where(FraudDetectionResult.risk_level == risk_level)
+        if is_reviewed is not None:
+            count_query = count_query.where(FraudDetectionResult.is_reviewed == is_reviewed)
+        
+        total = (await db.execute(count_query)).scalar() or 0
+        
+        # Get paginated results
+        results_query = query.order_by(desc(FraudDetectionResult.detected_at)).offset(skip).limit(limit)
+        result = await db.execute(results_query)
+        fraud_results = result.scalars().all()
+        
+        # Format response
+        items = []
+        for fraud_result in fraud_results:
+            items.append({
+                "id": fraud_result.id,
+                "report_id": fraud_result.report_id,
+                "risk_level": fraud_result.risk_level,
+                "fraud_score": fraud_result.fraud_score,
+                "confidence": fraud_result.confidence,
+                "flags": fraud_result.flags or [],
+                "is_reviewed": fraud_result.is_reviewed,
+                "is_confirmed_fraud": fraud_result.is_confirmed_fraud,
+                "detected_at": fraud_result.detected_at.isoformat() if fraud_result.detected_at else None,
+                "created_at": fraud_result.created_at.isoformat(),
+                "reviewed_at": fraud_result.reviewed_at.isoformat() if fraud_result.reviewed_at else None,
+                "reviewed_by": fraud_result.reviewed_by,
+                "admin_notes": fraud_result.admin_notes,
+            })
+        
+        # Get stats
+        stats_query = select(
+            func.count().label("total_detections"),
+            func.count().filter(FraudDetectionResult.is_reviewed == False).label("pending_review"),
+            func.count().filter(FraudDetectionResult.is_confirmed_fraud == True).label("confirmed_fraud"),
+            func.avg(FraudDetectionResult.fraud_score).label("avg_score"),
+        ).select_from(FraudDetectionResult)
+        
+        stats_result = await db.execute(stats_query)
+        stats_row = stats_result.first()
+        
+        stats = {
+            "total_detections": stats_row.total_detections or 0,
+            "pending_review": stats_row.pending_review or 0,
+            "confirmed_fraud": stats_row.confirmed_fraud or 0,
+            "avg_score": float(stats_row.avg_score) if stats_row.avg_score else 0.0,
+            "accuracy_rate": 85.0,  # Placeholder - would need actual calculation
+        }
+        
+        return {
+            "items": items,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "stats": stats,
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch fraud detection data: {str(e)}"
+        )
+
+
 class FraudAnalysisRequest(BaseModel):
     """Request model for fraud analysis."""
     report_ids: Optional[List[str]] = None

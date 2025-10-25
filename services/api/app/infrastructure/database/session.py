@@ -68,6 +68,9 @@ async def init_database():
     """Initialize database tables with optimizations."""
     try:
         async with async_engine.begin() as conn:
+            # First, safely create enum types
+            await safe_create_enum_types(conn)
+            
             # Create all tables (checkfirst=True prevents duplicate creation)
             await conn.run_sync(Base.metadata.create_all, checkfirst=True)
             
@@ -76,8 +79,19 @@ async def init_database():
             
             logger.info("Database tables and indexes created successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
+        # If it's an enum type conflict, that's okay - the type already exists
+        if "duplicate key value violates unique constraint" in str(e) and "pg_type_typname_nsp_index" in str(e):
+            logger.info("Database types already exist, continuing with initialization")
+            try:
+                async with async_engine.begin() as conn:
+                    # Create indexes for better performance
+                    await create_performance_indexes(conn)
+                    logger.info("Database indexes created successfully")
+            except Exception as index_error:
+                logger.warning(f"Some indexes may already exist: {index_error}")
+        else:
+            logger.error(f"Failed to initialize database: {e}")
+            raise
 
 
 async def create_performance_indexes(conn):
@@ -135,6 +149,24 @@ async def create_performance_indexes(conn):
         
     except Exception as e:
         logger.warning(f"Some indexes may already exist: {e}")
+
+
+async def safe_create_enum_types(conn):
+    """Safely create enum types if they don't exist."""
+    try:
+        # Create fraudrisklevel enum if it doesn't exist
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'fraudrisklevel') THEN
+                    CREATE TYPE fraudrisklevel AS ENUM ('low', 'medium', 'high', 'critical');
+                END IF;
+            END $$;
+        """))
+        
+        logger.info("Enum types created successfully")
+        
+    except Exception as e:
+        logger.warning(f"Enum types may already exist: {e}")
 
 
 async def check_database_health() -> dict:
