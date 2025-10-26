@@ -36,7 +36,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
           return;
         }
 
-        // Check if token is expired
+        // Check if token is expired (only for new format)
         try {
           const parsed = JSON.parse(tokenData);
           if (parsed.timestamp && parsed.expiresIn) {
@@ -48,12 +48,9 @@ export default function AdminGuard({ children }: AdminGuardProps) {
               return;
             }
           }
+          // If it's the old format or doesn't have timestamp, continue with server validation
         } catch {
-          // Invalid token format, clear and redirect
-          localStorage.removeItem("auth_token");
-          localStorage.removeItem("admin_user");
-          router.push("/login");
-          return;
+          // If parsing fails, it's the old string format - continue with server validation
         }
 
         // Parse user data
@@ -73,7 +70,14 @@ export default function AdminGuard({ children }: AdminGuardProps) {
         // Verify token is still valid by calling /me endpoint
         try {
           // Get the actual token from the stored data
-          const token = JSON.parse(tokenData).token || tokenData;
+          let token: string;
+          try {
+            const parsed = JSON.parse(tokenData);
+            token = parsed.token || tokenData;
+          } catch {
+            // If parsing fails, it's the old string format
+            token = tokenData;
+          }
 
           const response = await fetch(
             `${

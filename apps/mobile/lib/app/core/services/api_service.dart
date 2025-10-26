@@ -335,7 +335,7 @@ class ApiService {
     DateTime? dateOfBirth,
   }) async {
     try {
-      final url = _buildUrl(ApiConfig.updateProfileEndpoint);
+      final url = _buildUrl('${ApiConfig.usersEndpoint}/me');
       final body = json.encode({
         if (displayName != null) 'display_name': displayName,
         if (phoneNumber != null) 'phone_number': phoneNumber,
@@ -369,7 +369,7 @@ class ApiService {
   /// Get user profile statistics
   Future<Map<String, dynamic>> getProfileStats() async {
     try {
-      final url = _buildUrl(ApiConfig.profileStatsEndpoint);
+      final url = _buildUrl('/v1/mobile/users/stats');
       if (kDebugMode) {
         print('GetProfileStats request URL: $url');
       }
@@ -403,7 +403,7 @@ class ApiService {
       };
 
       if (search != null && search.isNotEmpty) {
-        queryParams['search'] = search;
+        queryParams['q'] = search;
       }
       if (type != null && type.isNotEmpty) {
         queryParams['type'] = type;
@@ -416,7 +416,7 @@ class ApiService {
       }
 
       final uri = Uri.parse(
-        _buildUrl(ApiConfig.reportsEndpoint),
+        _buildUrl('/v1/mobile/reports/search'),
       ).replace(queryParameters: queryParams);
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
@@ -492,7 +492,7 @@ class ApiService {
   /// Upload media file
   Future<Map<String, dynamic>> uploadMedia(File file) async {
     try {
-      final url = _buildUrl(ApiConfig.uploadMediaEndpoint);
+      final url = _buildUrl('/v1/mobile/media/upload');
 
       if (kDebugMode) {
         print('UploadMedia request URL: $url');
@@ -552,9 +552,7 @@ class ApiService {
   /// Delete media file by ID
   Future<void> deleteMedia(String mediaId) async {
     try {
-      final url = _buildUrl(
-        ApiConfig.deleteMediaEndpoint.replaceAll('{id}', mediaId),
-      );
+      final url = _buildUrl('/v1/mobile/media/$mediaId');
 
       final response = await _makeRequest('DELETE', url, _getHeaders());
 
@@ -575,7 +573,7 @@ class ApiService {
     String? reason,
   }) async {
     try {
-      final url = _buildUrl(ApiConfig.deleteAccountEndpoint);
+      final url = _buildUrl('${ApiConfig.usersEndpoint}/me');
       final body = json.encode({
         'password': password,
         if (reason != null) 'reason': reason,
@@ -601,7 +599,7 @@ class ApiService {
   /// Request user data download
   Future<Map<String, dynamic>> requestDataDownload() async {
     try {
-      final url = _buildUrl(ApiConfig.downloadDataEndpoint);
+      final url = _buildUrl('${ApiConfig.usersEndpoint}/me/export-data');
       final body = json.encode({
         'format': 'json',
         'include_reports': true,
@@ -636,7 +634,7 @@ class ApiService {
         'active_only': activeOnly.toString(),
       };
       final uri = Uri.parse(
-        _buildUrl(ApiConfig.categoriesEndpoint),
+        _buildUrl('/v1/mobile/taxonomy/categories'),
       ).replace(queryParameters: queryParams);
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
@@ -663,7 +661,7 @@ class ApiService {
         'active_only': activeOnly.toString(),
       };
       final uri = Uri.parse(
-        _buildUrl(ApiConfig.colorsEndpoint),
+        _buildUrl('/v1/mobile/taxonomy/colors'),
       ).replace(queryParameters: queryParams);
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
@@ -701,7 +699,7 @@ class ApiService {
   /// Get specific report by ID
   Future<Map<String, dynamic>> getReport(String reportId) async {
     try {
-      final url = _buildUrl('${ApiConfig.reportsEndpoint}/$reportId');
+      final url = _buildUrl('/v1/mobile/reports/$reportId');
       final response = await _makeRequest('GET', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
@@ -733,7 +731,7 @@ class ApiService {
       }
 
       final uri = Uri.parse(
-        _buildUrl('/v1/matches'),
+        _buildUrl('/v1/mobile/matches'),
       ).replace(queryParameters: queryParams);
 
       final response = await _makeRequest('GET', uri.toString(), _getHeaders());
@@ -756,7 +754,7 @@ class ApiService {
   /// Accept a match
   Future<Map<String, dynamic>> acceptMatch(String matchId) async {
     try {
-      final url = _buildUrl('/v1/matches/$matchId/accept');
+      final url = _buildUrl('/v1/mobile/matches/$matchId/accept');
       final response = await _makeRequest('POST', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;
@@ -771,7 +769,7 @@ class ApiService {
   /// Reject a match
   Future<Map<String, dynamic>> rejectMatch(String matchId) async {
     try {
-      final url = _buildUrl('/v1/matches/$matchId/reject');
+      final url = _buildUrl('/v1/mobile/matches/$matchId/reject');
       final response = await _makeRequest('POST', url, _getHeaders());
 
       return _handleResponse(response) as Map<String, dynamic>;

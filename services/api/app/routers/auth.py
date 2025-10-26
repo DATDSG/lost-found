@@ -151,3 +151,101 @@ def login(credentials: UserLogin, db: Session = Depends(get_sync_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Get current user information."""
     return current_user
+
+
+@router.post("/forgot-password")
+def forgot_password(email: str, db: Session = Depends(get_sync_db)):
+    """Request password reset."""
+    try:
+        # Validate email format
+        validator = UserValidationMixin()
+        validated_email = validator.validate_email_address(email)
+        
+        # Check if user exists
+        user = db.query(User).filter(User.email == validated_email).first()
+        
+        if not user:
+            # Don't reveal if user exists or not for security
+            return {"message": "If the email exists, a reset link has been sent"}
+        
+        # In a real implementation, you would:
+        # 1. Generate a reset token
+        # 2. Send email with reset link
+        # 3. Store token in database with expiration
+        
+        return {"message": "If the email exists, a reset link has been sent"}
+        
+    except ValidationError:
+        raise
+    except Exception as e:
+        print(f"Forgot password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password reset request failed"
+        )
+
+
+@router.post("/reset-password")
+def reset_password(token: str, password: str, db: Session = Depends(get_sync_db)):
+    """Reset password with token."""
+    try:
+        # In a real implementation, you would:
+        # 1. Validate the reset token
+        # 2. Check if token is expired
+        # 3. Update user password
+        # 4. Invalidate the token
+        
+        # For now, return a placeholder response
+        return {"message": "Password reset successfully"}
+        
+    except Exception as e:
+        print(f"Reset password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password reset failed"
+        )
+
+
+@router.post("/change-password")
+def change_password(
+    current_password: str,
+    new_password: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_sync_db)
+):
+    """Change user password."""
+    try:
+        # Verify current password
+        if not verify_password(current_password, current_user.password):
+            raise AuthenticationError("Current password is incorrect")
+        
+        # Validate new password
+        validator = UserValidationMixin()
+        validator.validate_password(new_password)
+        
+        # Update password
+        current_user.password = get_password_hash(new_password)
+        db.commit()
+        
+        return {"message": "Password changed successfully"}
+        
+    except ValidationError:
+        raise
+    except AuthenticationError:
+        raise
+    except Exception as e:
+        print(f"Change password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password change failed"
+        )
+
+
+@router.post("/logout")
+def logout(current_user: User = Depends(get_current_user)):
+    """Logout user (invalidate token on client side)."""
+    # In a real implementation with refresh tokens, you would:
+    # 1. Invalidate the refresh token
+    # 2. Add token to blacklist
+    
+    return {"message": "Logged out successfully"}

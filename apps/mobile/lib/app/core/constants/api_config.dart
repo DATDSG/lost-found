@@ -23,19 +23,19 @@ class ApiConfig {
   static const String usersEndpoint = '/v1/users';
 
   /// Reports endpoint
-  static const String reportsEndpoint = '/v1/reports';
+  static const String reportsEndpoint = '/v1/mobile/reports';
 
   /// Matches endpoint
-  static const String matchesEndpoint = '/v1/matches';
+  static const String matchesEndpoint = '/v1/mobile/matches';
 
   /// Media endpoint
-  static const String mediaEndpoint = '/v1/media';
+  static const String mediaEndpoint = '/v1/mobile/media';
 
   /// Categories endpoint
-  static const String categoriesEndpoint = '/v1/taxonomy/categories';
+  static const String categoriesEndpoint = '/v1/mobile/taxonomy/categories';
 
   /// Colors endpoint
-  static const String colorsEndpoint = '/v1/taxonomy/colors';
+  static const String colorsEndpoint = '/v1/mobile/taxonomy/colors';
 
   // Auth endpoints
   /// Login endpoint

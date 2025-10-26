@@ -125,7 +125,7 @@ def _serialize_user(user: User) -> dict:
     }
 
 
-@router.get("")
+@router.get("/list")
 async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),

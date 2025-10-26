@@ -40,17 +40,34 @@ const getApiUrl = (): string => {
 const isTokenExpired = (): boolean => {
     try {
         const tokenData = localStorage.getItem('auth_token');
-        if (!tokenData) return true;
-
-        const parsed = JSON.parse(tokenData);
-        if (parsed.timestamp && parsed.expiresIn) {
-            return Date.now() - parsed.timestamp > parsed.expiresIn;
+        if (!tokenData) {
+            console.log('🔍 No token found in localStorage');
+            return true;
         }
 
-        // Fallback: if token doesn't have timestamp, consider it expired
-        return true;
+        // Check if it's the new format with timestamp
+        const parsed = JSON.parse(tokenData);
+        if (parsed.timestamp && parsed.expiresIn) {
+            const isExpired = Date.now() - parsed.timestamp > parsed.expiresIn;
+            console.log('🔍 Token expiration check:', {
+                timestamp: parsed.timestamp,
+                expiresIn: parsed.expiresIn,
+                currentTime: Date.now(),
+                timeElapsed: Date.now() - parsed.timestamp,
+                isExpired
+            });
+            return isExpired;
+        }
+
+        // If it's the old format (just a string token), don't consider it expired
+        // Let the server validate it instead
+        console.log('🔍 Old token format detected, letting server validate');
+        return false;
     } catch {
-        return true;
+        // If parsing fails, it might be the old string format
+        // Don't consider it expired, let the server handle it
+        console.log('🔍 Token parsing failed, assuming old format');
+        return false;
     }
 };
 
@@ -59,10 +76,18 @@ const getToken = (): string | null => {
         const tokenData = localStorage.getItem('auth_token');
         if (!tokenData) return null;
 
+        // Try to parse as JSON (new format)
         const parsed = JSON.parse(tokenData);
-        return parsed.token || tokenData; // Support both old and new format
+        if (parsed.token) {
+            return parsed.token;
+        }
+
+        // If parsing succeeded but no token property, return the original data
+        return tokenData;
     } catch {
-        return localStorage.getItem('auth_token');
+        // If parsing fails, it's the old string format
+        const tokenData = localStorage.getItem('auth_token');
+        return tokenData;
     }
 };
 
@@ -378,7 +403,7 @@ export class ApiService {
         try {
             return await this.request({
                 method: 'GET',
-                url: '/admin/users',
+                url: '/admin/users/list',
                 params,
             });
         } catch (error: any) {

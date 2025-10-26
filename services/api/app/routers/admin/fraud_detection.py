@@ -7,6 +7,7 @@ API endpoints for fraud detection management and analysis.
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
@@ -20,7 +21,7 @@ from ...dependencies import get_current_admin
 from ...models import User, FraudDetectionResult, FraudPattern, FraudDetectionLog
 from ...domains.reports.models.report import Report
 from ...services.fraud_detection_service import fraud_detection_service, FraudDetectionResult as ServiceResult
-from ...helpers import create_audit_log
+from ...helpers import create_audit_log_async
 
 router = APIRouter()
 
@@ -222,7 +223,11 @@ async def analyze_reports_for_fraud(
                 id=str(uuid.uuid4()),
                 report_id=result.report_id,
                 detection_result_id=fraud_result.id,
+                analysis_type="automatic",
                 action_type="auto_detection",
+                triggered_by="system",
+                final_score=result.fraud_score,
+                final_risk_level=result.risk_level.value,
                 action_details={
                     "fraud_score": result.fraud_score,
                     "risk_level": result.risk_level.value,
@@ -236,7 +241,7 @@ async def analyze_reports_for_fraud(
         await db.commit()
         
         # Create audit log
-        await create_audit_log(
+        await create_audit_log_async(
             db=db,
             user_id=str(current_user.id),
             action="fraud_analysis",
@@ -515,7 +520,7 @@ async def review_fraud_detection_result(
         await db.commit()
         
         # Create audit log
-        await create_audit_log(
+        await create_audit_log_async(
             db=db,
             user_id=str(current_user.id),
             action="fraud_review",
@@ -647,7 +652,7 @@ async def train_fraud_detection_models(
         await db.commit()
         
         # Create audit log
-        await create_audit_log(
+        await create_audit_log_async(
             db=db,
             user_id=str(current_user.id),
             action="train_fraud_models",

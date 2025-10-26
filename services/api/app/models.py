@@ -104,6 +104,8 @@ class FraudDetectionResult(Base):
     risk_level = Column(SQLEnum(FraudRiskLevel), nullable=False, index=True)
     confidence = Column(Float)
     flags = Column(JSON)  # List of detected fraud flags
+    details = Column(JSON)  # Detailed analysis results
+    model_version = Column(String, default="1.0.0")  # Model version used for analysis
     
     # Review Status
     is_reviewed = Column(Boolean, default=False, index=True)
@@ -165,7 +167,9 @@ class FraudDetectionLog(Base):
     
     # Analysis Information
     report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id"), nullable=False, index=True)
+    detection_result_id = Column(UUID(as_uuid=True), ForeignKey("fraud_detection_results.id"), nullable=True, index=True)
     analysis_type = Column(String, nullable=False, index=True)  # automatic, manual, batch
+    action_type = Column(String, nullable=False, index=True)  # auto_detection, manual_review, etc.
     triggered_by = Column(String)  # user_id, system, scheduled
     
     # Results Summary
@@ -173,6 +177,8 @@ class FraudDetectionLog(Base):
     patterns_matched = Column(Integer, default=0)
     final_score = Column(Float)
     final_risk_level = Column(SQLEnum(FraudRiskLevel))
+    action_details = Column(JSON)  # Detailed action information
+    model_version = Column(String, default="1.0.0")  # Model version used
     
     # Processing Information
     processing_time_ms = Column(Integer)

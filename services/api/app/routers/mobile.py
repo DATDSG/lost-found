@@ -620,6 +620,489 @@ async def get_mobile_stats(
         )
 
 
+@router.get("/reports/search", response_model=List[ReportResponse])
+async def search_reports(
+    q: Optional[str] = Query(None, description="Search query"),
+    type: Optional[ReportType] = Query(None, description="Report type filter"),
+    category: Optional[str] = Query(None, description="Category filter"),
+    location: Optional[str] = Query(None, description="Location filter"),
+    latitude: Optional[float] = Query(None, description="Latitude for location search"),
+    longitude: Optional[float] = Query(None, description="Longitude for location search"),
+    radius: Optional[float] = Query(10.0, description="Search radius in kilometers"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Page size"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Search reports with various filters.
+    """
+    try:
+        query = select(Report).where(Report.status == ReportStatus.APPROVED)
+        
+        # Apply filters
+        if q:
+            query = query.where(
+                or_(
+                    Report.title.ilike(f"%{q}%"),
+                    Report.description.ilike(f"%{q}%")
+                )
+            )
+        
+        if type:
+            query = query.where(Report.type == type)
+        
+        if category:
+            query = query.where(Report.category == category)
+        
+        if location:
+            query = query.where(Report.location_city.ilike(f"%{location}%"))
+        
+        if latitude and longitude:
+            # Calculate bounding box for location search
+            lat_offset = radius / 111.0
+            lng_offset = radius / (111.0 * abs(latitude) / 90.0)
+            
+            query = query.where(
+                and_(
+                    Report.latitude.between(latitude - lat_offset, latitude + lat_offset),
+                    Report.longitude.between(longitude - lng_offset, longitude + lng_offset)
+                )
+            )
+        
+        # Exclude user's own reports
+        query = query.where(Report.owner_id != user.id)
+        
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.order_by(desc(Report.created_at)).offset(offset).limit(page_size)
+        
+        result = await db.execute(query)
+        reports = result.scalars().all()
+        
+        return [ReportResponse.from_orm(report) for report in reports]
+        
+    except Exception as e:
+        logger.error(f"Search reports failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Search failed"
+        )
+
+
+@router.get("/reports/{report_id}", response_model=ReportResponse)
+async def get_report(
+    report_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Get a specific report by ID.
+    """
+    try:
+        query = select(Report).where(Report.id == report_id)
+        result = await db.execute(query)
+        report = result.scalar_one_or_none()
+        
+        if not report:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Report not found"
+            )
+        
+        return ReportResponse.from_orm(report)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get report failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get report"
+        )
+
+
+@router.put("/reports/{report_id}", response_model=ReportResponse)
+async def update_report(
+    report_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Update a report.
+    """
+    try:
+        # Get report
+        query = select(Report).where(
+            and_(
+                Report.id == report_id,
+                Report.owner_id == user.id
+            )
+        )
+        result = await db.execute(query)
+        report = result.scalar_one_or_none()
+        
+        if not report:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Report not found"
+            )
+        
+        # Get update data
+        update_data = await request.json()
+        
+        # Update fields
+        if "title" in update_data:
+            report.title = update_data["title"]
+        if "description" in update_data:
+            report.description = update_data["description"]
+        if "category" in update_data:
+            report.category = update_data["category"]
+        if "location_city" in update_data:
+            report.location_city = update_data["location_city"]
+        if "colors" in update_data:
+            report.colors = update_data["colors"]
+        if "is_urgent" in update_data:
+            report.is_urgent = update_data["is_urgent"]
+        if "reward_offered" in update_data:
+            report.reward_offered = update_data["reward_offered"]
+        if "reward_amount" in update_data:
+            report.reward_amount = update_data["reward_amount"]
+        
+        report.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(report)
+        
+        return ReportResponse.from_orm(report)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update report failed: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update report"
+        )
+
+
+@router.delete("/reports/{report_id}")
+async def delete_report(
+    report_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Delete a report.
+    """
+    try:
+        # Get report
+        query = select(Report).where(
+            and_(
+                Report.id == report_id,
+                Report.owner_id == user.id
+            )
+        )
+        result = await db.execute(query)
+        report = result.scalar_one_or_none()
+        
+        if not report:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Report not found"
+            )
+        
+        await db.delete(report)
+        await db.commit()
+        
+        return {"message": "Report deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete report failed: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete report"
+        )
+
+
+@router.get("/matches", response_model=List[MatchResponse])
+async def get_matches(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Page size"),
+    status: Optional[MatchStatus] = Query(None, description="Match status filter"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Get matches for the current user.
+    """
+    try:
+        query = select(Match).where(
+            or_(
+                Match.source_report.has(Report.owner_id == user.id),
+                Match.candidate_report.has(Report.owner_id == user.id)
+            )
+        )
+        
+        if status:
+            query = query.where(Match.status == status)
+        
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = query.order_by(desc(Match.created_at)).offset(offset).limit(page_size)
+        
+        result = await db.execute(query)
+        matches = result.scalars().all()
+        
+        return [MatchResponse.from_orm(match) for match in matches]
+        
+    except Exception as e:
+        logger.error(f"Get matches failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get matches"
+        )
+
+
+@router.post("/matches/{match_id}/accept")
+async def accept_match(
+    match_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Accept a match.
+    """
+    try:
+        # Get match
+        query = select(Match).where(
+            and_(
+                Match.id == match_id,
+                or_(
+                    Match.source_report.has(Report.owner_id == user.id),
+                    Match.candidate_report.has(Report.owner_id == user.id)
+                )
+            )
+        )
+        
+        result = await db.execute(query)
+        match = result.scalar_one_or_none()
+        
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Match not found"
+            )
+        
+        # Update match status
+        match.status = MatchStatus.APPROVED
+        match.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        return {"message": "Match accepted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Accept match failed: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to accept match"
+        )
+
+
+@router.post("/matches/{match_id}/reject")
+async def reject_match(
+    match_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Reject a match.
+    """
+    try:
+        # Get match
+        query = select(Match).where(
+            and_(
+                Match.id == match_id,
+                or_(
+                    Match.source_report.has(Report.owner_id == user.id),
+                    Match.candidate_report.has(Report.owner_id == user.id)
+                )
+            )
+        )
+        
+        result = await db.execute(query)
+        match = result.scalar_one_or_none()
+        
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Match not found"
+            )
+        
+        # Update match status
+        match.status = MatchStatus.REJECTED
+        match.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        return {"message": "Match rejected successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reject match failed: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reject match"
+        )
+
+
+@router.get("/taxonomy/categories", response_model=List[Dict[str, Any]])
+async def get_categories(
+    active_only: bool = Query(True, description="Only return active categories"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Get available categories.
+    """
+    try:
+        # For now, return a static list of categories
+        # In a real implementation, this would come from a database
+        categories = [
+            {"id": "electronics", "name": "Electronics", "active": True},
+            {"id": "clothing", "name": "Clothing", "active": True},
+            {"id": "accessories", "name": "Accessories", "active": True},
+            {"id": "documents", "name": "Documents", "active": True},
+            {"id": "jewelry", "name": "Jewelry", "active": True},
+            {"id": "books", "name": "Books", "active": True},
+            {"id": "bags", "name": "Bags", "active": True},
+            {"id": "keys", "name": "Keys", "active": True},
+            {"id": "other", "name": "Other", "active": True},
+        ]
+        
+        if active_only:
+            categories = [cat for cat in categories if cat["active"]]
+        
+        return categories
+        
+    except Exception as e:
+        logger.error(f"Get categories failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get categories"
+        )
+
+
+@router.get("/taxonomy/colors", response_model=List[Dict[str, Any]])
+async def get_colors(
+    active_only: bool = Query(True, description="Only return active colors"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Get available colors.
+    """
+    try:
+        # For now, return a static list of colors
+        # In a real implementation, this would come from a database
+        colors = [
+            {"id": "black", "name": "Black", "hex": "#000000", "active": True},
+            {"id": "white", "name": "White", "hex": "#FFFFFF", "active": True},
+            {"id": "red", "name": "Red", "hex": "#FF0000", "active": True},
+            {"id": "blue", "name": "Blue", "hex": "#0000FF", "active": True},
+            {"id": "green", "name": "Green", "hex": "#008000", "active": True},
+            {"id": "yellow", "name": "Yellow", "hex": "#FFFF00", "active": True},
+            {"id": "orange", "name": "Orange", "hex": "#FFA500", "active": True},
+            {"id": "purple", "name": "Purple", "hex": "#800080", "active": True},
+            {"id": "pink", "name": "Pink", "hex": "#FFC0CB", "active": True},
+            {"id": "brown", "name": "Brown", "hex": "#A52A2A", "active": True},
+            {"id": "gray", "name": "Gray", "hex": "#808080", "active": True},
+            {"id": "silver", "name": "Silver", "hex": "#C0C0C0", "active": True},
+            {"id": "gold", "name": "Gold", "hex": "#FFD700", "active": True},
+        ]
+        
+        if active_only:
+            colors = [color for color in colors if color["active"]]
+        
+        return colors
+        
+    except Exception as e:
+        logger.error(f"Get colors failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get colors"
+        )
+
+
+@router.post("/media/upload")
+async def upload_media(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Upload media file.
+    """
+    try:
+        # This is a placeholder implementation
+        # In a real implementation, you would:
+        # 1. Validate file type and size
+        # 2. Upload to storage service (S3, MinIO, etc.)
+        # 3. Generate thumbnails
+        # 4. Store metadata in database
+        
+        return {
+            "id": str(uuid.uuid4()),
+            "url": "https://example.com/placeholder-image.jpg",
+            "filename": "uploaded_file.jpg",
+            "size": 1024,
+            "content_type": "image/jpeg",
+            "uploaded_at": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Upload media failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload media"
+        )
+
+
+@router.delete("/media/{media_id}")
+async def delete_media(
+    media_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Delete media file.
+    """
+    try:
+        # This is a placeholder implementation
+        # In a real implementation, you would:
+        # 1. Check if user owns the media
+        # 2. Delete from storage service
+        # 3. Remove from database
+        
+        return {"message": "Media deleted successfully"}
+        
+    except Exception as e:
+        logger.error(f"Delete media failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete media"
+        )
+
+
 
 
 # Background task functions
