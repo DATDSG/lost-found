@@ -8,7 +8,7 @@ const AdminIndex: NextPage = () => {
 
   useEffect(() => {
     // Check if user is authenticated
-    const token = localStorage.getItem("auth_token");
+    const token = localStorage.getItem("admin_token");
     const user = localStorage.getItem("admin_user");
 
     if (token && user) {

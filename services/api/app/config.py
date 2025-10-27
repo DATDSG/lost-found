@@ -123,7 +123,7 @@ class OptimizedConfig:
     # ========== Security & CORS ==========
     CORS_ORIGINS: List[str] = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://127.0.0.1:3000,http://127.0.0.1:8080,http://admin:3000,http://10.0.2.2:3000,http://10.0.2.2:8080,http://10.0.2.2:8000,http://10.0.2.2:8001,http://10.0.2.2:8002,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002"
+        "http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://admin:3000,http://10.0.2.2:3000,http://10.0.2.2:8080,http://10.0.2.2:8000,http://10.0.2.2:8001,http://10.0.2.2:8002,http://172.104.40.189:3000,http://172.104.40.189:8080,http://172.104.40.189:8000,http://172.104.40.189:8001,http://172.104.40.189:8002"
     ).split(",")
     CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
     

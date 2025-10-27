@@ -18,13 +18,10 @@ from ..config import optimized_config
 
 logger = logging.getLogger(__name__)
 
-# Create optimized async engine with connection pooling
+# Create optimized async engine
 async_engine = create_async_engine(
     optimized_config.DATABASE_URL,
-    pool_size=optimized_config.DB_POOL_SIZE,
-    max_overflow=optimized_config.DB_MAX_OVERFLOW,
-    pool_timeout=optimized_config.DB_POOL_TIMEOUT,
-    pool_recycle=optimized_config.DB_POOL_RECYCLE,
+    poolclass=NullPool,
     echo=optimized_config.DB_ECHO,
     future=True,
     connect_args={
