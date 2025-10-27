@@ -80,6 +80,34 @@ async def upload_media(
         # Generate public URL
         file_url = upload_result.get("url", f"{config.MINIO_ENDPOINT}/{config.MINIO_BUCKET_NAME}/{object_name}")
         
+        # Create database record for the uploaded file
+        from ...domains.media.models.media_file import MediaFile, MediaStatus, MediaType
+        
+        # Determine media type
+        if file.content_type.startswith('image/'):
+            media_type = MediaType.IMAGE.value
+        else:
+            media_type = MediaType.OTHER.value
+        
+        # Create media record
+        media_file = MediaFile(
+            id=file_id,
+            filename=object_name,
+            original_filename=file.filename or object_name,
+            file_size=len(file_content),
+            mime_type=file.content_type,
+            file_extension=file_extension,
+            media_type=media_type,
+            status=MediaStatus.ACTIVE.value,
+            storage_path=object_name,
+            storage_url=file_url,
+            owner_id=current_user.id
+        )
+        
+        db.add(media_file)
+        await db.commit()
+        await db.refresh(media_file)
+        
         logger.info(f"File uploaded successfully: {file_id}")
         
         return {

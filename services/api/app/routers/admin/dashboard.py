@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...infrastructure.database.session import get_async_db
 from ...dependencies import get_current_admin, get_current_admin_dev
 from ...models import User, AuditLog
-from ...domains.matches.models.match import Match
-from ...domains.reports.models.report import Report
+from ...domains.matches.models.match import Match, MatchStatus
+from ...domains.reports.models.report import Report, ReportStatus, ReportType
 
 router = APIRouter()
 
@@ -22,6 +22,7 @@ router = APIRouter()
 @router.get("/stats")
 async def get_dashboard_stats(
     db: AsyncSession = Depends(get_async_db),
+    user: User = Depends(get_current_admin),
 ):
     """Aggregate statistics for dashboard cards."""
     total_users = (
@@ -73,7 +74,7 @@ async def get_dashboard_stats(
     ).scalar() or 0
     promoted_matches = (
         await db.execute(
-            select(func.count()).select_from(Match).where(Match.status == "promoted")
+            select(func.count()).select_from(Match).where(Match.status == MatchStatus.PROMOTED.value)
         )
     ).scalar() or 0
 
@@ -120,7 +121,7 @@ async def get_dashboard_stats(
 async def get_reports_chart(
     days: int = 30,
     db: AsyncSession = Depends(get_async_db),
-    user: User = Depends(get_current_admin_dev),
+    user: User = Depends(get_current_admin),
 ):
     """Return daily counts of created and resolved reports."""
     days = max(1, min(90, days))
@@ -174,7 +175,7 @@ async def get_reports_chart(
 async def get_recent_activity(
     limit: int = 50,
     db: AsyncSession = Depends(get_async_db),
-    user: User = Depends(get_current_admin_dev),
+    user: User = Depends(get_current_admin),
 ):
     """Return recent audit log entries with user details."""
     try:
@@ -229,7 +230,7 @@ async def get_recent_activity(
 @router.get("/system/health")
 async def get_system_health(
     db: AsyncSession = Depends(get_async_db),
-    user: User = Depends(get_current_admin_dev),
+    user: User = Depends(get_current_admin),
 ):
     """Return coarse-grained health information for dependent services."""
     try:

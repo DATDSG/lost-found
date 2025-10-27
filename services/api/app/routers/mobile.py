@@ -85,12 +85,14 @@ async def mobile_sync(
             })
         
         # Get matches updated since last sync
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         if last_sync:
             matches_query = select(Match).where(
                 and_(
                     or_(
-                        Match.source_report.has(Report.owner_id == user.id),
-                        Match.candidate_report.has(Report.owner_id == user.id)
+                        Match.source_report_id.in_(user_reports_subquery),
+                        Match.candidate_report_id.in_(user_reports_subquery)
                     ),
                     Match.updated_at > last_sync
                 )
@@ -98,8 +100,8 @@ async def mobile_sync(
         else:
             matches_query = select(Match).where(
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(user_reports_subquery),
+                    Match.candidate_report_id.in_(user_reports_subquery)
                 )
             ).order_by(desc(Match.created_at))
         
@@ -352,11 +354,13 @@ async def get_pending_matches(
     Get pending matches for mobile app.
     """
     try:
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         query = select(Match).where(
             and_(
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(user_reports_subquery),
+                    Match.candidate_report_id.in_(user_reports_subquery)
                 ),
                 Match.status == MatchStatus.CANDIDATE,
                 Match.is_notified == False
@@ -394,12 +398,14 @@ async def respond_to_match(
             )
         
         # Get match
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         query = select(Match).where(
             and_(
                 Match.id == match_id,
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(user_reports_subquery),
+                    Match.candidate_report_id.in_(user_reports_subquery)
                 )
             )
         )
@@ -504,11 +510,13 @@ async def get_user_stats(
         )
         resolved_reports = await db.scalar(resolved_reports_query) or 0
         
-        # Match statistics
+        # Match statistics - use proper subqueries for async
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         total_matches_query = select(func.count(Match.id)).where(
             or_(
-                Match.source_report.has(Report.owner_id == user.id),
-                Match.candidate_report.has(Report.owner_id == user.id)
+                Match.source_report_id.in_(user_reports_subquery),
+                Match.candidate_report_id.in_(user_reports_subquery)
             )
         )
         total_matches = await db.scalar(total_matches_query) or 0
@@ -516,8 +524,8 @@ async def get_user_stats(
         successful_matches_query = select(func.count(Match.id)).where(
             and_(
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(user_reports_subquery),
+                    Match.candidate_report_id.in_(user_reports_subquery)
                 ),
                 Match.status == MatchStatus.PROMOTED
             )
@@ -578,38 +586,40 @@ async def get_mobile_stats(
         )
         active_reports = await db.scalar(active_reports_query)
         
-        # Get match counts
+        # Get match counts - use proper subqueries for async
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id).subquery()
+        
         matches_query = select(func.count(Match.id)).where(
             or_(
-                Match.source_report.has(Report.owner_id == user.id),
-                Match.candidate_report.has(Report.owner_id == user.id)
+                Match.source_report_id.in_(select(user_reports_subquery)),
+                Match.candidate_report_id.in_(select(user_reports_subquery))
             )
         )
-        total_matches = await db.scalar(matches_query)
+        total_matches = await db.scalar(matches_query) or 0
         
         pending_matches_query = select(func.count(Match.id)).where(
             and_(
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(select(user_reports_subquery)),
+                    Match.candidate_report_id.in_(select(user_reports_subquery))
                 ),
                 Match.status == MatchStatus.CANDIDATE
             )
         )
-        pending_matches = await db.scalar(pending_matches_query)
+        pending_matches = await db.scalar(pending_matches_query) or 0
         
         return {
             "reports": {
-                "total": total_reports,
-                "active": active_reports,
-                "pending": total_reports - active_reports
+                "total": total_reports or 0,
+                "active": active_reports or 0,
+                "pending": (total_reports or 0) - (active_reports or 0)
             },
             "matches": {
                 "total": total_matches,
                 "pending": pending_matches,
-                "resolved": total_matches - pending_matches
+                "resolved": max(total_matches - pending_matches, 0)
             },
-            "success_rate": round((total_matches - pending_matches) / max(total_matches, 1) * 100, 1)
+            "success_rate": round((total_matches - pending_matches) / max(total_matches, 1) * 100, 1) if total_matches > 0 else 0.0
         }
         
     except Exception as e:
@@ -842,10 +852,12 @@ async def get_matches(
     Get matches for the current user.
     """
     try:
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         query = select(Match).where(
             or_(
-                Match.source_report.has(Report.owner_id == user.id),
-                Match.candidate_report.has(Report.owner_id == user.id)
+                Match.source_report_id.in_(user_reports_subquery),
+                Match.candidate_report_id.in_(user_reports_subquery)
             )
         )
         
@@ -880,12 +892,14 @@ async def accept_match(
     """
     try:
         # Get match
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         query = select(Match).where(
             and_(
                 Match.id == match_id,
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(user_reports_subquery),
+                    Match.candidate_report_id.in_(user_reports_subquery)
                 )
             )
         )
@@ -929,12 +943,14 @@ async def reject_match(
     """
     try:
         # Get match
+        user_reports_subquery = select(Report.id).where(Report.owner_id == user.id)
+        
         query = select(Match).where(
             and_(
                 Match.id == match_id,
                 or_(
-                    Match.source_report.has(Report.owner_id == user.id),
-                    Match.candidate_report.has(Report.owner_id == user.id)
+                    Match.source_report_id.in_(user_reports_subquery),
+                    Match.candidate_report_id.in_(user_reports_subquery)
                 )
             )
         )

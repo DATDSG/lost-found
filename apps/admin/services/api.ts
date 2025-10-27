@@ -107,11 +107,20 @@ const createApiClient = (): AxiosInstance => {
         (config: InternalAxiosRequestConfig) => {
             // Add authentication token if available and not expired
             const token = getToken();
+            console.log('🔍 Request interceptor:', {
+                url: config.url,
+                method: config.method,
+                hasToken: !!token,
+                tokenLength: token?.length,
+                isTokenExpired: isTokenExpired()
+            });
+
             if (token && !isTokenExpired()) {
                 config.headers = config.headers || {};
                 config.headers.Authorization = `Bearer ${token}`;
             } else if (isTokenExpired()) {
                 // Token is expired, clear it
+                console.warn('⚠️ Token is expired, clearing...');
                 localStorage.removeItem('auth_token');
                 localStorage.removeItem('admin_user');
             }
@@ -138,7 +147,10 @@ const createApiClient = (): AxiosInstance => {
         (response: AxiosResponse) => {
             // Log response in development
             if (process.env.NODE_ENV === 'development') {
-                console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+                console.log(`✅ API Response: ${response.status} ${response.config.url}`, {
+                    status: response.status,
+                    data: response.data
+                });
             }
             return response;
         },
@@ -147,6 +159,13 @@ const createApiClient = (): AxiosInstance => {
 
             // Handle authentication errors
             if (error.response?.status === 401 && !originalRequest._retry) {
+                console.error('🔴 401 Authentication Error:', {
+                    url: originalRequest.url,
+                    method: originalRequest.method,
+                    error: error.response?.data,
+                    status: error.response?.status,
+                    headers: error.response?.headers
+                });
                 originalRequest._retry = true;
 
                 // Clear invalid token and user data

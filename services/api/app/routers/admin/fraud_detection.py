@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...infrastructure.database.session import get_async_db
 from ...dependencies import get_current_admin
-from ...models import User, FraudDetectionResult, FraudPattern, FraudDetectionLog
+from ...models import User, FraudDetectionResult, FraudPattern, FraudDetectionLog, FraudRiskLevel
 from ...domains.reports.models.report import Report
 from ...services.fraud_detection_service import fraud_detection_service, FraudDetectionResult as ServiceResult
 from ...helpers import create_audit_log_async
@@ -36,7 +36,11 @@ async def get_fraud_detection_overview(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Get fraud detection overview with results and stats."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info(f"🔍 Fetching fraud detection data for user: {current_user.email}")
         # Get fraud detection results
         query = select(FraudDetectionResult)
         
@@ -98,7 +102,7 @@ async def get_fraud_detection_overview(
             "accuracy_rate": 85.0,  # Placeholder - would need actual calculation
         }
         
-        return {
+        result = {
             "items": items,
             "total": total,
             "skip": skip,
@@ -106,7 +110,13 @@ async def get_fraud_detection_overview(
             "stats": stats,
         }
         
+        logger.info(f"✅ Fraud detection data fetched successfully: {total} total, {len(items)} returned")
+        return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"❌ Error fetching fraud detection data: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch fraud detection data: {str(e)}"
@@ -204,8 +214,8 @@ async def analyze_reports_for_fraud(
             
             # Create new fraud detection result
             fraud_result = FraudDetectionResult(
-                id=str(uuid.uuid4()),
-                report_id=result.report_id,
+                id=uuid.uuid4(),
+                report_id=uuid.UUID(result.report_id),
                 risk_level=result.risk_level.value,
                 fraud_score=result.fraud_score,
                 confidence=result.confidence,
@@ -220,14 +230,14 @@ async def analyze_reports_for_fraud(
             
             # Log the detection
             log_entry = FraudDetectionLog(
-                id=str(uuid.uuid4()),
-                report_id=result.report_id,
+                id=uuid.uuid4(),
+                report_id=uuid.UUID(result.report_id),
                 detection_result_id=fraud_result.id,
                 analysis_type="automatic",
                 action_type="auto_detection",
                 triggered_by="system",
                 final_score=result.fraud_score,
-                final_risk_level=result.risk_level.value,
+                final_risk_level=result.risk_level,
                 action_details={
                     "fraud_score": result.fraud_score,
                     "risk_level": result.risk_level.value,
@@ -500,8 +510,17 @@ async def review_fraud_detection_result(
 ):
     """Review and confirm fraud detection result."""
     try:
+        # Convert result_id to UUID
+        try:
+            result_id_uuid = uuid.UUID(result_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid result ID format"
+            )
+        
         # Get fraud detection result
-        result_query = select(FraudDetectionResult).where(FraudDetectionResult.id == result_id)
+        result_query = select(FraudDetectionResult).where(FraudDetectionResult.id == result_id_uuid)
         fraud_result = await db.execute(result_query)
         fraud_result = fraud_result.scalar_one_or_none()
         
@@ -514,7 +533,8 @@ async def review_fraud_detection_result(
         # Update result
         fraud_result.is_reviewed = True
         fraud_result.is_confirmed_fraud = request.is_confirmed_fraud
-        fraud_result.reviewer_notes = request.reviewer_notes
+        fraud_result.admin_notes = request.reviewer_notes
+        fraud_result.reviewed_by = str(current_user.id)
         fraud_result.reviewed_at = datetime.utcnow()
         
         await db.commit()
@@ -636,10 +656,16 @@ async def train_fraud_detection_models(
         await fraud_detection_service.train_models(training_data)
         
         # Log training activity
+        # Note: report_id is required, using a special training report UUID
+        training_report_id = uuid.UUID('00000000-0000-0000-0000-000000000000')
         log_entry = FraudDetectionLog(
-            id=str(uuid.uuid4()),
-            report_id=None,
+            id=uuid.uuid4(),
+            report_id=training_report_id,
+            analysis_type="batch",
             action_type="model_training",
+            triggered_by="admin",
+            final_score=0.0,
+            final_risk_level=FraudRiskLevel.LOW,
             action_details={
                 "training_samples": len(training_data),
                 "confirmed_fraud": sum(1 for d in training_data if d['is_fraud']),

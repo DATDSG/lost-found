@@ -74,7 +74,7 @@ const AdminLayoutContent: React.FC<LayoutProps> = ({
   }, [profileOpen]);
 
   const handleLogout = () => {
-    localStorage.removeItem("admin_token");
+    localStorage.removeItem("auth_token");
     localStorage.removeItem("admin_user");
     router.push("/login");
   };

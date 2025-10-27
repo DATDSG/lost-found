@@ -47,6 +47,9 @@ async def get_admin_user_info(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Get current admin user information (root endpoint)."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"✅ Admin user info accessed by: {current_user.email}")
     return {
         "user": _serialize_user(current_user),
         "permissions": {
@@ -136,6 +139,10 @@ async def list_users(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Return paginated list of users with optional filters."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"🔍 Fetching users list for admin: {current_user.email}")
+    
     conditions = []
     if role:
         conditions.append(User.role == role)
@@ -169,12 +176,15 @@ async def list_users(
     result = await db.execute(query)
     users = result.scalars().all()
 
-    return {
+    result = {
         "items": [_serialize_user(user) for user in users],
         "total": total,
         "skip": skip,
         "limit": limit,
     }
+    
+    logger.info(f"✅ Users list fetched successfully: {total} total, {len(users)} returned")
+    return result
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
