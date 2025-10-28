@@ -291,6 +291,112 @@ class MatchingApiService {
     }
   }
 
+  /// Trigger matching for a specific report
+  Future<bool> triggerMatchingForReport(String reportId) async {
+    try {
+      final url = _buildUrl('/v1/mobile/matching/trigger/$reportId');
+
+      if (kDebugMode) {
+        print('Triggering matching for report $reportId at: $url');
+      }
+
+      final response = await http
+          .post(Uri.parse(url), headers: _getHeaders())
+          .timeout(ApiConfig.timeout);
+
+      _handleResponse(response);
+      return true;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        print('Error triggering matching for report $reportId: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Trigger matching for all reports
+  Future<bool> triggerMatchingForAll({String? reportType}) async {
+    try {
+      var url = _buildUrl('/v1/mobile/matching/trigger-all');
+
+      if (reportType != null && reportType.isNotEmpty) {
+        url += '?report_type=$reportType';
+      }
+
+      if (kDebugMode) {
+        print('Triggering matching for all reports at: $url');
+      }
+
+      final response = await http
+          .post(Uri.parse(url), headers: _getHeaders())
+          .timeout(ApiConfig.timeout);
+
+      final data = _handleResponse(response);
+
+      if (kDebugMode) {
+        print('Trigger result: $data');
+      }
+
+      return true;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        print('Error triggering matching for all reports: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Get matching status
+  Future<Map<String, dynamic>> getMatchingStatus() async {
+    try {
+      final url = _buildUrl('/v1/mobile/matching/status');
+
+      if (kDebugMode) {
+        print('Getting matching status from: $url');
+      }
+
+      final response = await http
+          .get(Uri.parse(url), headers: _getHeaders())
+          .timeout(ApiConfig.timeout);
+
+      final data = _handleResponse(response);
+
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+
+      return {'total_matches': 0, 'recent_matches': <Map<String, dynamic>>[]};
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        print('Error getting matching status: $e');
+      }
+      return {'total_matches': 0, 'recent_matches': <Map<String, dynamic>>[]};
+    }
+  }
+
+  /// Clear all matches
+  Future<bool> clearAllMatches() async {
+    try {
+      final url = _buildUrl('/v1/mobile/matching/clear');
+
+      if (kDebugMode) {
+        print('Clearing all matches at: $url');
+      }
+
+      final response = await http
+          .delete(Uri.parse(url), headers: _getHeaders())
+          .timeout(ApiConfig.timeout);
+
+      _handleResponse(response);
+      return true;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        print('Error clearing all matches: $e');
+      }
+      return false;
+    }
+  }
+
   /// Parse ReportWithMatches from API response
   ReportWithMatches _parseReportWithMatches(Map<String, dynamic> data) {
     final report = _parseUserReport(data['report'] as Map<String, dynamic>);

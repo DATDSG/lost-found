@@ -163,7 +163,8 @@ async def get_cache(key: str) -> Optional[Dict]:
     if not redis_client:
         return None
     try:
-        value = redis_client.get(key)
+        # Use asyncio.to_thread for synchronous Redis operations in async context
+        value = await asyncio.to_thread(redis_client.get, key)
         return json.loads(value) if value else None
     except:
         return None
@@ -173,7 +174,8 @@ async def set_cache(key: str, value: Dict, ttl: int = 3600):
     if not redis_client:
         return
     try:
-        redis_client.setex(key, ttl, json.dumps(value))
+        # Use asyncio.to_thread for synchronous Redis operations in async context
+        await asyncio.to_thread(redis_client.setex, key, ttl, json.dumps(value))
     except:
         pass
 
@@ -193,7 +195,8 @@ async def startup_event():
             retry_on_timeout=True,
             health_check_interval=30
         )
-        redis_client.ping()
+        # Test connection asynchronously
+        await asyncio.to_thread(redis_client.ping)
         logger.info("Redis connection established")
     except Exception as e:
         logger.warning(f"Redis connection failed, continuing without cache: {e}")
@@ -216,7 +219,8 @@ async def health_check():
     redis_connected = False
     if redis_client:
         try:
-            redis_client.ping()
+            # Use asyncio.to_thread for synchronous Redis operations
+            await asyncio.to_thread(redis_client.ping)
             redis_connected = True
         except:
             pass

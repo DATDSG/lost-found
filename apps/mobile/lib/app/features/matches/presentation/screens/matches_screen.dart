@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/services/matching_api_service.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../../shared/models/matching_models.dart';
 import '../../../../shared/providers/matching_providers.dart';
@@ -20,6 +21,8 @@ class MatchesScreen extends ConsumerStatefulWidget {
 class _MatchesScreenState extends ConsumerState<MatchesScreen>
     with TickerProviderStateMixin {
   TabController? _tabController;
+  bool _isTriggeringMatching = false;
+  final MatchingApiService _matchingService = MatchingApiService();
 
   @override
   void initState() {
@@ -36,29 +39,112 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen>
   @override
   Widget build(BuildContext context) => MainLayout(
     currentIndex: 2, // Matches is index 2
-    child: SingleChildScrollView(
-      child: Column(
-        children: [
-          // Header with stats
-          _buildHeader(),
+    child: Stack(
+      children: [
+        SingleChildScrollView(
+          child: Column(
+            children: [
+              // Header with stats
+              _buildHeader(),
 
-          // Tab Bar
-          _buildTabBar(),
+              // Tab Bar
+              _buildTabBar(),
 
-          // Tab Content
-          SizedBox(
-            height: MediaQuery.of(context).size.height - 200, // Adjust height
-            child: _tabController == null
-                ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _tabController,
-                    children: [_buildLostReportsTab(), _buildFoundReportsTab()],
-                  ),
+              // Tab Content
+              SizedBox(
+                height:
+                    MediaQuery.of(context).size.height - 200, // Adjust height
+                child: _tabController == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildLostReportsTab(),
+                          _buildFoundReportsTab(),
+                        ],
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // Floating Action Button for triggering matching
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton.extended(
+            onPressed: _isTriggeringMatching ? null : _triggerMatchingForAll,
+            icon: _isTriggeringMatching
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            label: Text(
+              _isTriggeringMatching ? 'Processing...' : 'Find Matches',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: DT.c.brand,
+          ),
+        ),
+      ],
     ),
   );
+
+  Future<void> _triggerMatchingForAll() async {
+    setState(() {
+      _isTriggeringMatching = true;
+    });
+
+    try {
+      final success = await _matchingService.triggerMatchingForAll();
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Matching triggered! Processing reports...'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+
+        // Refresh the matches
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            ref.invalidate(userReportsWithMatchesProvider);
+            ref.invalidate(totalMatchesCountProvider);
+            ref.invalidate(acceptedMatchesCountProvider);
+            ref.invalidate(unwatchedMatchesCountProvider);
+          }
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to trigger matching. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTriggeringMatching = false;
+        });
+      }
+    }
+  }
 
   Widget _buildHeader() => Container(
     margin: EdgeInsets.all(DT.s.md),

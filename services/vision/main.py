@@ -22,6 +22,7 @@ import json
 import os
 import redis
 import numpy as np
+import asyncio
 import cv2
 from datetime import datetime
 from scipy.spatial.distance import hamming
@@ -119,7 +120,7 @@ async def startup_event():
                 decode_responses=True,
                 socket_timeout=config.REDIS_TIMEOUT
             )
-            redis_client.ping()  # Remove await - this is synchronous
+            await asyncio.to_thread(redis_client.ping)
             logger.info("Redis connection established")
         else:
             logger.info("Redis caching disabled")
@@ -132,7 +133,7 @@ async def shutdown_event():
     """Close Redis connection on shutdown."""
     global redis_client
     if redis_client:
-        redis_client.close()  # Remove await - this is synchronous
+        await asyncio.to_thread(redis_client.close)
         logger.info("Redis connection closed")
 
 def validate_image_format(filename: str) -> bool:
@@ -315,7 +316,7 @@ async def get_from_cache(key: str) -> Optional[Dict]:
         return None
     
     try:
-        cached_data = redis_client.get(key)  # Remove await - this is synchronous
+        cached_data = await asyncio.to_thread(redis_client.get, key)
         if cached_data:
             return json.loads(cached_data)
     except Exception as e:
@@ -329,7 +330,8 @@ async def set_cache(key: str, data: Dict) -> None:
         return
     
     try:
-        redis_client.setex(  # Remove await - this is synchronous
+        await asyncio.to_thread(
+            redis_client.setex, 
             key, 
             config.REDIS_CACHE_TTL, 
             json.dumps(data)
@@ -343,7 +345,7 @@ async def health_check():
     redis_connected = False
     if redis_client:
         try:
-            redis_client.ping()  # Remove await - this is synchronous
+            await asyncio.to_thread(redis_client.ping)
             redis_connected = True
         except:
             pass

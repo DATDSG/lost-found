@@ -398,6 +398,36 @@ export class ApiService {
         });
     }
 
+    // Real-time Matching
+    async triggerMatchingForReport(reportId: string): Promise<any> {
+        return this.request({
+            method: 'POST',
+            url: `/mobile/matching/trigger/${reportId}`,
+        });
+    }
+
+    async triggerMatchingForAll(reportType?: string): Promise<any> {
+        return this.request({
+            method: 'POST',
+            url: '/mobile/matching/trigger-all',
+            params: reportType ? { report_type: reportType } : undefined,
+        });
+    }
+
+    async getMatchingStatus(): Promise<any> {
+        return this.request({
+            method: 'GET',
+            url: '/mobile/matching/status',
+        });
+    }
+
+    async clearAllMatches(): Promise<any> {
+        return this.request({
+            method: 'DELETE',
+            url: '/mobile/matching/clear',
+        });
+    }
+
     // Users
     async getUsers(params?: any): Promise<any> {
         try {

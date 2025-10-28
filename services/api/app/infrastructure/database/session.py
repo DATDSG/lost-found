@@ -14,7 +14,7 @@ from functools import lru_cache
 import time
 
 from .base import Base
-from ..config import optimized_config
+from ...config import optimized_config
 
 logger = logging.getLogger(__name__)
 

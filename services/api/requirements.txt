@@ -54,6 +54,9 @@ python-magic==0.4.27
 # Machine Learning (for fraud detection)
 scikit-learn==1.4.2
 
+# Geographic Calculations
+geopy==2.4.1
+
 # Additional Utilities
 aiofiles==24.1.0
 psutil==6.1.0

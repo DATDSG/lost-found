@@ -43,9 +43,19 @@ class EnvironmentConfig {
   /// Current environment - change this to switch environments
   static const Environment currentEnvironment = Environment.development;
 
+  /// MANUAL OVERRIDE: Set to override the base URL selection
+  /// Options: 'emulator', 'server', or null (auto-detect)
+  ///
+  /// To use emulator (10.0.2.2): Set to 'emulator'
+  /// To use server (172.104.40.189): Set to 'server'
+  /// To auto-detect: Set to null
+  static const String? urlOverride =
+      null; // Set to 'emulator' or 'server' to force a specific URL
+
   /// Force emulator mode - set to true if running on emulator, false for real device
   /// This can be overridden for testing purposes
-  static const bool forceEmulatorMode = false;
+  /// Set to null for automatic detection
+  static const bool? forceEmulatorMode = null; // null = auto-detect
 
   /// Get the base URL for the current environment
   static String get baseUrl {
@@ -65,7 +75,21 @@ class EnvironmentConfig {
 
   /// Get development URL dynamically based on device type
   static String _getDevelopmentUrl() {
-    // Check if running on emulator or real device
+    // Check for manual URL override first
+    if (urlOverride != null) {
+      switch (urlOverride) {
+        case 'emulator':
+          return emulatorUrl; // http://10.0.2.2:8000
+        case 'server':
+          return serverUrl; // http://172.104.40.189:8000
+        case 'localhost':
+          return localhostUrl; // http://localhost:8000
+        default:
+          return serverUrl; // Default to server
+      }
+    }
+
+    // Auto-detect based on device type
     if (_isRunningOnEmulator()) {
       return emulatorUrl; // Use 10.0.2.2 for emulator
     } else {
@@ -78,9 +102,9 @@ class EnvironmentConfig {
 
   /// Check if the app is running on an emulator
   static bool _isRunningOnEmulator() {
-    // Use force override if set
-    if (forceEmulatorMode) {
-      return true;
+    // Use force override if set explicitly
+    if (forceEmulatorMode != null) {
+      return forceEmulatorMode!;
     }
 
     // For release builds, always use server URL for real devices
@@ -89,10 +113,10 @@ class EnvironmentConfig {
       return false; // Always use server URL in release builds
     }
 
-    // For debug builds, default to real device (server URL)
-    // In a production app, you would implement proper device detection here
-    // using platform-specific APIs to detect emulator vs real device
-    return false;
+    // For debug builds, try to auto-detect
+    // You would need to add platform-specific detection here
+    // For now, default to trying emulator first (10.0.2.2)
+    return true; // Default to emulator URL for development
   }
 
   /// Get alternative development URLs
@@ -100,7 +124,16 @@ class EnvironmentConfig {
     'emulator': 'http://10.0.2.2:8000',
     'server': 'http://172.104.40.189:8000',
     'localhost': 'http://localhost:8000',
+    'local': 'http://127.0.0.1:8000',
   };
+
+  /// Get all available API URLs for testing
+  static List<String> get availableUrls => [
+    'http://10.0.2.2:8000', // Emulator
+    'http://172.104.40.189:8000', // Server
+    'http://localhost:8000', // Localhost
+    'http://127.0.0.1:8000', // Local IP
+  ];
 
   /// Get server URL specifically (for real devices)
   static String get serverUrl => 'http://172.104.40.189:8000';
@@ -176,9 +209,12 @@ class EnvironmentConfig {
     'emulatorUrl': emulatorUrl,
     'localhostUrl': localhostUrl,
     'developmentUrls': developmentUrls,
+    'availableUrls': availableUrls,
     'apiTimeout': apiTimeout.inSeconds,
     'enableDebugLogging': enableDebugLogging,
     'cacheTimeout': cacheTimeout.inMinutes,
     'forceEmulatorMode': forceEmulatorMode,
+    'urlOverride': urlOverride,
+    'activeUrl': baseUrl,
   };
 }

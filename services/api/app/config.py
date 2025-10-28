@@ -57,7 +57,7 @@ class OptimizedConfig:
     HTTP_RETRY_DELAY: float = float(os.getenv("HTTP_RETRY_DELAY", "0.5"))
     
     # ========== Caching Configuration ==========
-    ENABLE_RESPONSE_CACHE: bool = os.getenv("ENABLE_RESPONSE_CACHE", "false").lower() == "true"
+    ENABLE_RESPONSE_CACHE: bool = os.getenv("ENABLE_RESPONSE_CACHE", "true").lower() == "true"
     RESPONSE_CACHE_TTL: int = int(os.getenv("RESPONSE_CACHE_TTL", "300"))  # 5 minutes
     ENABLE_QUERY_CACHE: bool = os.getenv("ENABLE_QUERY_CACHE", "true").lower() == "true"
     QUERY_CACHE_TTL: int = int(os.getenv("QUERY_CACHE_TTL", "600"))  # 10 minutes

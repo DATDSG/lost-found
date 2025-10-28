@@ -109,7 +109,7 @@ final realTimeStatisticsProvider = StreamProvider<StatisticsData>((ref) {
 
   // Start the service when first accessed and set up cleanup
   service.start();
-  ref.onDispose(() => service.stop());
+  ref.onDispose(service.stop);
 
   return service.statisticsStream;
 });

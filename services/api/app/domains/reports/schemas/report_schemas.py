@@ -43,7 +43,7 @@ class ReportBase(BaseModel):
     contact_info: Optional[str] = Field(None, max_length=1000)
     is_urgent: bool = False
     reward_offered: bool = False
-    reward_amount: Optional[str] = Field(None, min_length=1)
+    reward_amount: Optional[str] = None
 
 
 class ReportCreate(ReportBase):
@@ -78,7 +78,7 @@ class ReportUpdate(BaseModel):
     contact_info: Optional[str] = Field(None, max_length=1000)
     is_urgent: Optional[bool] = None
     reward_offered: Optional[bool] = None
-    reward_amount: Optional[str] = Field(None, min_length=1)
+    reward_amount: Optional[str] = None
     images: Optional[List[str]] = None
     status: Optional[ReportStatusEnum] = None
 

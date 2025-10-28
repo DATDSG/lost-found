@@ -306,30 +306,10 @@ async def optimized_metrics_middleware(request: Request, call_next):
         endpoint=request.url.path
     ).observe(duration)
     
-    # Cache successful GET responses
-    if (optimized_config.ENABLE_RESPONSE_CACHE and 
-        request.method == "GET" and 
-        response.status_code == 200 and
-        cached_response is None):
-        
-        try:
-            response_body = b""
-            async for chunk in response.body_iterator:
-                response_body += chunk
-            
-            response_cache[cache_key] = {
-                'data': json.loads(response_body.decode()),
-                'headers': dict(response.headers),
-                'timestamp': time.time()
-            }
-            
-            # Clean old cache entries
-            if len(response_cache) > 1000:
-                oldest_key = min(response_cache.keys(), key=lambda k: response_cache[k]['timestamp'])
-                del response_cache[oldest_key]
-                
-        except Exception as e:
-            logger.warning(f"Failed to cache response: {e}")
+    # Note: Response caching requires intercepting the response before it's sent
+    # This is complex with async generators, so we'll skip automatic response caching
+    # for now. Instead, endpoints can use explicit caching decorators if needed.
+    # The response cache is left as a placeholder for future implementation.
     
     return response
 

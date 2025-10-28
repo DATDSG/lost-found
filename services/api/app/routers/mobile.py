@@ -297,7 +297,7 @@ async def get_nearby_reports(
     """
     try:
         # Calculate bounding box for location search
-        # Approximate: 1 degree ≈ 111 km
+        # Approximate: 1 degree â‰ˆ 111 km
         lat_offset = radius_km / 111.0
         lng_offset = radius_km / (111.0 * abs(latitude) / 90.0)
         
@@ -1137,10 +1137,317 @@ async def generate_report_embeddings(report_id: str):
 
 
 async def find_initial_matches(report_id: str):
-    """Find initial matches for new report."""
+    """Find initial matches for a report using full matching pipeline."""
     try:
-        # This would use the matching service
-        logger.info(f"Finding matches for report: {report_id}")
+        logger.info(f"🔍 Starting match finding for report: {report_id}")
         
+        async for db in get_async_db():
+            # Get the source report
+            result = await db.execute(
+                select(Report).where(Report.id == report_id)
+            )
+            source_report = result.scalar_one_or_none()
+            
+            if not source_report:
+                logger.error(f"Report {report_id} not found")
+                return
+            
+            # Determine candidate type (opposite of source)
+            candidate_type = ReportType.FOUND if source_report.type == ReportType.LOST else ReportType.LOST
+            
+            # Find candidate reports
+            candidates_result = await db.execute(
+                select(Report).where(
+                    and_(
+                        Report.type == candidate_type,
+                        Report.status == ReportStatus.APPROVED,
+                        Report.id != report_id
+                    )
+                )
+            )
+            candidate_reports = candidates_result.scalars().all()
+            
+            logger.info(f"Found {len(candidate_reports)} candidate reports")
+            
+            if not candidate_reports:
+                logger.info("No candidates found for matching")
+                return
+            
+            matches_created = 0
+            
+            for candidate in candidate_reports:
+                try:
+                    scores = {
+                        "text": 0.0,
+                        "image": 0.0,
+                        "geo": 0.0,
+                        "metadata": 0.0,
+                        "total": 0.0
+                    }
+                    
+                    # 1. Text similarity (using NLP service)
+                    if source_report.description and candidate.description:
+                        try:
+                            async with get_nlp_client() as nlp:
+                                similarity = await nlp.calculate_similarity(
+                                    source_report.description,
+                                    candidate.description,
+                                    algorithm="combined"
+                                )
+                                scores["text"] = similarity or 0.0
+                                logger.info(f"Text similarity: {scores['text']:.2f}")
+                        except Exception as e:
+                            logger.warning(f"NLP similarity failed: {e}")
+                    
+                    # 2. Image similarity (using Vision service)
+                    if (source_report.images and candidate.images and 
+                        len(source_report.images) > 0 and len(candidate.images) > 0):
+                        try:
+                            async with get_vision_client() as vision:
+                                # Use first image from each report
+                                img1_hash = await vision.get_image_hash(source_report.images[0])
+                                img2_hash = await vision.get_image_hash(candidate.images[0])
+                                
+                                if img1_hash and img2_hash:
+                                    similarity = await vision.calculate_image_similarity(
+                                        img1_hash, img2_hash
+                                    )
+                                    scores["image"] = similarity or 0.0
+                                    logger.info(f"Image similarity: {scores['image']:.2f}")
+                        except Exception as e:
+                            logger.warning(f"Vision similarity failed: {e}")
+                    
+                    # 3. Geo location similarity
+                    if (source_report.latitude and source_report.longitude and
+                        candidate.latitude and candidate.longitude):
+                        try:
+                            # Simple distance calculation
+                            import math
+                            R = 6371.0  # Earth's radius in kilometers
+                            
+                            lat1, lon1 = source_report.latitude, source_report.longitude
+                            lat2, lon2 = candidate.latitude, candidate.longitude
+                            
+                            dlat = math.radians(lat2 - lat1)
+                            dlon = math.radians(lon2 - lon1)
+                            
+                            a = (
+                                math.sin(dlat / 2) ** 2 +
+                                math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+                                math.sin(dlon / 2) ** 2
+                            )
+                            
+                            c = 2 * math.asin(math.sqrt(a))
+                            distance_km = R * c
+                            
+                            # Convert distance to similarity score
+                            if distance_km <= 1:
+                                scores["geo"] = 1.0
+                            elif distance_km <= 5:
+                                scores["geo"] = 0.8
+                            elif distance_km <= 10:
+                                scores["geo"] = 0.6
+                            elif distance_km <= 25:
+                                scores["geo"] = 0.4
+                            elif distance_km <= 50:
+                                scores["geo"] = 0.2
+                            else:
+                                scores["geo"] = 0.0
+                            
+                            logger.info(f"Geo similarity: {scores['geo']:.2f} (distance: {distance_km:.2f}km)")
+                        except Exception as e:
+                            logger.warning(f"Geo similarity failed: {e}")
+                    
+                    # 4. Metadata similarity
+                    if source_report.category == candidate.category:
+                        scores["metadata"] += 0.5
+                    
+                    if source_report.location_city == candidate.location_city:
+                        scores["metadata"] += 0.3
+                    
+                    # Check for color matches
+                    if source_report.colors and candidate.colors:
+                        source_colors = set(source_report.colors)
+                        candidate_colors = set(candidate.colors)
+                        if source_colors and candidate_colors:
+                            color_match = len(source_colors & candidate_colors) / len(source_colors | candidate_colors)
+                            scores["metadata"] += color_match * 0.2
+                    
+                    # Calculate total weighted score
+                    scores["total"] = (
+                        scores["text"] * 0.4 +      # 40% weight
+                        scores["image"] * 0.3 +      # 30% weight
+                        scores["geo"] * 0.2 +        # 20% weight
+                        scores["metadata"] * 0.1     # 10% weight
+                    )
+                    
+                    # Only create match if score is above threshold
+                    if scores["total"] >= 0.5:
+                        match_data = {
+                            "id": uuid.uuid4(),
+                            "source_report_id": source_report.id,
+                            "candidate_report_id": candidate.id,
+                            "score_total": round(scores["total"], 3),
+                            "score_text": round(scores["text"], 3),
+                            "score_image": round(scores["image"], 3) if scores["image"] > 0 else None,
+                            "score_geo": round(scores["geo"], 3),
+                            "score_time": None,
+                            "status": "candidate",
+                            "is_notified": False,
+                            "confidence_level": (
+                                "high" if scores["total"] >= 0.8 else 
+                                "medium" if scores["total"] >= 0.6 else 
+                                "low"
+                            ),
+                            "created_at": datetime.utcnow(),
+                            "updated_at": datetime.utcnow()
+                        }
+                        
+                        new_match = Match(**match_data)
+                        db.add(new_match)
+                        matches_created += 1
+                        
+                        logger.info(
+                            f"✅ Created match: {new_match.id} "
+                            f"(score: {scores['total']:.2f}, "
+                            f"text: {scores['text']:.2f}, "
+                            f"image: {scores['image']:.2f}, "
+                            f"geo: {scores['geo']:.2f})"
+                        )
+                
+                except Exception as e:
+                    logger.error(f"Error processing candidate {candidate.id}: {e}")
+                    continue
+            
+            # Commit all matches
+            await db.commit()
+            logger.info(f"🎉 Match finding complete: {matches_created} matches created for report {report_id}")
+            
     except Exception as e:
         logger.error(f"Match finding failed for report {report_id}: {e}")
+
+
+
+# =============================================================
+# Real-Time Matching Endpoints
+# =============================================================
+
+@router.post("/matching/trigger/{report_id}")
+async def trigger_matching_for_report(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Manually trigger matching for a specific report."""
+    try:
+        result = await db.execute(
+            select(Report).where(
+                and_(Report.id == report_id, Report.owner_id == user.id)
+            )
+        )
+        report = result.scalar_one_or_none()
+        
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        # Clear existing matches for this report
+        await db.execute(select(Match).where(Match.source_report_id == report_id))
+        await db.commit()
+        
+        # Trigger matching
+        background_tasks.add_task(find_initial_matches, report_id)
+        
+        return {"success": True, "message": f"Matching triggered for report {report_id}", "report_id": report_id}
+    except Exception as e:
+        logger.error(f"Failed to trigger matching: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/matching/trigger-all")
+async def trigger_matching_for_all_reports(
+    background_tasks: BackgroundTasks,
+    report_type: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Trigger matching for all approved reports."""
+    try:
+        query = select(Report).where(Report.status == ReportStatus.APPROVED)
+        if report_type:
+            query = query.where(Report.type == report_type)
+        
+        result = await db.execute(query)
+        reports = result.scalars().all()
+        
+        logger.info(f"Triggering matching for {len(reports)} reports")
+        
+        triggered = []
+        for report in reports:
+            background_tasks.add_task(find_initial_matches, report.id)
+            triggered.append(str(report.id))
+        
+        return {
+            "success": True,
+            "message": f"Matching triggered for {len(triggered)} reports",
+            "total_reports": len(triggered),
+            "report_ids": triggered
+        }
+    except Exception as e:
+        logger.error(f"Failed to trigger matching: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/matching/status")
+async def get_matching_status(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Get matching status."""
+    try:
+        result = await db.execute(select(Match))
+        total_matches = len(result.scalars().all())
+        
+        recent_result = await db.execute(select(Match).order_by(desc(Match.created_at)).limit(10))
+        recent_matches = recent_result.scalars().all()
+        
+        return {
+            "total_matches": total_matches,
+            "recent_matches": [
+                {
+                    "id": str(m.id),
+                    "source_report_id": str(m.source_report_id),
+                    "candidate_report_id": str(m.candidate_report_id),
+                    "score_total": m.score_total,
+                    "status": m.status,
+                    "created_at": m.created_at.isoformat()
+                }
+                for m in recent_matches
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get matching status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/matching/clear")
+async def clear_all_matches(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """Clear all matches from the database."""
+    try:
+        result = await db.execute(select(Match))
+        matches = result.scalars().all()
+        
+        for match in matches:
+            await db.delete(match)
+        
+        await db.commit()
+        
+        return {"success": True, "message": f"Cleared {len(matches)} matches", "matches_deleted": len(matches)}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to clear matches: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

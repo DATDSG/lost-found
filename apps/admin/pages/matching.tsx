@@ -8,6 +8,8 @@ import {
   XCircleIcon,
   ClockIcon,
   ExclamationTriangleIcon,
+  ArrowPathIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import AdminLayout from "../components/AdminLayout";
 import {
@@ -32,6 +34,7 @@ const Matching: NextPage = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(true);
+  const [isTriggeringMatching, setIsTriggeringMatching] = useState(false);
 
   // Real-time update interval (in milliseconds)
   const UPDATE_INTERVAL = 30000; // 30 seconds
@@ -105,6 +108,41 @@ const Matching: NextPage = () => {
       fetchData(); // Refresh data
     } catch (err) {
       console.error("Status update error:", err);
+    }
+  };
+
+  const handleTriggerMatching = async () => {
+    setIsTriggeringMatching(true);
+    try {
+      const result = await apiService.triggerMatchingForAll();
+      console.log("Matching triggered:", result);
+      // Refresh data after a short delay to allow matching to process
+      setTimeout(() => {
+        fetchData();
+      }, 3000);
+    } catch (err) {
+      console.error("Failed to trigger matching:", err);
+      setError("Failed to trigger matching. Please try again.");
+    } finally {
+      setIsTriggeringMatching(false);
+    }
+  };
+
+  const handleClearMatches = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to clear all matches? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await apiService.clearAllMatches();
+      fetchData(); // Refresh data
+    } catch (err) {
+      console.error("Failed to clear matches:", err);
+      setError("Failed to clear matches. Please try again.");
     }
   };
 
@@ -188,6 +226,22 @@ const Matching: NextPage = () => {
             >
               {isRealTimeEnabled ? "Disable" : "Enable"} Real-time
             </button>
+            <Button
+              onClick={handleTriggerMatching}
+              disabled={isTriggeringMatching}
+              variant="primary"
+            >
+              <ArrowPathIcon
+                className={`h-4 w-4 mr-2 ${
+                  isTriggeringMatching ? "animate-spin" : ""
+                }`}
+              />
+              {isTriggeringMatching ? "Processing..." : "Find Matches"}
+            </Button>
+            <Button onClick={handleClearMatches} variant="danger">
+              <TrashIcon className="h-4 w-4 mr-2" />
+              Clear All
+            </Button>
             <Button onClick={fetchData} variant="secondary">
               <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
               Refresh

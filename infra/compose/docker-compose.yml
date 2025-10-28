@@ -153,6 +153,11 @@ services:
 
       # Monitoring
       - METRICS_ENABLED=${METRICS_ENABLED:-true}
+
+      # Performance optimization
+      - ENABLE_RESPONSE_CACHE=${ENABLE_RESPONSE_CACHE:-true}
+      - RESPONSE_CACHE_TTL=${RESPONSE_CACHE_TTL:-300}
+      - ENABLE_COMPRESSION=${ENABLE_COMPRESSION:-true}
     ports:
       - "0.0.0.0:${API_PORT:-8000}:8000"
     depends_on:
