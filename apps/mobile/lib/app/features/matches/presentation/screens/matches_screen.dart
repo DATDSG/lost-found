@@ -104,10 +104,10 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen>
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Matching triggered! Processing reports...'),
+          const SnackBar(
+            content: Text('Matching triggered! Processing reports...'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
+            duration: Duration(seconds: 3),
           ),
         );
 
